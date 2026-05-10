@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "album-mastering-studio"
+version = "0.1.0"
+description = "Local music mastering and interlude generation prototype"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.0",
+  "scipy>=1.13",
+]
+
+[project.scripts]
+album-master = "album_mastering_studio.cli:main"
+album-master-studio = "album_mastering_studio.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

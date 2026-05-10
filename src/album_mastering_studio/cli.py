@@ -1,0 +1,367 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from .arc import ARC_PRESETS
+from .analysis import analyze_audio
+from .audio_io import collect_audio_files, load_audio
+from .dashboard import export_dashboard
+from .iteration import iterate_project
+from .mastering import PRESETS
+from .interludes import INTERLUDE_STYLE_CHOICES
+from .pipeline import (
+    RenderOptions,
+    create_project,
+    render_album,
+    render_project,
+    render_transition_preview,
+)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="album-master",
+        description="Master tracks and generate interludes for album sequencing.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    render = subparsers.add_parser("render", help="Render mastered tracks and interludes.")
+    render.add_argument("inputs", nargs="+", type=Path, help="Audio files or folders to render.")
+    render.add_argument("--output", "-o", type=Path, required=True, help="Output folder.")
+    render.add_argument(
+        "--preset",
+        choices=sorted(PRESETS),
+        default="streaming",
+        help="Mastering preset.",
+    )
+    render.add_argument(
+        "--format",
+        dest="output_format",
+        choices=["wav", "flac", "mp3", "m4a", "ogg", "opus"],
+        default="wav",
+        help="Output file format for tracks and interludes.",
+    )
+    render.add_argument("--sample-rate", type=int, default=48_000, help="Render sample rate.")
+    render.add_argument("--target-lufs", type=float, default=None, help="Optional album base LUFS target while preserving arc offsets.")
+    render.add_argument("--ceiling-dbfs", type=float, default=None, help="Optional true-peak ceiling proxy in dBFS.")
+    render.add_argument(
+        "--interlude-duration",
+        type=float,
+        default=8.0,
+        help="Interlude duration in seconds.",
+    )
+    render.add_argument(
+        "--interlude-style",
+        choices=INTERLUDE_STYLE_CHOICES,
+        default="auto",
+        help="Generated interlude style. Use auto to derive it from surrounding tracks.",
+    )
+    render.add_argument(
+        "--arc",
+        choices=sorted(ARC_PRESETS),
+        default="cinematic",
+        help="Album-level emotional dynamic arc.",
+    )
+    render.add_argument("--arc-intensity", type=float, default=1.0, help="Strength of album arc movement.")
+    render.add_argument("--tweak-lufs", type=float, default=0.0, help="Small album-wide LUFS offset.")
+    render.add_argument("--tweak-brightness-db", type=float, default=0.0, help="Brightness tilt offset in dB.")
+    render.add_argument("--tweak-warmth", type=float, default=0.0, help="Small saturation/warmth offset.")
+    render.add_argument("--tweak-low-end-db", type=float, default=0.0, help="Small low-shelf weight offset in dB.")
+    render.add_argument("--tweak-air-db", type=float, default=0.0, help="Small high-shelf air EQ offset in dB.")
+    render.add_argument(
+        "--tweak-presence-db",
+        type=float,
+        default=0.0,
+        help="Small presence EQ offset around 3.2 kHz in dB.",
+    )
+    render.add_argument(
+        "--tweak-width",
+        type=float,
+        default=0.0,
+        help="Small stereo width offset, for example 0.05 or -0.05.",
+    )
+    render.add_argument("--tweak-intensity", type=float, default=0.0, help="Small compression/density offset.")
+    render.add_argument("--tweak-limiter", type=float, default=0.0, help="Small limiter aggressiveness offset.")
+    render.add_argument(
+        "--album-wav",
+        action="store_true",
+        help="Also render a continuous album_sequence.wav file.",
+    )
+
+    init_project = subparsers.add_parser(
+        "init-project",
+        help="Create an editable album project JSON file from source tracks.",
+    )
+    init_project.add_argument("inputs", nargs="+", type=Path, help="Audio files or folders to add.")
+    init_project.add_argument("--project", "-p", type=Path, required=True, help="Project JSON path.")
+    init_project.add_argument("--title", default="Untitled Album", help="Album title.")
+    init_project.add_argument(
+        "--preset",
+        choices=sorted(PRESETS),
+        default="streaming",
+        help="Default mastering preset.",
+    )
+    init_project.add_argument(
+        "--format",
+        dest="output_format",
+        choices=["wav", "flac", "mp3", "m4a", "ogg", "opus"],
+        default="wav",
+        help="Default output format.",
+    )
+    init_project.add_argument("--sample-rate", type=int, default=48_000, help="Default render sample rate.")
+    init_project.add_argument("--target-lufs", type=float, default=None, help="Optional album base LUFS target while preserving arc offsets.")
+    init_project.add_argument("--ceiling-dbfs", type=float, default=None, help="Optional true-peak ceiling proxy in dBFS.")
+    init_project.add_argument(
+        "--interlude-duration",
+        type=float,
+        default=8.0,
+        help="Default interlude duration in seconds.",
+    )
+    init_project.add_argument(
+        "--interlude-style",
+        choices=INTERLUDE_STYLE_CHOICES,
+        default="auto",
+        help="Default generated interlude style.",
+    )
+    init_project.add_argument(
+        "--arc",
+        choices=sorted(ARC_PRESETS),
+        default="cinematic",
+        help="Album-level emotional dynamic arc.",
+    )
+    init_project.add_argument("--arc-intensity", type=float, default=1.0, help="Strength of album arc movement.")
+    init_project.add_argument("--tweak-lufs", type=float, default=0.0, help="Small album-wide LUFS offset.")
+    init_project.add_argument("--tweak-brightness-db", type=float, default=0.0, help="Brightness tilt offset in dB.")
+    init_project.add_argument("--tweak-warmth", type=float, default=0.0, help="Small saturation/warmth offset.")
+    init_project.add_argument("--tweak-low-end-db", type=float, default=0.0, help="Small low-shelf weight offset in dB.")
+    init_project.add_argument("--tweak-air-db", type=float, default=0.0, help="Small high-shelf air EQ offset in dB.")
+    init_project.add_argument("--tweak-presence-db", type=float, default=0.0, help="Small presence EQ offset in dB.")
+    init_project.add_argument("--tweak-width", type=float, default=0.0, help="Small stereo width offset.")
+    init_project.add_argument("--tweak-intensity", type=float, default=0.0, help="Small compression/density offset.")
+    init_project.add_argument("--tweak-limiter", type=float, default=0.0, help="Small limiter aggressiveness offset.")
+    init_project.add_argument(
+        "--album-wav",
+        action="store_true",
+        help="Set the project to render a continuous album_sequence.wav file.",
+    )
+
+    render_project_parser = subparsers.add_parser(
+        "render-project",
+        help="Render an editable album project JSON file.",
+    )
+    render_project_parser.add_argument("project", type=Path, help="Project JSON path.")
+    render_project_parser.add_argument("--output", "-o", type=Path, required=True, help="Output folder.")
+
+    preview = subparsers.add_parser(
+        "preview-transition",
+        help="Render a short audition file for one project transition.",
+    )
+    preview.add_argument("project", type=Path, help="Project JSON path.")
+    preview.add_argument(
+        "--after-track",
+        type=int,
+        required=True,
+        help="Preview the transition after this 1-based track index.",
+    )
+    preview.add_argument("--output", "-o", type=Path, required=True, help="Preview audio output path.")
+    preview.add_argument("--tail-seconds", type=float, default=12.0, help="Seconds from the previous track tail.")
+    preview.add_argument("--head-seconds", type=float, default=12.0, help="Seconds from the next track head.")
+
+    score = subparsers.add_parser(
+        "score-render",
+        help="Score a completed render from its manifest and rendered audio.",
+    )
+    score.add_argument("manifest", type=Path, help="Render manifest.json path.")
+    score.add_argument(
+        "--scorer",
+        choices=["auto", "local", "llm"],
+        default="auto",
+        help="Use local scoring, optional LLM scoring, or auto fallback.",
+    )
+
+    iterate = subparsers.add_parser(
+        "iterate-project",
+        help="Render, score, and adjust a project over multiple passes.",
+    )
+    iterate.add_argument("project", type=Path, help="Project JSON path.")
+    iterate.add_argument("--output", "-o", type=Path, required=True, help="Iteration output folder.")
+    iterate.add_argument("--passes", type=int, default=2, help="Number of render/score passes.")
+    iterate.add_argument(
+        "--scorer",
+        choices=["auto", "local", "llm"],
+        default="auto",
+        help="Use local scoring, optional LLM scoring, or auto fallback.",
+    )
+
+    dashboard = subparsers.add_parser(
+        "export-dashboard",
+        help="Export a polished standalone HTML dashboard for a render.",
+    )
+    dashboard.add_argument("manifest", type=Path, help="Render manifest.json path.")
+    dashboard.add_argument("--output", "-o", type=Path, required=True, help="Dashboard HTML output path.")
+
+    analyze = subparsers.add_parser("analyze", help="Analyze source tracks without rendering.")
+    analyze.add_argument("inputs", nargs="+", type=Path, help="Audio files or folders to analyze.")
+    analyze.add_argument("--sample-rate", type=int, default=48_000, help="Analysis sample rate.")
+
+    app = subparsers.add_parser("app", help="Launch the local Windows desktop mastering studio.")
+    app.add_argument("--output", "-o", type=Path, default=None, help="Default output folder for app renders.")
+
+    smoke = subparsers.add_parser("smoke", help="Run product workflow smoke checks with synthetic audio.")
+    smoke.add_argument("--output", "-o", type=Path, default=Path("test-output") / "smoke", help="Smoke output folder.")
+    smoke.add_argument("--keep", action="store_true", help="Keep any existing smoke output folder contents.")
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "render":
+        manifest = render_album(
+            args.inputs,
+            args.output,
+            RenderOptions(
+                sample_rate=args.sample_rate,
+                preset=args.preset,
+                output_format=args.output_format,
+                target_lufs=args.target_lufs,
+                ceiling_dbfs=args.ceiling_dbfs,
+                interlude_duration=args.interlude_duration,
+                interlude_style=args.interlude_style,
+                arc=args.arc,
+                arc_intensity=args.arc_intensity,
+                tweak_lufs=args.tweak_lufs,
+                tweak_brightness_db=args.tweak_brightness_db,
+                tweak_warmth=args.tweak_warmth,
+                tweak_low_end_db=args.tweak_low_end_db,
+                tweak_air_db=args.tweak_air_db,
+                tweak_presence_db=args.tweak_presence_db,
+                tweak_width=args.tweak_width,
+                tweak_intensity=args.tweak_intensity,
+                tweak_limiter=args.tweak_limiter,
+                album_wav=args.album_wav,
+            ),
+        )
+        print(json.dumps(_render_summary(manifest), indent=2))
+        return 0
+
+    if args.command == "init-project":
+        project = create_project(
+            args.inputs,
+            args.project,
+            RenderOptions(
+                sample_rate=args.sample_rate,
+                preset=args.preset,
+                output_format=args.output_format,
+                target_lufs=args.target_lufs,
+                ceiling_dbfs=args.ceiling_dbfs,
+                interlude_duration=args.interlude_duration,
+                interlude_style=args.interlude_style,
+                arc=args.arc,
+                arc_intensity=args.arc_intensity,
+                tweak_lufs=args.tweak_lufs,
+                tweak_brightness_db=args.tweak_brightness_db,
+                tweak_warmth=args.tweak_warmth,
+                tweak_low_end_db=args.tweak_low_end_db,
+                tweak_air_db=args.tweak_air_db,
+                tweak_presence_db=args.tweak_presence_db,
+                tweak_width=args.tweak_width,
+                tweak_intensity=args.tweak_intensity,
+                tweak_limiter=args.tweak_limiter,
+                album_wav=args.album_wav,
+            ),
+            album_title=args.title,
+        )
+        print(
+            json.dumps(
+                {
+                    "project": str(args.project),
+                    "track_count": len(project["tracks"]),
+                    "transition_count": len(project["transitions"]),
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.command == "render-project":
+        manifest = render_project(args.project, args.output)
+        print(json.dumps(_render_summary(manifest), indent=2))
+        return 0
+
+    if args.command == "preview-transition":
+        summary = render_transition_preview(
+            args.project,
+            args.after_track,
+            args.output,
+            tail_seconds=args.tail_seconds,
+            head_seconds=args.head_seconds,
+        )
+        print(json.dumps(summary, indent=2))
+        return 0
+
+    if args.command == "score-render":
+        from .scoring import score_render
+
+        scorecard = score_render(args.manifest, scorer=args.scorer)
+        print(json.dumps({"overall": scorecard["overall"], "scorecard": str(args.manifest.parent / "scorecard.json")}, indent=2))
+        return 0
+
+    if args.command == "iterate-project":
+        summary = iterate_project(args.project, args.output, passes=args.passes, scorer=args.scorer)
+        print(
+            json.dumps(
+                {
+                    "passes": len(summary["passes"]),
+                    "last_overall": summary["passes"][-1]["overall"],
+                    "summary": str(args.output / "iteration_summary.json"),
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.command == "export-dashboard":
+        summary = export_dashboard(args.manifest, args.output)
+        print(json.dumps(summary, indent=2))
+        return 0
+
+    if args.command == "analyze":
+        rows = []
+        for path in collect_audio_files(args.inputs):
+            samples = load_audio(path, args.sample_rate)
+            rows.append({"source": str(path), "analysis": analyze_audio(samples, args.sample_rate).to_dict()})
+        print(json.dumps(rows, indent=2))
+        return 0
+
+    if args.command == "app":
+        from .app import main as app_main
+
+        return app_main(default_output=args.output)
+
+    if args.command == "smoke":
+        from .smoke import run_smoke
+
+        summary = run_smoke(args.output, clean=not args.keep)
+        print(json.dumps(summary, indent=2))
+        return 0
+
+    parser.error(f"Unknown command: {args.command}")
+    return 2
+
+
+def _render_summary(manifest: dict) -> dict:
+    return {
+        "track_count": manifest["track_count"],
+        "interlude_count": manifest["interlude_count"],
+        "album_sequence": manifest["album_sequence"],
+        "manifest": "manifest.json",
+    }
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
