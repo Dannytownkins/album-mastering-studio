@@ -105,6 +105,63 @@ Remaining partner-review items:
 - Character inference still uses filename hints and positional return-acoustic logic. Overrides make it controllable, but the classifier is not yet a robust genre model.
 - The app is still a large single Tk class; the loop is prioritizing correctness and first-run workflow before splitting presentation/project/playback modules.
 
+### Dark UI / Product Feel Pass
+
+- Reworked the Tk desktop app into a dark, clean cyberpunk-style interface with restrained green/amber/red hierarchy.
+- Added a styled app header, dark input/menu/tree/log surfaces, zebra-striped tables, themed waveform canvas, and clearer primary/secondary/destructive button treatment.
+- Kept interaction behavior direct and stable: no animated or hover-heavy effects, just better visual priority and readability.
+- Added log severity color so warnings/errors/completions separate visually during longer renders.
+- Fixed a Tk runtime issue where the global `Segoe UI` font string was parsed incorrectly because of the space in the font family name.
+
+Verification:
+
+```powershell
+python -m compileall -q src tests
+python -m unittest discover -s tests
+python -m album_mastering_studio.cli smoke --output test-output\codex-ui-smoke
+```
+
+Results:
+
+- Compile passed.
+- Hidden Tk app instantiation passed.
+- Unit tests passed: 13 tests.
+- Smoke passed.
+- Eight-track smoke render produced 8 masters, 7 interludes, `album_sequence.wav`, `manifest.json`, `scorecard.json`, and `dashboard.html`.
+- Eight-track smoke warnings: 0.
+
+### Deep Research Implementation Pass
+
+- Read both local research reports and captured the implementation decisions in `docs/research-implementation-notes.md`.
+- Treated overlapping report guidance as product direction where it fit the personal/offline scope: album-mode loudness, delivery profiles, integer PCM output, dither, codec QC, cue sheets, metadata, and richer metering.
+- Added `standards.py` with delivery profiles for streaming universal, AES album mode, Apple/AAC check, YouTube/video, Amazon/speaker-safe, CD 16/44.1, vinyl premaster, and loud-rock reference renders.
+- Added GUI/CLI settings for delivery profile, bit depth, and codec QC preview.
+- Changed WAV writing to deterministic dithered 24-bit or 16-bit PCM by default, with 32-bit float available only when selected.
+- Added short-term loudness maximum and LRA-style loudness range proxy to track, reference, interlude, album, and codec-preview analysis.
+- Added sample-accurate `album_sequence.cue` and `album_sequence.cue.json` outputs for continuous album renders.
+- Added local AAC and Opus round-trip codec QC preview files and warnings.
+- Added release metadata fields for artist, album artist, genre, year, UPC, per-track artist, and ISRC in the GUI, project JSON, manifest, and dashboard.
+- Updated README and AGENTS with the delivery/metadata/cue/codec workflow.
+- Added regression assertions for cue files, codec preview records, 24-bit WAV sample width, metadata preservation, and richer loudness fields.
+
+Verification:
+
+```powershell
+python -m compileall -q src tests
+python -m unittest discover -s tests
+python -m album_mastering_studio.cli smoke --output test-output\codex-research-smoke
+```
+
+Results:
+
+- Compile passed.
+- Hidden Tk app instantiation passed.
+- Unit tests passed: 13 tests.
+- Smoke passed.
+- Eight-track smoke render produced 8 masters, 7 interludes, `album_sequence.wav`, `album_sequence.cue`, `album_sequence.cue.json`, `manifest.json`, `scorecard.json`, `dashboard.html`, and 2 codec preview files.
+- Eight-track smoke warnings: 0.
+- Eight-track album WAV is stereo 48 kHz, 24-bit PCM (`sample_width` 3), with true-peak proxy about `-1.14 dBFS` and integrated loudness about `-14.29 LUFS`.
+
 ### What Works
 
 - Python CLI package renders album projects locally through FFmpeg/FFprobe.
@@ -112,7 +169,8 @@ Remaining partner-review items:
   - add/remove/reorder up to 8 songs
   - analyze source files
   - choose global preset and album arc
-  - set target LUFS, ceiling proxy, target profile, brightness, bass, presence, air, warmth, compression, limiter, and stereo width
+  - set delivery profile, target LUFS, ceiling proxy, sample rate, bit depth, codec QC preview, brightness, bass, presence, air, warmth, compression, limiter, and stereo width
+  - enter album artist/release metadata and per-track artist/ISRC metadata
   - select a reference track for analysis/reporting
   - set global transition length/style
   - override selected track character/preset
@@ -120,11 +178,12 @@ Remaining partner-review items:
   - render full album or individual mastered tracks only
   - preview a selected transition
   - open output folder or dashboard
+  - use a dark desktop UI with visible table, waveform, action, status, and log hierarchy
 - Required user-facing preset names are available alongside the original creative presets.
 - Transition generator now supports additional practical local styles: crossfade, filtered-fade, reverse-swell, noise-riser, sub-drop, tape-stop, breath-gap, ring-out, pulsed-swell, drone-pad, and hard-cut marker.
-- Manifest now records output paths, album analysis, per-track warnings, interlude analysis, aggregate warnings, selected presets, ceiling proxy, and tuning settings.
-- Dashboard shows warnings, reference analysis, and output paths in addition to arc, tracks, transitions, scorecard, and decision log.
-- `album-master smoke` creates synthetic 1-track, 2-track, and 8-track renders and verifies key artifacts.
+- Manifest now records output paths, album analysis, per-track warnings, interlude analysis, aggregate warnings, selected presets, delivery profile, metadata, normalization preview, codec QC, cue paths, ceiling proxy, and tuning settings.
+- Dashboard shows delivery settings, metadata, codec QC, warnings, reference analysis, and output paths in addition to arc, tracks, transitions, scorecard, and decision log.
+- `album-master smoke` creates synthetic 1-track, 2-track, and 8-track renders and verifies key artifacts, cue files, and codec preview records.
 
 ### Verification Run
 
@@ -153,7 +212,7 @@ Results:
 
 ### Weak Spots
 
-- GUI is workflow-complete but plain; waveform and playback are basic rather than DAW-like.
+- GUI is workflow-complete and dark themed, but waveform and playback are still basic rather than DAW-like.
 - True peak remains a local oversampling proxy, and LUFS falls back to the local approximation when `pyloudnorm` is not installed.
 - Tempo/key/chroma are not full musicology features; transition roots are estimated from local spectra.
 - Reference matching is not automatic yet; the app only analyzes/reports the reference track.
@@ -162,5 +221,5 @@ Results:
 ### Next Move
 
 - Add A/B comparison between source, master, transition preview, and album sequence.
-- Add cue sheet/metadata export for album sequencing.
+- Add real transport/A-B playback with level matching between source, master, transition preview, and album sequence.
 - Add actual reference-track matching once the core workflow has been used on real songs.

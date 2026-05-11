@@ -14,6 +14,7 @@ from .character import infer_album_characters
 from .constants import DEFAULT_SAMPLE_RATE, MAX_TRACKS
 from .interludes import INTERLUDE_STYLE_CHOICES, make_interlude
 from .mastering import PRESETS, FineTune, MasterResult, apply_edge_treatment, limit_ceiling, master_track
+from .standards import delivery_profile
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,9 @@ class RenderOptions:
     sample_rate: int = DEFAULT_SAMPLE_RATE
     preset: str = "streaming"
     output_format: str = "wav"
+    bit_depth: int = 24
+    delivery_profile: str = "custom"
+    codec_preview: bool = True
     target_lufs: float | None = None
     ceiling_dbfs: float | None = None
     interlude_duration: float = 8.0
@@ -46,6 +50,8 @@ class TrackSpec:
     title: str | None = None
     character: str | None = None
     preset: str | None = None
+    artist: str | None = None
+    isrc: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,7 +78,7 @@ def render_album(inputs: list[Path], output_dir: Path, options: RenderOptions) -
         )
         for _ in range(max(len(track_specs) - 1, 0))
     ]
-    return render_sequence(track_specs, output_dir, options, transitions, project_path=None, album_title=None)
+    return render_sequence(track_specs, output_dir, options, transitions, project_path=None, album_title=None, album_metadata={})
 
 
 def render_project(project_path: Path, output_dir: Path) -> dict:
@@ -83,6 +89,9 @@ def render_project(project_path: Path, output_dir: Path) -> dict:
         sample_rate=int(settings.get("sample_rate", DEFAULT_SAMPLE_RATE)),
         preset=str(settings.get("preset", "streaming")),
         output_format=str(settings.get("output_format", "wav")),
+        bit_depth=int(settings.get("bit_depth", 24)),
+        delivery_profile=str(settings.get("delivery_profile", settings.get("target_profile", "custom"))),
+        codec_preview=bool(settings.get("codec_preview", True)),
         target_lufs=_optional_float(settings.get("target_lufs")),
         ceiling_dbfs=_optional_float(settings.get("ceiling_dbfs")),
         interlude_duration=float(settings.get("default_interlude_duration", 8.0)),
@@ -108,6 +117,8 @@ def render_project(project_path: Path, output_dir: Path) -> dict:
             title=track.get("title"),
             character=track.get("character"),
             preset=track.get("preset"),
+            artist=track.get("artist"),
+            isrc=track.get("isrc"),
         )
         for track in project.get("tracks", [])
     ]
@@ -122,6 +133,7 @@ def render_project(project_path: Path, output_dir: Path) -> dict:
         transitions,
         project_path=project_path,
         album_title=project.get("album_title"),
+        album_metadata=dict(project.get("metadata", {})),
     )
 
 
@@ -139,6 +151,9 @@ def render_transition_preview(
         sample_rate=int(settings.get("sample_rate", DEFAULT_SAMPLE_RATE)),
         preset=str(settings.get("preset", "streaming")),
         output_format=output_path.suffix.lower().lstrip(".") or str(settings.get("output_format", "wav")),
+        bit_depth=int(settings.get("bit_depth", 24)),
+        delivery_profile=str(settings.get("delivery_profile", settings.get("target_profile", "custom"))),
+        codec_preview=False,
         target_lufs=_optional_float(settings.get("target_lufs")),
         ceiling_dbfs=_optional_float(settings.get("ceiling_dbfs")),
         interlude_duration=float(settings.get("default_interlude_duration", 8.0)),
@@ -164,6 +179,8 @@ def render_transition_preview(
             title=track.get("title"),
             character=track.get("character"),
             preset=track.get("preset"),
+            artist=track.get("artist"),
+            isrc=track.get("isrc"),
         )
         for track in project.get("tracks", [])
     ]
@@ -239,7 +256,7 @@ def render_transition_preview(
     chunks.append(_head(right_master, options.sample_rate, head_seconds))
 
     preview = np.concatenate(chunks, axis=0).astype(np.float32)
-    write_audio(output_path, preview, options.sample_rate)
+    write_audio(output_path, preview, options.sample_rate, bit_depth=options.bit_depth)
     return {
         "project": str(project_path),
         "output": str(output_path),
@@ -262,6 +279,7 @@ def render_sequence(
     transitions: list[TransitionSpec],
     project_path: Path | None,
     album_title: str | None,
+    album_metadata: dict | None = None,
 ) -> dict:
     if len(tracks) > MAX_TRACKS:
         raise ValueError(f"Album Mastering Studio supports up to {MAX_TRACKS} tracks per render.")
@@ -319,7 +337,7 @@ def render_sequence(
         )
         title = track.title or source.stem
         output_path = masters_dir / f"{index:02d}_{_slug(title)}_mastered.{options.output_format}"
-        write_audio(output_path, result.samples, options.sample_rate)
+        write_audio(output_path, result.samples, options.sample_rate, bit_depth=options.bit_depth)
         mastered.append((track, result.samples, result, track_arc))
 
     sequence: list[dict] = []
@@ -334,6 +352,8 @@ def render_sequence(
                 "type": "track",
                 "index": index,
                 "title": track.title,
+                "artist": track.artist,
+                "isrc": track.isrc,
                 "source": str(source),
                 "output": str(output_path),
                 "probe": _safe_probe(source),
@@ -381,7 +401,7 @@ def render_sequence(
                     interludes_dir
                     / f"{index:02d}_to_{index + 1:02d}_{transition.style}_{_slug(left_track.path.stem)}_into_{_slug(right_track.path.stem)}.{options.output_format}"
                 )
-                write_audio(output_path, interlude, options.sample_rate)
+                write_audio(output_path, interlude, options.sample_rate, bit_depth=options.bit_depth)
                 sequence.append(
                     {
                         "type": "interlude",
@@ -404,23 +424,39 @@ def render_sequence(
                 )
 
     album_path: Path | None = None
+    cue_json_path: Path | None = None
+    cue_sheet_path: Path | None = None
+    cue_points: list[dict] = []
+    codec_previews: list[dict] = []
     if options.album_wav:
         album_path = output_dir / "album_sequence.wav"
-        album_audio = _build_album_sequence(mastered, options, transitions)
-        write_audio(album_path, album_audio, options.sample_rate)
+        album_audio, cue_points = _build_album_sequence_with_cues(mastered, options, transitions, album_title)
+        write_audio(album_path, album_audio, options.sample_rate, bit_depth=options.bit_depth)
         album_analysis = analyze_audio(album_audio, options.sample_rate)
         album_warnings = _album_warnings(album_analysis, options.ceiling_dbfs)
         warnings.extend(f"Album: {warning}" for warning in album_warnings)
+        cue_json_path = output_dir / "album_sequence.cue.json"
+        cue_sheet_path = output_dir / "album_sequence.cue"
+        cue_json_path.write_text(json.dumps(_cue_manifest(cue_points, options.sample_rate), indent=2), encoding="utf-8")
+        cue_sheet_path.write_text(_cue_sheet(album_path.name, cue_points, album_title), encoding="utf-8")
+        codec_previews = _codec_preview_report(album_audio, output_dir, options, album_analysis)
+        for preview in codec_previews:
+            warnings.extend(f"Codec {preview['codec']}: {warning}" for warning in preview.get("warnings", []))
     else:
         album_analysis = None
         album_warnings = []
 
+    profile = delivery_profile(options.delivery_profile)
+    metadata = _clean_metadata(album_metadata or {})
     manifest = {
         "version": 1,
         "settings": {
             "sample_rate": options.sample_rate,
             "preset": options.preset,
             "output_format": options.output_format,
+            "bit_depth": options.bit_depth,
+            "delivery_profile": profile.key,
+            "codec_preview": options.codec_preview,
             "target_lufs": options.target_lufs,
             "ceiling_dbfs": options.ceiling_dbfs,
             "interlude_duration": options.interlude_duration,
@@ -439,6 +475,9 @@ def render_sequence(
             "album_wav": options.album_wav,
             "reference_track": str(options.reference_track) if options.reference_track else None,
         },
+        "delivery_profile": profile.to_dict(),
+        "normalization_preview": _normalization_preview(profile, album_analysis),
+        "metadata": metadata,
         "reference": reference,
         "album_title": album_title,
         "album_story": _album_story(arc_plan),
@@ -448,9 +487,15 @@ def render_sequence(
         "interlude_count": sum(1 for item in sequence if item["type"] == "interlude"),
         "album_sequence": str(album_path) if album_path else None,
         "album_analysis": album_analysis.to_dict() if album_analysis else None,
+        "cue_points": cue_points,
+        "cue_sheet": str(cue_sheet_path) if cue_sheet_path else None,
+        "codec_previews": codec_previews,
         "outputs": {
             "manifest": str(output_dir / "manifest.json"),
             "album_sequence": str(album_path) if album_path else None,
+            "cue_json": str(cue_json_path) if cue_json_path else None,
+            "cue_sheet": str(cue_sheet_path) if cue_sheet_path else None,
+            "codec_previews_dir": str(output_dir / "codec_previews") if codec_previews else None,
             "masters_dir": str(masters_dir),
             "interludes_dir": str(interludes_dir),
         },
@@ -469,11 +514,13 @@ def create_project(
     project_path: Path,
     options: RenderOptions,
     album_title: str = "Untitled Album",
+    metadata: dict | None = None,
 ) -> dict:
     tracks = collect_audio_files(inputs)
     if len(tracks) > MAX_TRACKS:
         raise ValueError(f"Album Mastering Studio supports up to {MAX_TRACKS} tracks per project.")
     base_dir = project_path.resolve().parent
+    profile = delivery_profile(options.delivery_profile)
     project = {
         "version": 1,
         "album_title": album_title,
@@ -481,6 +528,9 @@ def create_project(
             "sample_rate": options.sample_rate,
             "preset": options.preset,
             "output_format": options.output_format,
+            "bit_depth": options.bit_depth,
+            "delivery_profile": profile.key,
+            "codec_preview": options.codec_preview,
             "target_lufs": options.target_lufs,
             "ceiling_dbfs": options.ceiling_dbfs,
             "default_interlude_duration": options.interlude_duration,
@@ -499,12 +549,15 @@ def create_project(
             "album_wav": options.album_wav,
             "reference_track": str(options.reference_track) if options.reference_track else None,
         },
+        "metadata": _clean_metadata(metadata or {}),
         "tracks": [
             {
                 "path": _project_relative_path(base_dir, track),
                 "title": track.stem,
                 "character": "auto",
                 "preset": "auto",
+                "artist": "",
+                "isrc": "",
             }
             for track in tracks
         ],
@@ -565,6 +618,140 @@ def _build_album_sequence(
     if not chunks:
         return np.zeros((0, 2), dtype=np.float32)
     return np.concatenate(chunks, axis=0).astype(np.float32)
+
+
+def _build_album_sequence_with_cues(
+    mastered: list[tuple[TrackSpec, np.ndarray, MasterResult, dict]],
+    options: RenderOptions,
+    transitions: list[TransitionSpec],
+    album_title: str | None,
+) -> tuple[np.ndarray, list[dict]]:
+    chunks: list[np.ndarray] = []
+    cues: list[dict] = []
+    cursor = 0
+    cue_index = 1
+
+    for index, (track, audio, result, _) in enumerate(mastered):
+        title = track.title or track.path.stem
+        chunks.append(audio)
+        end = cursor + int(audio.shape[0])
+        cues.append(
+            _cue_point(
+                cue_index,
+                "track",
+                title,
+                cursor,
+                end,
+                options.sample_rate,
+                source=str(track.path),
+                output_title=title,
+                artist=track.artist,
+                isrc=track.isrc,
+                integrated_lufs=result.after.integrated_lufs,
+                true_peak_dbfs=result.after.true_peak_dbfs,
+            )
+        )
+        cue_index += 1
+        cursor = end
+
+        if index >= len(mastered) - 1:
+            continue
+        transition = transitions[index] if index < len(transitions) else TransitionSpec(
+            duration_seconds=options.interlude_duration,
+            style=options.interlude_style,
+            enabled=True,
+        )
+        if not transition.enabled:
+            continue
+        interlude = make_interlude(
+            audio,
+            mastered[index + 1][1],
+            options.sample_rate,
+            transition.duration_seconds,
+            transition.style,
+            target_lufs=_transition_target_lufs(
+                mastered[index][2].after.integrated_lufs,
+                mastered[index + 1][2].after.integrated_lufs,
+                transition.style,
+            ),
+            ceiling_dbfs=_interlude_ceiling(options),
+        )
+        chunks.append(interlude)
+        end = cursor + int(interlude.shape[0])
+        cues.append(
+            _cue_point(
+                cue_index,
+                "interlude",
+                f"Transition {index + 1} to {index + 2}",
+                cursor,
+                end,
+                options.sample_rate,
+                style=transition.style,
+                album_title=album_title,
+            )
+        )
+        cue_index += 1
+        cursor = end
+
+    if not chunks:
+        return np.zeros((0, 2), dtype=np.float32), []
+    return np.concatenate(chunks, axis=0).astype(np.float32), cues
+
+
+def _cue_point(cue_index: int, kind: str, title: str, start: int, end: int, sample_rate: int, **extra) -> dict:
+    payload = {
+        "cue_index": cue_index,
+        "type": kind,
+        "title": title,
+        "start_sample": start,
+        "end_sample": end,
+        "duration_samples": max(end - start, 0),
+        "start_seconds": round(start / sample_rate, 6) if sample_rate else 0.0,
+        "duration_seconds": round(max(end - start, 0) / sample_rate, 6) if sample_rate else 0.0,
+        "cue_time": _cue_time(start, sample_rate),
+    }
+    payload.update({key: value for key, value in extra.items() if value not in (None, "")})
+    return payload
+
+
+def _cue_manifest(cues: list[dict], sample_rate: int) -> dict:
+    return {
+        "format": "album-mastering-studio-cue-points-v1",
+        "sample_rate": sample_rate,
+        "mode": "sequence_chunks",
+        "description": "Sample-accurate cue points for the continuous album WAV. Interludes are included as addressable sequence chunks.",
+        "cues": cues,
+    }
+
+
+def _cue_sheet(file_name: str, cues: list[dict], album_title: str | None) -> str:
+    lines = [
+        "REM Generated by Album Mastering Studio",
+        f'TITLE "{_cue_escape(album_title or "Untitled Album")}"',
+        f'FILE "{_cue_escape(file_name)}" WAVE',
+    ]
+    for cue in cues:
+        lines.extend(
+            [
+                f"  TRACK {int(cue['cue_index']):02d} AUDIO",
+                f'    TITLE "{_cue_escape(str(cue["title"]))}"',
+                f"    INDEX 01 {cue['cue_time']}",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _cue_time(sample: int, sample_rate: int) -> str:
+    if sample_rate <= 0:
+        return "00:00:00"
+    total_frames = int(round((sample / sample_rate) * 75.0))
+    minutes, remainder = divmod(total_frames, 75 * 60)
+    seconds, frames = divmod(remainder, 75)
+    return f"{minutes:02d}:{seconds:02d}:{frames:02d}"
+
+
+def _cue_escape(value: str) -> str:
+    return value.replace('"', "'")
 
 
 def _project_transitions(project: dict, options: RenderOptions, track_count: int) -> list[TransitionSpec]:
@@ -833,6 +1020,41 @@ def _transition_target_lufs(left_lufs: float, right_lufs: float, style: str) -> 
     return float(np.clip(target, lower, upper))
 
 
+def _codec_preview_report(samples: np.ndarray, output_dir: Path, options: RenderOptions, album_analysis) -> list[dict]:
+    if not options.codec_preview:
+        return []
+    preview_dir = output_dir / "codec_previews"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    previews = []
+    for codec, suffix in (("AAC 256k", ".m4a"), ("Opus 192k", ".opus")):
+        output_path = preview_dir / f"album_sequence_{suffix.lstrip('.')}{suffix}"
+        try:
+            write_audio(output_path, samples, options.sample_rate, bit_depth=options.bit_depth)
+            decoded = load_audio(output_path, options.sample_rate)
+            stats = analyze_audio(decoded, options.sample_rate)
+            preview_warnings = []
+            ceiling = _interlude_ceiling(options)
+            if stats.true_peak_dbfs > ceiling + 0.2:
+                preview_warnings.append(
+                    f"decoded true-peak proxy {stats.true_peak_dbfs:.2f} dBFS is above ceiling {ceiling:.2f} dBFS"
+                )
+            if stats.peak_dbfs > -0.1:
+                preview_warnings.append("decoded sample peak is close to full scale after lossy encode")
+            previews.append(
+                {
+                    "codec": codec,
+                    "output": str(output_path),
+                    "analysis": stats.to_dict(),
+                    "lufs_shift": round(stats.integrated_lufs - album_analysis.integrated_lufs, 4) if album_analysis else None,
+                    "true_peak_shift_db": round(stats.true_peak_dbfs - album_analysis.true_peak_dbfs, 4) if album_analysis else None,
+                    "warnings": preview_warnings,
+                }
+            )
+        except Exception as exc:
+            previews.append({"codec": codec, "output": str(output_path), "warning": str(exc), "warnings": [str(exc)]})
+    return previews
+
+
 def _interlude_warnings(index: int, stats, style: str) -> list[str]:
     warnings: list[str] = []
     if style != "hard-cut" and stats.integrated_lufs < -65.0:
@@ -862,6 +1084,25 @@ def _album_warnings(stats, ceiling_dbfs: float | None) -> list[str]:
     return warnings
 
 
+def _normalization_preview(profile, album_analysis) -> dict | None:
+    if profile.target_lufs is None or album_analysis is None:
+        return None
+    gain = float(profile.target_lufs) - float(album_analysis.integrated_lufs)
+    return {
+        "profile": profile.display_name,
+        "target_lufs": profile.target_lufs,
+        "album_integrated_lufs": album_analysis.integrated_lufs,
+        "expected_playback_gain_db": round(gain, 3),
+        "direction": "turn down" if gain < -0.05 else "turn up" if gain > 0.05 else "no material change",
+        "note": "Album-mode services preserve relative track moves and apply one gain value to the continuous album.",
+    }
+
+
+def _clean_metadata(metadata: dict) -> dict:
+    fields = ("artist", "album_artist", "genre", "release_year", "upc", "notes")
+    return {field: str(metadata.get(field, "")).strip() for field in fields if str(metadata.get(field, "")).strip()}
+
+
 def _stats_are_finite(stats) -> bool:
     values = [
         stats.duration_seconds,
@@ -869,6 +1110,8 @@ def _stats_are_finite(stats) -> bool:
         stats.true_peak_dbfs,
         stats.rms_dbfs,
         stats.integrated_lufs,
+        stats.short_term_lufs_max,
+        stats.loudness_range_lu_proxy,
         stats.crest_factor_db,
         stats.dynamic_range_db,
         stats.stereo_width,

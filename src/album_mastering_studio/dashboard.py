@@ -28,6 +28,10 @@ def _html(manifest: dict, scorecard: dict | None) -> str:
     story = manifest.get("album_story") or manifest.get("arc", {}).get("description", "")
     warnings = manifest.get("warnings", [])
     reference = manifest.get("reference")
+    metadata = manifest.get("metadata", {})
+    delivery = manifest.get("delivery_profile", {})
+    normalization = manifest.get("normalization_preview")
+    codec_previews = manifest.get("codec_previews", [])
 
     return f"""<!doctype html>
 <html lang="en">
@@ -244,6 +248,8 @@ def _html(manifest: dict, scorecard: dict | None) -> str:
       <aside class="plate">
         {_metric("Preset", preset.get("display_name", settings.get("preset", "unknown")))}
         {_metric("Arc", manifest.get("arc", {}).get("display_name", settings.get("arc", "unknown")))}
+        {_metric("Delivery", delivery.get("display_name", settings.get("delivery_profile", "custom")))}
+        {_metric("Format", f"{settings.get('bit_depth', 24)}-bit {settings.get('output_format', 'wav')}")}
         {_metric("Tracks", str(manifest.get("track_count", 0)))}
         {_metric("Interludes", str(manifest.get("interlude_count", 0)))}
         {_metric("Score", f"{score:.2f}" if isinstance(score, (int, float)) else "not scored")}
@@ -253,6 +259,11 @@ def _html(manifest: dict, scorecard: dict | None) -> str:
     <section>
       <h2>Album Arc</h2>
       <div class="arc">{_arc_svg(tracks)}</div>
+    </section>
+
+    <section>
+      <h2>Delivery / Metadata</h2>
+      <div class="plate">{_delivery_block(delivery, normalization, metadata, codec_previews)}</div>
     </section>
 
     <section>
@@ -358,9 +369,11 @@ def _track_card(track: dict) -> str:
         {f"<p class='warning'>{_e('; '.join(warnings))}</p>" if warnings else ""}
         <div class="data">
           <span>LUFS<br><strong>{_num(after.get("integrated_lufs"))}</strong></span>
+          <span>ST Max<br><strong>{_num(after.get("short_term_lufs_max"))}</strong></span>
+          <span>LRA Proxy<br><strong>{_num(after.get("loudness_range_lu_proxy"))}</strong></span>
           <span>Target<br><strong>{_num(arc.get("target_lufs"))}</strong></span>
           <span>True peak<br><strong>{_num(after.get("true_peak_dbfs"))}</strong></span>
-          <span>Energy<br><strong>{_num(after.get("energy_density"))}</strong></span>
+          <span>Artist / ISRC<br><strong>{_e(track.get("artist") or "n/a")} / {_e(track.get("isrc") or "n/a")}</strong></span>
         </div>
       </article>
     """
@@ -412,16 +425,46 @@ def _reference(reference: dict | None) -> str:
     return (
         f"<p><strong>{_e(reference.get('path', 'Reference track'))}</strong></p>"
         f"{_metric('LUFS', _num(analysis.get('integrated_lufs')))}"
+        f"{_metric('Short-Term Max', _num(analysis.get('short_term_lufs_max')))}"
+        f"{_metric('LRA Proxy', _num(analysis.get('loudness_range_lu_proxy')))}"
         f"{_metric('True Peak', _num(analysis.get('true_peak_dbfs')))}"
-        f"{_metric('Dynamics', _num(analysis.get('dynamic_range_db')))}"
         f"{_metric('Brightness', _num(analysis.get('spectral_centroid_hz')))}"
     )
+
+
+def _delivery_block(delivery: dict, normalization: dict | None, metadata: dict, codec_previews: list[dict]) -> str:
+    rows = [
+        _metric("Profile", delivery.get("display_name", "Custom")),
+        _metric("Profile Note", delivery.get("note", "Manual delivery settings.")),
+    ]
+    for label, key in (
+        ("Artist", "artist"),
+        ("Album Artist", "album_artist"),
+        ("Genre", "genre"),
+        ("Release Year", "release_year"),
+        ("UPC/EAN", "upc"),
+    ):
+        if metadata.get(key):
+            rows.append(_metric(label, metadata[key]))
+    if normalization:
+        rows.append(_metric("Normalization", f"{normalization.get('direction')} {normalization.get('expected_playback_gain_db')} dB"))
+    if codec_previews:
+        for preview in codec_previews:
+            analysis = preview.get("analysis", {})
+            warning = "; ".join(preview.get("warnings", [])) or "ok"
+            rows.append(
+                _metric(
+                    f"Codec QC {preview.get('codec', 'codec')}",
+                    f"TP {_num(analysis.get('true_peak_dbfs'))}, LUFS shift {_num(preview.get('lufs_shift'))}, {warning}",
+                )
+            )
+    return "".join(rows)
 
 
 def _outputs(manifest: dict, tracks: list[dict], interludes: list[dict]) -> str:
     outputs = manifest.get("outputs", {})
     rows = []
-    for label in ("manifest", "album_sequence", "masters_dir", "interludes_dir"):
+    for label in ("manifest", "album_sequence", "cue_json", "cue_sheet", "codec_previews_dir", "masters_dir", "interludes_dir"):
         value = outputs.get(label)
         if value:
             rows.append(f"<div><strong>{_e(label.replace('_', ' ').title())}</strong><br>{_e(value)}</div>")

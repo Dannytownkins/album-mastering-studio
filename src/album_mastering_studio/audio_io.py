@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import wave
 import shutil
 import subprocess
 import tempfile
@@ -92,18 +93,18 @@ def load_audio(path: Path, sample_rate: int) -> np.ndarray:
     return np.nan_to_num(samples, nan=0.0, posinf=0.0, neginf=0.0)
 
 
-def write_audio(path: Path, samples: np.ndarray, sample_rate: int) -> None:
+def write_audio(path: Path, samples: np.ndarray, sample_rate: int, *, bit_depth: int = 24, dither: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     suffix = path.suffix.lower()
-    samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+    samples = _stereo_float(samples)
 
     if suffix == ".wav":
-        wavfile.write(path, sample_rate, samples)
+        _write_wav(path, samples, sample_rate, bit_depth=bit_depth, dither=dither)
         return
 
     with tempfile.TemporaryDirectory(prefix="album-master-encode-") as tmpdir:
         source = Path(tmpdir) / "source.wav"
-        wavfile.write(source, sample_rate, samples)
+        _write_wav(source, samples, sample_rate, bit_depth=bit_depth, dither=dither)
         _run(
             [
                 "ffmpeg",
@@ -150,6 +151,59 @@ def _codec_args(suffix: str) -> list[str]:
     if suffix == ".opus":
         return ["-c:a", "libopus", "-b:a", "192k"]
     raise ValueError(f"Unsupported output extension: {suffix}")
+
+
+def _stereo_float(samples: np.ndarray) -> np.ndarray:
+    samples = np.asarray(samples, dtype=np.float32)
+    if samples.ndim == 1:
+        samples = samples[:, np.newaxis]
+    if samples.shape[1] == 1:
+        samples = np.repeat(samples, 2, axis=1)
+    elif samples.shape[1] > 2:
+        samples = samples[:, :2]
+    return np.nan_to_num(np.clip(samples, -1.0, 1.0), nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def _write_wav(path: Path, samples: np.ndarray, sample_rate: int, *, bit_depth: int, dither: bool) -> None:
+    if bit_depth == 32:
+        wavfile.write(path, sample_rate, samples.astype(np.float32))
+        return
+    if bit_depth == 24:
+        _write_pcm24(path, samples, sample_rate, dither=dither)
+        return
+    if bit_depth == 16:
+        rendered = _quantize(samples, 16, dither=dither).astype("<i2")
+        with wave.open(str(path), "wb") as wav:
+            wav.setnchannels(rendered.shape[1])
+            wav.setsampwidth(2)
+            wav.setframerate(sample_rate)
+            wav.writeframes(rendered.reshape(-1).tobytes())
+        return
+    raise ValueError("WAV bit depth must be 16, 24, or 32.")
+
+
+def _write_pcm24(path: Path, samples: np.ndarray, sample_rate: int, *, dither: bool) -> None:
+    quantized = _quantize(samples, 24, dither=dither).reshape(-1).astype(np.int32)
+    unsigned = quantized & 0xFFFFFF
+    packed = np.empty((unsigned.size, 3), dtype=np.uint8)
+    packed[:, 0] = unsigned & 0xFF
+    packed[:, 1] = (unsigned >> 8) & 0xFF
+    packed[:, 2] = (unsigned >> 16) & 0xFF
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(samples.shape[1])
+        wav.setsampwidth(3)
+        wav.setframerate(sample_rate)
+        wav.writeframes(packed.tobytes())
+
+
+def _quantize(samples: np.ndarray, bit_depth: int, *, dither: bool) -> np.ndarray:
+    scale = float((1 << (bit_depth - 1)) - 1)
+    rendered = samples.astype(np.float64, copy=False)
+    if dither:
+        rng = np.random.default_rng(0)
+        rendered = rendered + ((rng.random(rendered.shape) - rng.random(rendered.shape)) / scale)
+    rendered = np.clip(rendered, -1.0, 1.0 - (1.0 / scale))
+    return np.round(rendered * scale)
 
 
 def _run(args: list[str], capture: bool = False) -> subprocess.CompletedProcess:

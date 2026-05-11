@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 import numpy as np
@@ -48,10 +49,19 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(manifest["settings"]["interlude_style"], "swell")
             self.assertIn("integrated_lufs", manifest["sequence"][0]["after"])
             self.assertIn("true_peak_dbfs", manifest["sequence"][0]["after"])
+            self.assertIn("short_term_lufs_max", manifest["sequence"][0]["after"])
+            self.assertIn("loudness_range_lu_proxy", manifest["sequence"][0]["after"])
+            self.assertEqual(manifest["settings"]["bit_depth"], 24)
+            self.assertEqual(len(manifest["cue_points"]), 5)
+            self.assertTrue(Path(manifest["cue_sheet"]).exists())
+            self.assertTrue(Path(manifest["outputs"]["cue_json"]).exists())
+            self.assertEqual(len(manifest["codec_previews"]), 2)
             self.assertTrue((output_dir / "manifest.json").exists())
             self.assertEqual(len(list((output_dir / "masters").glob("*.wav"))), 3)
             self.assertEqual(len(list((output_dir / "interludes").glob("*.wav"))), 2)
             self.assertTrue((output_dir / "album_sequence.wav").exists())
+            with wave.open(str(output_dir / "album_sequence.wav"), "rb") as wav:
+                self.assertEqual(wav.getsampwidth(), 3)
 
             album = load_audio(output_dir / "album_sequence.wav", 48_000)
             self.assertGreater(album.shape[0], 48_000 * 10)
@@ -180,9 +190,17 @@ class PipelineTest(unittest.TestCase):
             project = create_project(
                 [input_dir],
                 project_path,
-                RenderOptions(interlude_duration=0.75, interlude_style="tape", tweak_lufs=-1.25, album_wav=True),
+                RenderOptions(
+                    interlude_duration=0.75,
+                    interlude_style="tape",
+                    tweak_lufs=-1.25,
+                    album_wav=True,
+                    delivery_profile="apple-aac-check",
+                ),
                 album_title="Inherit Test",
+                metadata={"artist": "Dan", "album_artist": "Dan", "genre": "Folk Metal", "release_year": "2026", "upc": "123456789012"},
             )
+            project["tracks"][0]["isrc"] = "USAAA2600001"
             project["transitions"][0]["style"] = "inherit"
             project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
 
@@ -190,6 +208,9 @@ class PipelineTest(unittest.TestCase):
             interlude = next(item for item in manifest["sequence"] if item["type"] == "interlude")
 
             self.assertEqual(manifest["settings"]["tweak_lufs"], -1.25)
+            self.assertEqual(manifest["delivery_profile"]["key"], "apple-aac-check")
+            self.assertEqual(manifest["metadata"]["album_artist"], "Dan")
+            self.assertEqual(manifest["sequence"][0]["isrc"], "USAAA2600001")
             self.assertEqual(interlude["style"], "tape")
 
     def test_hard_cut_silence_is_not_reported_as_unintentional(self) -> None:

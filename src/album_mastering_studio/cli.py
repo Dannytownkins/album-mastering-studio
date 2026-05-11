@@ -18,6 +18,7 @@ from .pipeline import (
     render_project,
     render_transition_preview,
 )
+from .standards import DELIVERY_PROFILES, delivery_profile
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,6 +45,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output file format for tracks and interludes.",
     )
     render.add_argument("--sample-rate", type=int, default=48_000, help="Render sample rate.")
+    render.add_argument("--bit-depth", type=int, choices=[16, 24, 32], default=24, help="WAV/intermediate export bit depth.")
+    render.add_argument(
+        "--delivery-profile",
+        choices=sorted(DELIVERY_PROFILES),
+        default="custom",
+        help="Apply a standards-oriented delivery shortcut before manual overrides.",
+    )
+    render.add_argument("--no-codec-preview", action="store_true", help="Skip AAC/Opus round-trip QC preview for album WAV renders.")
     render.add_argument("--target-lufs", type=float, default=None, help="Optional album base LUFS target while preserving arc offsets.")
     render.add_argument("--ceiling-dbfs", type=float, default=None, help="Optional true-peak ceiling proxy in dBFS.")
     render.add_argument(
@@ -111,6 +120,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Default output format.",
     )
     init_project.add_argument("--sample-rate", type=int, default=48_000, help="Default render sample rate.")
+    init_project.add_argument("--bit-depth", type=int, choices=[16, 24, 32], default=24, help="Default WAV/intermediate export bit depth.")
+    init_project.add_argument(
+        "--delivery-profile",
+        choices=sorted(DELIVERY_PROFILES),
+        default="custom",
+        help="Apply a standards-oriented delivery shortcut before manual overrides.",
+    )
+    init_project.add_argument("--no-codec-preview", action="store_true", help="Disable AAC/Opus round-trip QC preview in the project.")
     init_project.add_argument("--target-lufs", type=float, default=None, help="Optional album base LUFS target while preserving arc offsets.")
     init_project.add_argument("--ceiling-dbfs", type=float, default=None, help="Optional true-peak ceiling proxy in dBFS.")
     init_project.add_argument(
@@ -141,6 +158,12 @@ def build_parser() -> argparse.ArgumentParser:
     init_project.add_argument("--tweak-width", type=float, default=0.0, help="Small stereo width offset.")
     init_project.add_argument("--tweak-intensity", type=float, default=0.0, help="Small compression/density offset.")
     init_project.add_argument("--tweak-limiter", type=float, default=0.0, help="Small limiter aggressiveness offset.")
+    init_project.add_argument("--artist", default="", help="Default track/release artist metadata.")
+    init_project.add_argument("--album-artist", default="", help="Album artist metadata.")
+    init_project.add_argument("--genre", default="", help="Release genre metadata.")
+    init_project.add_argument("--year", default="", help="Release year metadata.")
+    init_project.add_argument("--upc", default="", help="Release UPC/EAN metadata.")
+    init_project.add_argument("--notes", default="", help="Private release notes stored in the project manifest.")
     init_project.add_argument(
         "--album-wav",
         action="store_true",
@@ -221,60 +244,30 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "render":
+        options = _options_from_args(args)
         manifest = render_album(
             args.inputs,
             args.output,
-            RenderOptions(
-                sample_rate=args.sample_rate,
-                preset=args.preset,
-                output_format=args.output_format,
-                target_lufs=args.target_lufs,
-                ceiling_dbfs=args.ceiling_dbfs,
-                interlude_duration=args.interlude_duration,
-                interlude_style=args.interlude_style,
-                arc=args.arc,
-                arc_intensity=args.arc_intensity,
-                tweak_lufs=args.tweak_lufs,
-                tweak_brightness_db=args.tweak_brightness_db,
-                tweak_warmth=args.tweak_warmth,
-                tweak_low_end_db=args.tweak_low_end_db,
-                tweak_air_db=args.tweak_air_db,
-                tweak_presence_db=args.tweak_presence_db,
-                tweak_width=args.tweak_width,
-                tweak_intensity=args.tweak_intensity,
-                tweak_limiter=args.tweak_limiter,
-                album_wav=args.album_wav,
-            ),
+            options,
         )
         print(json.dumps(_render_summary(manifest), indent=2))
         return 0
 
     if args.command == "init-project":
+        options = _options_from_args(args)
         project = create_project(
             args.inputs,
             args.project,
-            RenderOptions(
-                sample_rate=args.sample_rate,
-                preset=args.preset,
-                output_format=args.output_format,
-                target_lufs=args.target_lufs,
-                ceiling_dbfs=args.ceiling_dbfs,
-                interlude_duration=args.interlude_duration,
-                interlude_style=args.interlude_style,
-                arc=args.arc,
-                arc_intensity=args.arc_intensity,
-                tweak_lufs=args.tweak_lufs,
-                tweak_brightness_db=args.tweak_brightness_db,
-                tweak_warmth=args.tweak_warmth,
-                tweak_low_end_db=args.tweak_low_end_db,
-                tweak_air_db=args.tweak_air_db,
-                tweak_presence_db=args.tweak_presence_db,
-                tweak_width=args.tweak_width,
-                tweak_intensity=args.tweak_intensity,
-                tweak_limiter=args.tweak_limiter,
-                album_wav=args.album_wav,
-            ),
+            options,
             album_title=args.title,
+            metadata={
+                "artist": args.artist,
+                "album_artist": args.album_artist,
+                "genre": args.genre,
+                "release_year": args.year,
+                "upc": args.upc,
+                "notes": args.notes,
+            },
         )
         print(
             json.dumps(
@@ -361,6 +354,34 @@ def _render_summary(manifest: dict) -> dict:
         "album_sequence": manifest["album_sequence"],
         "manifest": "manifest.json",
     }
+
+
+def _options_from_args(args) -> RenderOptions:
+    profile = delivery_profile(args.delivery_profile)
+    return RenderOptions(
+        sample_rate=profile.sample_rate or args.sample_rate,
+        preset=args.preset,
+        output_format=profile.output_format or args.output_format,
+        bit_depth=profile.bit_depth or args.bit_depth,
+        delivery_profile=args.delivery_profile,
+        codec_preview=(not args.no_codec_preview) and profile.codec_preview,
+        target_lufs=args.target_lufs if args.target_lufs is not None else profile.target_lufs,
+        ceiling_dbfs=args.ceiling_dbfs if args.ceiling_dbfs is not None else profile.ceiling_dbfs,
+        interlude_duration=args.interlude_duration,
+        interlude_style=args.interlude_style,
+        arc=args.arc,
+        arc_intensity=args.arc_intensity,
+        tweak_lufs=args.tweak_lufs,
+        tweak_brightness_db=args.tweak_brightness_db,
+        tweak_warmth=args.tweak_warmth,
+        tweak_low_end_db=args.tweak_low_end_db,
+        tweak_air_db=args.tweak_air_db,
+        tweak_presence_db=args.tweak_presence_db,
+        tweak_width=args.tweak_width,
+        tweak_intensity=args.tweak_intensity,
+        tweak_limiter=args.tweak_limiter,
+        album_wav=args.album_wav,
+    )
 
 
 if __name__ == "__main__":

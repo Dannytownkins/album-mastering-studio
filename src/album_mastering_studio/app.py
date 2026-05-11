@@ -32,6 +32,7 @@ from .interludes import INTERLUDE_STYLE_CHOICES
 from .mastering import PRESETS
 from .pipeline import load_project, render_project, render_transition_preview
 from .scoring import score_render
+from .standards import delivery_choice, delivery_choices, delivery_key, delivery_profile
 
 
 @dataclass
@@ -40,6 +41,8 @@ class TrackState:
     title: str
     character: str = "auto"
     preset: str = "auto"
+    artist: str = ""
+    isrc: str = ""
     analysis: dict[str, Any] | None = None
     probe: dict[str, Any] | None = None
     waveform: list[float] | None = None
@@ -53,13 +56,28 @@ class TransitionState:
     enabled: bool = True
 
 
-TARGET_PROFILES: dict[str, tuple[float | None, float | None]] = {
-    "Custom": (None, None),
-    "Spotify / streaming (-14 LUFS)": (-14.0, -1.0),
-    "Apple Music-ish (-16 LUFS)": (-16.0, -1.0),
-    "YouTube-ish (-13 LUFS)": (-13.0, -1.0),
-    "Quiet album (-18 LUFS)": (-18.0, -1.0),
-    "Loud rock (-10.5 LUFS)": (-10.5, -0.8),
+UI_COLORS = {
+    "bg": "#071013",
+    "panel": "#0d1b1e",
+    "panel_alt": "#102328",
+    "panel_lift": "#132c31",
+    "input": "#081518",
+    "table": "#09171a",
+    "table_alt": "#0c1e22",
+    "line": "#26434a",
+    "line_hot": "#4b7773",
+    "text": "#d8e6df",
+    "muted": "#88a39c",
+    "faint": "#58716d",
+    "primary": "#6ff0a8",
+    "primary_dark": "#183f32",
+    "accent": "#ffb454",
+    "accent_dark": "#3b2b14",
+    "danger": "#ff5c7a",
+    "danger_dark": "#3a1722",
+    "selection": "#1d4548",
+    "wave": "#6ff0a8",
+    "wave_mid": "#29464d",
 }
 
 
@@ -94,17 +112,24 @@ class MasteringStudioApp:
 
         default_output = default_output or (Path.cwd() / "outputs" / DEFAULT_RENDER_SUBDIR)
         self.album_title = tk.StringVar(value="Untitled Album")
+        self.artist = tk.StringVar(value="")
+        self.album_artist = tk.StringVar(value="")
+        self.release_year = tk.StringVar(value="")
+        self.genre = tk.StringVar(value="")
+        self.upc = tk.StringVar(value="")
         self.output_dir = tk.StringVar(value=str(default_output))
         self.reference_path = tk.StringVar(value="")
         self.sample_rate = tk.StringVar(value=str(DEFAULT_SAMPLE_RATE))
-        self.target_profile = tk.StringVar(value="Custom")
+        self.bit_depth = tk.StringVar(value="24")
+        self.target_profile = tk.StringVar(value=delivery_choice("streaming-universal"))
+        self.codec_preview = tk.BooleanVar(value=True)
         self.preset = tk.StringVar(value=_preset_choice("album-cohesion-cinematic"))
         self.arc = tk.StringVar(value=_arc_choice("cinematic"))
         self.arc_intensity = tk.DoubleVar(value=1.0)
         self.output_format = tk.StringVar(value="wav")
         self.transition_style = tk.StringVar(value="auto")
         self.transition_duration = tk.DoubleVar(value=8.0)
-        self.target_lufs = tk.StringVar(value="")
+        self.target_lufs = tk.StringVar(value="-14.0")
         self.ceiling_dbfs = tk.StringVar(value="-1.0")
         self.tweak_lufs = tk.StringVar(value="0.0")
         self.brightness = tk.DoubleVar(value=0.0)
@@ -117,6 +142,8 @@ class MasteringStudioApp:
         self.width = tk.DoubleVar(value=0.0)
 
         self.track_title = tk.StringVar(value="")
+        self.track_artist = tk.StringVar(value="")
+        self.track_isrc = tk.StringVar(value="")
         self.track_character = tk.StringVar(value="auto")
         self.track_preset = tk.StringVar(value="auto")
         self.transition_override_style = tk.StringVar(value="inherit")
@@ -126,6 +153,7 @@ class MasteringStudioApp:
         self.status = tk.StringVar(value="Ready")
         self.slider_labels: dict[str, tk.StringVar] = {}
 
+        self._configure_theme()
         self._build_ui()
         self._refresh_tracks()
         self._poll_queue()
@@ -134,23 +162,192 @@ class MasteringStudioApp:
         if self.missing_audio_tools:
             self._log(f"Missing required audio tools: {', '.join(self.missing_audio_tools)}. Install FFmpeg/FFprobe before rendering.")
 
+    def _configure_theme(self) -> None:
+        colors = UI_COLORS
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        self.root.configure(bg=colors["bg"])
+        self.root.option_add("*Font", "{Segoe UI} 9")
+        self.root.option_add("*Menu.background", colors["panel"])
+        self.root.option_add("*Menu.foreground", colors["text"])
+        self.root.option_add("*Menu.activeBackground", colors["selection"])
+        self.root.option_add("*Menu.activeForeground", colors["primary"])
+        self.root.option_add("*TCombobox*Listbox.background", colors["input"])
+        self.root.option_add("*TCombobox*Listbox.foreground", colors["text"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", colors["selection"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", colors["primary"])
+
+        style.configure(
+            ".",
+            background=colors["bg"],
+            foreground=colors["text"],
+            bordercolor=colors["line"],
+            darkcolor=colors["panel"],
+            lightcolor=colors["panel_lift"],
+            troughcolor=colors["input"],
+            selectbackground=colors["selection"],
+            selectforeground=colors["text"],
+            font=("Segoe UI", 9),
+        )
+        style.configure("TFrame", background=colors["bg"])
+        style.configure("Panel.TFrame", background=colors["panel"])
+        style.configure("TLabel", background=colors["bg"], foreground=colors["text"])
+        style.configure("Muted.TLabel", background=colors["bg"], foreground=colors["muted"])
+        style.configure("Brand.TLabel", background=colors["bg"], foreground=colors["primary"], font=("Segoe UI Semibold", 15))
+        style.configure("Console.TLabel", background=colors["bg"], foreground=colors["accent"], font=("Segoe UI Semibold", 9))
+        style.configure("Counter.TLabel", background=colors["bg"], foreground=colors["primary"], font=("Segoe UI Semibold", 9))
+
+        style.configure(
+            "TLabelframe",
+            background=colors["panel"],
+            foreground=colors["primary"],
+            bordercolor=colors["line"],
+            relief="solid",
+            borderwidth=1,
+        )
+        style.configure(
+            "TLabelframe.Label",
+            background=colors["bg"],
+            foreground=colors["primary"],
+            font=("Segoe UI Semibold", 9),
+        )
+
+        style.configure(
+            "TEntry",
+            fieldbackground=colors["input"],
+            foreground=colors["text"],
+            insertcolor=colors["primary"],
+            bordercolor=colors["line"],
+            lightcolor=colors["line"],
+            darkcolor=colors["line"],
+            padding=(6, 4),
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=colors["input"],
+            background=colors["panel_lift"],
+            foreground=colors["text"],
+            arrowcolor=colors["primary"],
+            bordercolor=colors["line"],
+            padding=(6, 3),
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", colors["input"]), ("disabled", colors["panel"])],
+            foreground=[("readonly", colors["text"]), ("disabled", colors["faint"])],
+            background=[("active", colors["panel_lift"]), ("readonly", colors["panel_lift"])],
+        )
+        style.configure(
+            "TSpinbox",
+            fieldbackground=colors["input"],
+            foreground=colors["text"],
+            arrowcolor=colors["primary"],
+            bordercolor=colors["line"],
+            padding=(6, 3),
+        )
+
+        self._configure_button_styles(style)
+        style.configure("TCheckbutton", background=colors["panel"], foreground=colors["text"], indicatorcolor=colors["input"])
+        style.map("TCheckbutton", background=[("active", colors["panel"])], foreground=[("active", colors["text"])])
+        style.configure("Horizontal.TScale", background=colors["panel"], troughcolor=colors["input"], bordercolor=colors["line"])
+        style.configure("TProgressbar", troughcolor=colors["input"], background=colors["primary"], bordercolor=colors["line"])
+        style.configure("TPanedwindow", background=colors["bg"])
+        style.configure(
+            "Vertical.TScrollbar",
+            background=colors["panel_lift"],
+            troughcolor=colors["input"],
+            bordercolor=colors["line"],
+            arrowcolor=colors["primary"],
+            relief="flat",
+        )
+        style.map("Vertical.TScrollbar", background=[("active", colors["panel_lift"]), ("pressed", colors["panel_lift"])])
+
+        style.configure(
+            "Treeview",
+            background=colors["table"],
+            fieldbackground=colors["table"],
+            foreground=colors["text"],
+            bordercolor=colors["line"],
+            rowheight=25,
+            relief="flat",
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=colors["panel_lift"],
+            foreground=colors["accent"],
+            bordercolor=colors["line"],
+            relief="flat",
+            font=("Segoe UI Semibold", 9),
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", colors["selection"])],
+            foreground=[("selected", colors["primary"])],
+        )
+
+    def _configure_button_styles(self, style: ttk.Style) -> None:
+        colors = UI_COLORS
+
+        def button_style(name: str, bg: str, fg: str, border: str) -> None:
+            style.configure(
+                name,
+                background=bg,
+                foreground=fg,
+                bordercolor=border,
+                focusthickness=1,
+                focuscolor=border,
+                padding=(10, 6),
+                relief="flat",
+                font=("Segoe UI Semibold", 9),
+            )
+            style.map(
+                name,
+                background=[("active", bg), ("pressed", bg), ("disabled", colors["panel"])],
+                foreground=[("active", fg), ("pressed", fg), ("disabled", colors["faint"])],
+                bordercolor=[("active", border), ("pressed", border)],
+            )
+
+        button_style("TButton", colors["panel_lift"], colors["text"], colors["line"])
+        button_style("Primary.TButton", colors["primary_dark"], colors["primary"], colors["primary"])
+        button_style("Accent.TButton", colors["accent_dark"], colors["accent"], colors["accent"])
+        button_style("Danger.TButton", colors["danger_dark"], colors["danger"], colors["danger"])
+        button_style("Ghost.TButton", colors["panel"], colors["muted"], colors["line"])
+
     def _build_ui(self) -> None:
         self._build_menu()
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
 
-        header = ttk.Frame(self.root, padding=(12, 10, 12, 6))
+        header = ttk.Frame(self.root, padding=(14, 12, 14, 8))
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(1, weight=1)
         header.columnconfigure(3, weight=1)
-        ttk.Label(header, text="Album Title").grid(row=0, column=0, sticky="w")
-        ttk.Entry(header, textvariable=self.album_title).grid(row=0, column=1, sticky="ew", padx=(8, 12))
-        ttk.Label(header, text="Output").grid(row=0, column=2, sticky="w")
-        ttk.Entry(header, textvariable=self.output_dir, width=48).grid(row=0, column=3, sticky="ew", padx=(8, 6))
-        ttk.Button(header, text="Browse", command=self._choose_output).grid(row=0, column=4)
-        ttk.Label(header, text="Reference").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        ttk.Entry(header, textvariable=self.reference_path).grid(row=1, column=1, columnspan=3, sticky="ew", padx=(8, 6), pady=(8, 0))
-        ttk.Button(header, text="Browse", command=self._choose_reference).grid(row=1, column=4, pady=(8, 0))
+        ttk.Label(header, text="ALBUM MASTERING STUDIO", style="Brand.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(header, text="LOCAL OFFLINE RENDER CONSOLE", style="Console.TLabel").grid(row=0, column=2, columnspan=3, sticky="e")
+        ttk.Label(header, text="Album Title").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        ttk.Entry(header, textvariable=self.album_title).grid(row=1, column=1, sticky="ew", padx=(8, 12), pady=(10, 0))
+        ttk.Label(header, text="Output").grid(row=1, column=2, sticky="w", pady=(10, 0))
+        ttk.Entry(header, textvariable=self.output_dir, width=48).grid(row=1, column=3, sticky="ew", padx=(8, 6), pady=(10, 0))
+        ttk.Button(header, text="Browse", command=self._choose_output, style="Ghost.TButton").grid(row=1, column=4, pady=(10, 0))
+        ttk.Label(header, text="Artist").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Entry(header, textvariable=self.artist).grid(row=2, column=1, sticky="ew", padx=(8, 12), pady=(8, 0))
+        ttk.Label(header, text="Album Artist").grid(row=2, column=2, sticky="w", pady=(8, 0))
+        ttk.Entry(header, textvariable=self.album_artist).grid(row=2, column=3, sticky="ew", padx=(8, 6), pady=(8, 0))
+        metadata_row = ttk.Frame(header)
+        metadata_row.grid(row=2, column=4, sticky="ew", pady=(8, 0))
+        ttk.Label(metadata_row, text="Year").pack(side=tk.LEFT, padx=(0, 3))
+        ttk.Entry(metadata_row, textvariable=self.release_year, width=7).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(metadata_row, text="Genre").pack(side=tk.LEFT, padx=(0, 3))
+        ttk.Entry(metadata_row, textvariable=self.genre, width=13).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(metadata_row, text="UPC").pack(side=tk.LEFT, padx=(0, 3))
+        ttk.Entry(metadata_row, textvariable=self.upc, width=14).pack(side=tk.LEFT)
+        ttk.Label(header, text="Reference").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        ttk.Entry(header, textvariable=self.reference_path).grid(row=3, column=1, columnspan=3, sticky="ew", padx=(8, 6), pady=(8, 0))
+        ttk.Button(header, text="Browse", command=self._choose_reference, style="Ghost.TButton").grid(row=3, column=4, pady=(8, 0))
 
         main = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main.grid(row=1, column=0, sticky="nsew", padx=12, pady=6)
@@ -178,6 +375,14 @@ class MasteringStudioApp:
         run_menu.add_command(label="Render Full Album", accelerator="Ctrl+R", command=lambda: self._render(album_wav=True))
         run_menu.add_command(label="Smoke Check", command=self._run_smoke_check)
         menu.add_cascade(label="Run", menu=run_menu)
+        for item in (menu, file_menu, run_menu):
+            item.configure(
+                background=UI_COLORS["panel"],
+                foreground=UI_COLORS["text"],
+                activebackground=UI_COLORS["selection"],
+                activeforeground=UI_COLORS["primary"],
+                borderwidth=0,
+            )
         self.root.config(menu=menu)
 
     def _build_track_panel(self, parent: ttk.Frame) -> None:
@@ -185,18 +390,18 @@ class MasteringStudioApp:
         parent.columnconfigure(0, weight=1)
         toolbar = ttk.Frame(parent)
         toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        for text, command in (
-            ("Add Files", self._add_files),
-            ("Remove", self._remove_selected_track),
-            ("Move Up", lambda: self._move_track(-1)),
-            ("Move Down", lambda: self._move_track(1)),
-            ("Analyze", self._analyze_tracks),
-            ("Play Source", self._play_selected_source),
-            ("Play Master", self._play_selected_master),
-            ("Stop", self._stop_playback),
+        for text, command, style_name in (
+            ("Add Files", self._add_files, "Primary.TButton"),
+            ("Remove", self._remove_selected_track, "Danger.TButton"),
+            ("Move Up", lambda: self._move_track(-1), "Ghost.TButton"),
+            ("Move Down", lambda: self._move_track(1), "Ghost.TButton"),
+            ("Analyze", self._analyze_tracks, "Accent.TButton"),
+            ("Play Source", self._play_selected_source, "TButton"),
+            ("Play Master", self._play_selected_master, "TButton"),
+            ("Stop", self._stop_playback, "Ghost.TButton"),
         ):
-            ttk.Button(toolbar, text=text, command=command).pack(side=tk.LEFT, padx=(0, 6))
-        ttk.Label(toolbar, textvariable=self.track_counter).pack(side=tk.RIGHT)
+            ttk.Button(toolbar, text=text, command=command, style=style_name).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(toolbar, textvariable=self.track_counter, style="Counter.TLabel").pack(side=tk.RIGHT)
 
         columns = ("title", "duration", "lufs", "peak", "dr", "brightness", "format", "character", "preset", "path")
         self.track_tree = ttk.Treeview(parent, columns=columns, show="headings", height=12)
@@ -205,7 +410,7 @@ class MasteringStudioApp:
             ("duration", "Duration", 82),
             ("lufs", "LUFS", 70),
             ("peak", "True Peak", 82),
-            ("dr", "DR", 55),
+            ("dr", "LRA", 55),
             ("brightness", "Bright", 70),
             ("format", "Format", 120),
             ("character", "Character", 120),
@@ -215,6 +420,9 @@ class MasteringStudioApp:
             self.track_tree.heading(name, text=label)
             self.track_tree.column(name, width=width, minwidth=60, stretch=name == "path")
         self.track_tree.grid(row=1, column=0, sticky="nsew")
+        self.track_tree.tag_configure("even", background=UI_COLORS["table"])
+        self.track_tree.tag_configure("odd", background=UI_COLORS["table_alt"])
+        self.track_tree.tag_configure("warning", foreground=UI_COLORS["accent"])
         self.track_tree.bind("<<TreeviewSelect>>", lambda _event: self._load_selected_track())
 
         detail = ttk.LabelFrame(parent, text="Selected Track", padding=10)
@@ -238,9 +446,13 @@ class MasteringStudioApp:
             width=28,
             state="readonly",
         ).grid(row=1, column=1, columnspan=2, sticky="ew", padx=8, pady=(8, 0))
-        ttk.Button(detail, text="Apply Track Override", command=self._apply_track_override).grid(
+        ttk.Button(detail, text="Apply Track Override", command=self._apply_track_override, style="Accent.TButton").grid(
             row=1, column=3, sticky="ew", padx=8, pady=(8, 0)
         )
+        ttk.Label(detail, text="Artist").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Entry(detail, textvariable=self.track_artist).grid(row=2, column=1, sticky="ew", padx=8, pady=(8, 0))
+        ttk.Label(detail, text="ISRC").grid(row=2, column=2, sticky="w", pady=(8, 0))
+        ttk.Entry(detail, textvariable=self.track_isrc, width=18).grid(row=2, column=3, sticky="ew", padx=8, pady=(8, 0))
 
         transition_box = ttk.LabelFrame(parent, text="Transitions", padding=10)
         transition_box.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
@@ -260,6 +472,9 @@ class MasteringStudioApp:
             self.transition_tree.heading(name, text=label)
             self.transition_tree.column(name, width=width, minwidth=50)
         self.transition_tree.grid(row=0, column=0, sticky="ew")
+        self.transition_tree.tag_configure("even", background=UI_COLORS["table"])
+        self.transition_tree.tag_configure("odd", background=UI_COLORS["table_alt"])
+        self.transition_tree.tag_configure("disabled", foreground=UI_COLORS["faint"])
         self.transition_tree.bind("<<TreeviewSelect>>", lambda _event: self._load_selected_transition())
 
         controls = ttk.Frame(transition_box)
@@ -280,14 +495,20 @@ class MasteringStudioApp:
             width=7,
         ).pack(side=tk.LEFT, padx=(0, 6))
         ttk.Checkbutton(controls, text="Enabled", variable=self.transition_enabled).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(controls, text="Apply Transition", command=self._apply_transition_override).pack(side=tk.LEFT, padx=(0, 6))
-        ttk.Button(controls, text="Preview Transition", command=self._preview_transition).pack(side=tk.LEFT)
+        ttk.Button(controls, text="Apply Transition", command=self._apply_transition_override, style="Accent.TButton").pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(controls, text="Preview Transition", command=self._preview_transition, style="Primary.TButton").pack(side=tk.LEFT)
         ttk.Button(controls, text="Play Preview", command=self._play_last_preview).pack(side=tk.LEFT, padx=(6, 0))
 
         waveform_box = ttk.LabelFrame(parent, text="Selected Track Waveform / Analysis", padding=8)
         waveform_box.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         waveform_box.columnconfigure(0, weight=1)
-        self.waveform_canvas = tk.Canvas(waveform_box, height=82, bg="#101418", highlightthickness=1, highlightbackground="#374151")
+        self.waveform_canvas = tk.Canvas(
+            waveform_box,
+            height=82,
+            bg=UI_COLORS["input"],
+            highlightthickness=1,
+            highlightbackground=UI_COLORS["line_hot"],
+        )
         self.waveform_canvas.grid(row=0, column=0, sticky="ew")
         self.waveform_canvas.bind("<Configure>", lambda _event: self._redraw_selected_waveform())
         self.analysis_summary = tk.StringVar(value="Analyze a selected track to see LUFS, true peak, dynamics, brightness, width, and transient density.")
@@ -318,8 +539,8 @@ class MasteringStudioApp:
         render.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         for index in range(4):
             render.columnconfigure(index, weight=1)
-        ttk.Label(render, text="Target Preset").grid(row=0, column=0, sticky="w")
-        target_box = ttk.Combobox(render, textvariable=self.target_profile, values=tuple(TARGET_PROFILES), state="readonly")
+        ttk.Label(render, text="Delivery Profile").grid(row=0, column=0, sticky="w")
+        target_box = ttk.Combobox(render, textvariable=self.target_profile, values=delivery_choices(), state="readonly")
         target_box.grid(row=0, column=1, sticky="ew", padx=8)
         target_box.bind("<<ComboboxSelected>>", lambda _event: self._apply_target_profile())
         self._entry(render, "Target LUFS", self.target_lufs, 0, 2)
@@ -331,10 +552,15 @@ class MasteringStudioApp:
             row=2, column=3, sticky="ew", padx=8, pady=(8, 0)
         )
         self._entry(render, "LU Offset", self.tweak_lufs, 3, 0)
-        ttk.Label(render, text="Format").grid(row=3, column=2, sticky="w", pady=(8, 0))
-        ttk.Combobox(render, textvariable=self.output_format, values=("wav", "flac", "mp3", "m4a", "ogg", "opus"), state="readonly").grid(
+        ttk.Label(render, text="Bit Depth").grid(row=3, column=2, sticky="w", pady=(8, 0))
+        ttk.Combobox(render, textvariable=self.bit_depth, values=("16", "24", "32"), state="readonly", width=8).grid(
             row=3, column=3, sticky="ew", padx=8, pady=(8, 0)
         )
+        ttk.Label(render, text="Format").grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ttk.Combobox(render, textvariable=self.output_format, values=("wav", "flac", "mp3", "m4a", "ogg", "opus"), state="readonly").grid(
+            row=4, column=1, sticky="ew", padx=8, pady=(8, 0)
+        )
+        ttk.Checkbutton(render, text="Codec QC preview", variable=self.codec_preview).grid(row=4, column=2, columnspan=2, sticky="w", pady=(8, 0))
 
         tune = ttk.LabelFrame(parent, text="Fine Tuning", padding=10)
         tune.grid(row=2, column=0, sticky="ew", pady=(8, 0))
@@ -359,17 +585,17 @@ class MasteringStudioApp:
 
         actions = ttk.LabelFrame(parent, text="Actions", padding=10)
         actions.grid(row=3, column=0, sticky="ew", pady=(8, 0))
-        for text, command in (
-            ("Open Project", self._open_project),
-            ("Save Project As", self._save_project_as),
-            ("Render Full Album", lambda: self._render(album_wav=True)),
-            ("Render Tracks Only", lambda: self._render(album_wav=False)),
-            ("Smoke Check", self._run_smoke_check),
-            ("Reset Tuning", self._reset_tuning),
-            ("Open Output Folder", self._open_output_folder),
-            ("Open Report", self._open_report),
+        for text, command, style_name in (
+            ("Render Full Album", lambda: self._render(album_wav=True), "Primary.TButton"),
+            ("Render Tracks Only", lambda: self._render(album_wav=False), "Accent.TButton"),
+            ("Open Report", self._open_report, "TButton"),
+            ("Open Output Folder", self._open_output_folder, "TButton"),
+            ("Open Project", self._open_project, "Ghost.TButton"),
+            ("Save Project As", self._save_project_as, "Ghost.TButton"),
+            ("Smoke Check", self._run_smoke_check, "Ghost.TButton"),
+            ("Reset Tuning", self._reset_tuning, "Danger.TButton"),
         ):
-            ttk.Button(actions, text=text, command=command).pack(fill=tk.X, pady=3)
+            ttk.Button(actions, text=text, command=command, style=style_name).pack(fill=tk.X, pady=3)
 
     def _build_log_panel(self) -> None:
         log_frame = ttk.LabelFrame(self.root, text="Progress / Warnings", padding=(10, 6, 10, 10))
@@ -378,13 +604,30 @@ class MasteringStudioApp:
         status_row = ttk.Frame(log_frame)
         status_row.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
         status_row.columnconfigure(1, weight=1)
-        ttk.Label(status_row, textvariable=self.status).grid(row=0, column=0, sticky="w")
+        ttk.Label(status_row, textvariable=self.status, style="Console.TLabel").grid(row=0, column=0, sticky="w")
         self.progress = ttk.Progressbar(status_row, mode="indeterminate")
         self.progress.grid(row=0, column=1, sticky="ew", padx=10)
-        ttk.Button(status_row, text="Cancel", command=self._request_cancel).grid(row=0, column=2, sticky="e", padx=(0, 6))
-        ttk.Button(status_row, text="Clear Log", command=self._clear_log).grid(row=0, column=3, sticky="e")
+        ttk.Button(status_row, text="Cancel", command=self._request_cancel, style="Danger.TButton").grid(row=0, column=2, sticky="e", padx=(0, 6))
+        ttk.Button(status_row, text="Clear Log", command=self._clear_log, style="Ghost.TButton").grid(row=0, column=3, sticky="e")
         self.log = tk.Text(log_frame, height=8, wrap=tk.WORD)
+        self.log.configure(
+            background=UI_COLORS["input"],
+            foreground=UI_COLORS["text"],
+            insertbackground=UI_COLORS["primary"],
+            selectbackground=UI_COLORS["selection"],
+            selectforeground=UI_COLORS["primary"],
+            relief=tk.FLAT,
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=UI_COLORS["line"],
+            font=("Cascadia Mono", 9),
+        )
         self.log.grid(row=1, column=0, sticky="ew")
+        self.log.tag_configure("time", foreground=UI_COLORS["faint"])
+        self.log.tag_configure("normal", foreground=UI_COLORS["text"])
+        self.log.tag_configure("ok", foreground=UI_COLORS["primary"])
+        self.log.tag_configure("warning", foreground=UI_COLORS["accent"])
+        self.log.tag_configure("error", foreground=UI_COLORS["danger"])
         scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log.yview)
         scrollbar.grid(row=1, column=1, sticky="ns")
         self.log.configure(yscrollcommand=scrollbar.set)
@@ -432,12 +675,19 @@ class MasteringStudioApp:
             self.reference_path.set(selected)
 
     def _apply_target_profile(self) -> None:
-        target, ceiling = TARGET_PROFILES.get(self.target_profile.get(), (None, None))
-        if target is not None:
-            self.target_lufs.set(f"{target:.1f}")
-        if ceiling is not None:
-            self.ceiling_dbfs.set(f"{ceiling:.1f}")
-        self._log(f"Applied target preset: {self.target_profile.get()}.")
+        profile = delivery_profile(delivery_key(self.target_profile.get()))
+        if profile.target_lufs is not None:
+            self.target_lufs.set(f"{profile.target_lufs:.1f}")
+        if profile.ceiling_dbfs is not None:
+            self.ceiling_dbfs.set(f"{profile.ceiling_dbfs:.1f}")
+        if profile.sample_rate is not None:
+            self.sample_rate.set(str(profile.sample_rate))
+        if profile.bit_depth is not None:
+            self.bit_depth.set(str(profile.bit_depth))
+        if profile.output_format is not None:
+            self.output_format.set(profile.output_format)
+        self.codec_preview.set(profile.codec_preview)
+        self._log(f"Applied delivery profile: {profile.display_name}. {profile.note}")
 
     def _request_cancel(self) -> None:
         if not self.busy:
@@ -494,13 +744,21 @@ class MasteringStudioApp:
     def _load_project_state(self, project: dict, project_path: Path) -> None:
         base_dir = project_path.resolve().parent
         settings = project.get("settings", {})
+        metadata = project.get("metadata", {})
         self.album_title.set(str(project.get("album_title") or "Untitled Album"))
+        self.artist.set(str(metadata.get("artist", "")))
+        self.album_artist.set(str(metadata.get("album_artist", "")))
+        self.release_year.set(str(metadata.get("release_year", "")))
+        self.genre.set(str(metadata.get("genre", "")))
+        self.upc.set(str(metadata.get("upc", "")))
         self.sample_rate.set(str(settings.get("sample_rate", DEFAULT_SAMPLE_RATE)))
+        self.bit_depth.set(str(settings.get("bit_depth", 24)))
         self.preset.set(_preset_choice(str(settings.get("preset", "album-cohesion-cinematic"))))
         self.arc.set(_arc_choice(str(settings.get("arc", "cinematic"))))
         self.arc_intensity.set(float(settings.get("arc_intensity", 1.0)))
         self.output_format.set(str(settings.get("output_format", "wav")))
-        self.target_profile.set(str(settings.get("target_profile", "Custom")))
+        self.target_profile.set(_delivery_choice_from_settings(settings))
+        self.codec_preview.set(bool(settings.get("codec_preview", True)))
         self.transition_style.set(str(settings.get("default_interlude_style", "auto")))
         self.transition_duration.set(float(settings.get("default_interlude_duration", 8.0)))
         self.target_lufs.set("" if settings.get("target_lufs") is None else str(settings.get("target_lufs")))
@@ -536,6 +794,8 @@ class MasteringStudioApp:
                     title=str(raw_track.get("title") or path.stem),
                     character=str(raw_track.get("character") or "auto"),
                     preset=str(raw_track.get("preset") or "auto"),
+                    artist=str(raw_track.get("artist") or ""),
+                    isrc=str(raw_track.get("isrc") or ""),
                 )
             )
         raw_transitions = list(project.get("transitions", []))
@@ -568,7 +828,7 @@ class MasteringStudioApp:
                 continue
             if len(self.tracks) >= MAX_TRACKS:
                 break
-            self.tracks.append(TrackState(path=path, title=path.stem))
+            self.tracks.append(TrackState(path=path, title=path.stem, artist=self.artist.get().strip()))
             added += 1
         if added:
             self._sync_transitions()
@@ -612,6 +872,8 @@ class MasteringStudioApp:
         track = self.tracks[index]
         self.editing_track_index = index
         self.track_title.set(track.title)
+        self.track_artist.set(track.artist or self.artist.get())
+        self.track_isrc.set(track.isrc)
         self.track_character.set(track.character)
         self.track_preset.set("auto" if track.preset == "auto" else _preset_choice(track.preset))
         self._update_selected_analysis(track)
@@ -632,6 +894,8 @@ class MasteringStudioApp:
         except ValueError:
             preset = track.preset
         track.title = self.track_title.get().strip() or track.path.stem
+        track.artist = self.track_artist.get().strip()
+        track.isrc = self.track_isrc.get().strip().upper()
         track.character = self.track_character.get()
         track.preset = preset
         if not silent:
@@ -880,10 +1144,14 @@ class MasteringStudioApp:
         self.compression.set(0.0)
         self.limiter.set(0.0)
         self.width.set(0.0)
-        self.target_lufs.set("")
+        self.target_lufs.set("-14.0")
         self.ceiling_dbfs.set("-1.0")
+        self.sample_rate.set(str(DEFAULT_SAMPLE_RATE))
+        self.bit_depth.set("24")
+        self.output_format.set("wav")
+        self.codec_preview.set(True)
         self.tweak_lufs.set("0.0")
-        self.target_profile.set("Custom")
+        self.target_profile.set(delivery_choice("streaming-universal"))
         self.track_character.set("auto")
         self.track_preset.set("auto")
         self.transition_override_style.set("inherit")
@@ -906,6 +1174,9 @@ class MasteringStudioApp:
     def _project_dict(self, album_wav: bool) -> dict:
         self._save_open_editors()
         sample_rate = _read_int(self.sample_rate, "Sample rate", minimum=8_000, maximum=192_000)
+        bit_depth = _read_int(self.bit_depth, "Bit depth", minimum=16, maximum=32)
+        if bit_depth not in {16, 24, 32}:
+            raise ValueError("Bit depth must be 16, 24, or 32.")
         transition_duration = _read_float(self.transition_duration, "Transition seconds", minimum=0.25, maximum=30.0)
         transition_style = self.transition_style.get()
         reference = self.reference_path.get().strip()
@@ -913,11 +1184,21 @@ class MasteringStudioApp:
         return {
             "version": 1,
             "album_title": self.album_title.get().strip() or "Untitled Album",
+            "metadata": {
+                "artist": self.artist.get().strip(),
+                "album_artist": self.album_artist.get().strip(),
+                "genre": self.genre.get().strip(),
+                "release_year": self.release_year.get().strip(),
+                "upc": self.upc.get().strip(),
+            },
             "settings": {
                 "sample_rate": sample_rate,
                 "preset": _preset_key(self.preset.get()),
                 "output_format": self.output_format.get(),
+                "bit_depth": bit_depth,
+                "delivery_profile": delivery_key(self.target_profile.get()),
                 "target_profile": self.target_profile.get(),
+                "codec_preview": bool(self.codec_preview.get()),
                 "target_lufs": _optional_float(self.target_lufs.get(), "Target LUFS"),
                 "ceiling_dbfs": _optional_float(self.ceiling_dbfs.get(), "Ceiling dBFS"),
                 "reference_track": str(Path(reference).expanduser()) if reference else None,
@@ -942,6 +1223,8 @@ class MasteringStudioApp:
                     "title": track.title,
                     "character": track.character,
                     "preset": track.preset,
+                    "artist": track.artist,
+                    "isrc": track.isrc,
                 }
                 for track in self.tracks
             ],
@@ -1019,16 +1302,18 @@ class MasteringStudioApp:
             info = track.probe or {}
             duration = stats.get("duration_seconds") or info.get("format", {}).get("duration")
             fmt = _format_probe(info)
+            tags = ("warning",) if track.warnings else ("even" if index % 2 == 0 else "odd",)
             self.track_tree.insert(
                 "",
                 tk.END,
                 iid=str(index),
+                tags=tags,
                 values=(
                     track.title,
                     _seconds(duration),
                     _num(stats.get("integrated_lufs")),
                     _num(stats.get("true_peak_dbfs")),
-                    _num(stats.get("dynamic_range_db")),
+                    _num(stats.get("loudness_range_lu_proxy", stats.get("dynamic_range_db"))),
                     _num(stats.get("spectral_centroid_hz"), digits=0),
                     fmt,
                     track.character,
@@ -1045,10 +1330,12 @@ class MasteringStudioApp:
         self._sync_transitions()
         self.transition_tree.delete(*self.transition_tree.get_children())
         for index, transition in enumerate(self.transitions):
+            tags = ("disabled",) if not transition.enabled else ("even" if index % 2 == 0 else "odd",)
             self.transition_tree.insert(
                 "",
                 tk.END,
                 iid=str(index),
+                tags=tags,
                 values=(
                     f"{index + 1} -> {index + 2}",
                     transition.style,
@@ -1067,6 +1354,8 @@ class MasteringStudioApp:
                 " | ".join(
                     [
                         f"LUFS {_num(stats.get('integrated_lufs'))}",
+                        f"ST max {_num(stats.get('short_term_lufs_max'))}",
+                        f"LRA {_num(stats.get('loudness_range_lu_proxy'))}",
                         f"True peak {_num(stats.get('true_peak_dbfs'))} dBFS",
                         f"RMS {_num(stats.get('rms_dbfs'))} dBFS",
                         f"DR {_num(stats.get('dynamic_range_db'))}",
@@ -1087,15 +1376,16 @@ class MasteringStudioApp:
         width = max(canvas.winfo_width(), 320)
         height = max(canvas.winfo_height(), 80)
         mid = height / 2.0
-        canvas.create_line(0, mid, width, mid, fill="#334155")
+        canvas.configure(bg=UI_COLORS["input"], highlightbackground=UI_COLORS["line_hot"])
+        canvas.create_line(0, mid, width, mid, fill=UI_COLORS["wave_mid"])
         if not waveform:
-            canvas.create_text(width / 2.0, mid, text="No waveform yet", fill="#94a3b8")
+            canvas.create_text(width / 2.0, mid, text="No waveform yet", fill=UI_COLORS["muted"])
             return
         step = width / max(len(waveform), 1)
         for index, value in enumerate(waveform):
             x = index * step
             amp = max(0.0, min(float(value), 1.0)) * (height * 0.44)
-            canvas.create_line(x, mid - amp, x, mid + amp, fill="#38bdf8")
+            canvas.create_line(x, mid - amp, x, mid + amp, fill=UI_COLORS["wave"])
 
     def _start_background(self, target, *args) -> None:
         if self.busy:
@@ -1142,7 +1432,17 @@ class MasteringStudioApp:
         self.root.after(150, self._poll_queue)
 
     def _log(self, message: str) -> None:
-        self.log.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')}  {message}\n")
+        lower = message.lower()
+        if lower.startswith("error") or "failed" in lower:
+            tag = "error"
+        elif "warning" in lower or "missing" in lower or "risk" in lower:
+            tag = "warning"
+        elif "ready" in lower or "complete" in lower or "passed" in lower or "wrote" in lower:
+            tag = "ok"
+        else:
+            tag = "normal"
+        self.log.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')}  ", ("time",))
+        self.log.insert(tk.END, f"{message}\n", (tag,))
         self.log.see(tk.END)
 
     def _open_output_folder(self) -> None:
@@ -1160,6 +1460,14 @@ class MasteringStudioApp:
 
 def _preset_choices() -> tuple[str, ...]:
     return tuple(f"{preset.display_name} ({key})" for key, preset in sorted(PRESETS.items()))
+
+
+def _delivery_choice_from_settings(settings: dict) -> str:
+    value = settings.get("delivery_profile", settings.get("target_profile", "streaming-universal"))
+    try:
+        return delivery_choice(delivery_key(str(value)))
+    except ValueError:
+        return delivery_choice("streaming-universal")
 
 
 def _preset_choice(key: str) -> str:
@@ -1294,3 +1602,7 @@ def _open_path(path: Path) -> None:
         subprocess.Popen(["open", str(path)])
     else:
         subprocess.Popen(["xdg-open", str(path)])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

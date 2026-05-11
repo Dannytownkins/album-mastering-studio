@@ -41,6 +41,8 @@ Current working tree is intentionally dirty with an in-progress review-fix patch
 
 Known modified/new files at handoff time:
 
+- `AGENTS.md`
+- `README.md`
 - `src/album_mastering_studio/app.py`
 - `src/album_mastering_studio/audio_io.py`
 - `src/album_mastering_studio/dashboard.py`
@@ -50,9 +52,13 @@ Known modified/new files at handoff time:
 - `src/album_mastering_studio/mastering.py`
 - `src/album_mastering_studio/pipeline.py`
 - `src/album_mastering_studio/scoring.py`
+- `src/album_mastering_studio/smoke.py`
+- `src/album_mastering_studio/standards.py`
 - `tests/test_pipeline.py`
 - `pyproject.toml`
 - `src/album_mastering_studio/constants.py`
+- `docs/progress.md`
+- `docs/research-implementation-notes.md`
 - this file
 
 ## Screenshot Critiques To Re-Check
@@ -94,6 +100,11 @@ These have code changes started and should be preserved unless found broken:
   - Added FFmpeg/FFprobe preflight helper.
   - Added subprocess timeout.
   - Split `.ogg` to `libvorbis` and `.opus` to `libopus`.
+  - Writes dithered 24-bit/16-bit PCM WAVs directly by default; 32-bit float is explicit.
+- `standards.py`
+  - Added delivery profile shortcuts from the two research reports: streaming universal, AES album mode, Apple/AAC check, YouTube/video, Amazon/speaker-safe, CD 16/44.1, vinyl premaster, and loud-rock reference.
+- `analysis.py`
+  - Added short-term loudness maximum and LRA-style loudness range proxy fields.
 - `mastering.py`
   - Replaced tanh ceiling path with a local oversampled lookahead gain limiter. It no longer uses centered lookahead or whole-song true-peak trim.
   - Replaced the centered compressor attack detector with causal attack/release filtering.
@@ -115,6 +126,9 @@ These have code changes started and should be preserved unless found broken:
   - Uses sample-rate-aware limiter for edge shaping.
   - Adds warning when LUFS match hits the clamp and misses target.
   - Adds optional reference-track analysis to manifests.
+  - Adds delivery profile, bit depth, codec QC, metadata, cue sheet, and normalization-preview data to manifests.
+  - Writes `album_sequence.cue` and `album_sequence.cue.json` for continuous album renders.
+  - Writes AAC and Opus round-trip codec QC preview files when enabled.
   - Accepts `"inherit"` project transition styles and resolves them at render time.
   - Updates edge-shaped `applied_gain_db` after the post-edge limiter.
 - `scoring.py`
@@ -128,6 +142,7 @@ These have code changes started and should be preserved unless found broken:
 - `tests/test_pipeline.py`
   - Added tempo regression test.
   - Adjusted hard-cut expectation.
+  - Added assertions for cue outputs, codec preview records, 24-bit WAV sample width, metadata preservation, and richer loudness fields.
 - `app.py`
   - Added project Open/Save menu and actions.
   - Added FFmpeg preflight.
@@ -146,13 +161,13 @@ These have code changes started and should be preserved unless found broken:
   - Warns when oversized projects/transitions are truncated to the current 8-track cap.
   - Caches decoded playback WAVs and deletes the playback temp folder on close.
   - Validates output folder writability before render/preview.
+  - Adds a dark early-2000s-clean-cyberpunk theme with styled menus, tables, waveform canvas, log severity colors, and clearer primary/secondary/destructive button hierarchy.
+  - Adds release metadata fields, per-track artist/ISRC fields, delivery profile, bit-depth, and codec QC controls.
 - `loudness.py`
   - Uses `pyloudnorm` when installed, with the local LUFS approximation retained as a fallback.
 - `dashboard.py`
   - Shows reference-track analysis when a reference is selected.
-- `audio_io.py`
-  - Writes WAV directly instead of temp-WAV-to-FFmpeg-to-WAV.
-  - Uses configurable `ALBUM_MASTER_FFMPEG_TIMEOUT`, default 900 seconds.
+  - Shows delivery profile, release metadata, normalization preview, codec QC, cue outputs, and richer metering.
 
 ## Current Status
 
@@ -163,6 +178,8 @@ The app patch has been completed enough to instantiate and pass smoke. The playb
 - `_play_last_preview`
 - waveform drawing/update helpers
 - analysis worker waveform capture
+
+The two deep-research reports were read and converted into `docs/research-implementation-notes.md`. Implemented now: delivery profiles, integer/dithered WAV exports, codec QC, cue sheets, metadata, normalization preview, and richer metering. Deferred deliberately: JUCE/C++ rewrite, plugin hosting, Demucs/stem separation, cloud AI transition providers, full Essentia/madmom key/tempo stack, real metadata container tagging, and full reference matching.
 
 If another instance resumes this, run verification before assuming the tree is still clean:
 
@@ -179,7 +196,7 @@ Run all of these fresh:
 ```powershell
 python -m compileall -q src tests
 python -m unittest discover -s tests
-python -m album_mastering_studio.cli smoke --output test-output\codex-loop-smoke
+python -m album_mastering_studio.cli smoke --output test-output\codex-research-smoke
 ```
 
 Then instantiate the app:
@@ -203,6 +220,9 @@ Also inspect the 8-track smoke manifest for:
 - 7 transitions
 - `album_sequence.wav`
 - `dashboard.html`
+- `album_sequence.cue`
+- `album_sequence.cue.json`
+- codec preview records/files when enabled
 - no NaN/inf
 - no unexpected true-peak warnings after limiter patch
 
@@ -211,21 +231,23 @@ Latest verified run in this thread:
 ```text
 python -m compileall -q src tests
 python -m unittest discover -s tests
-python -m album_mastering_studio.cli smoke --output test-output\codex-loop-smoke
+python -m album_mastering_studio.cli smoke --output test-output\codex-research-smoke
 hidden Tk app instantiation
-reference-track render/dashboard check
 ```
 
 Result:
 
 - 13 unit tests passed.
-- Smoke passed.
+- Smoke passed in `test-output\codex-research-smoke`.
 - App instantiated.
-- 8-track render: 8 masters, 7 interludes, album WAV, dashboard, scorecard.
+- 8-track render: 8 masters, 7 interludes, album WAV, cue sheet, cue JSON, 2 codec preview files, dashboard, scorecard.
 - 8-track warnings: 0.
 - Album true peak proxy: -1.14 dBFS.
+- Album integrated loudness: -14.29 LUFS.
+- Album WAV: stereo 48 kHz, 24-bit PCM (`sample_width` 3).
+- Delivery profile in 8-track smoke: `streaming-universal`.
 - Interlude LUFS in smoke ranged about -20.0 to -14.9 LUFS, now style/context-relative instead of fixed quiet.
-- Reference render wrote reference analysis to `manifest.json` and `dashboard.html`.
+- Reference render/dashboard support was verified earlier in the thread and remains covered by project/render paths, but it was not separately re-run in this last research pass.
 
 ## Likely Next Product Fixes After Current Patch
 

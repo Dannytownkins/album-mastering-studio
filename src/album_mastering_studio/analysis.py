@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from .loudness import integrated_lufs, true_peak_dbfs
+from .loudness import integrated_lufs, k_weight, true_peak_dbfs
 
 EPSILON = 1e-12
 
@@ -17,6 +17,8 @@ class AudioStats:
     true_peak_dbfs: float
     rms_dbfs: float
     integrated_lufs: float
+    short_term_lufs_max: float
+    loudness_range_lu_proxy: float
     crest_factor_db: float
     dynamic_range_db: float
     stereo_correlation: float | None
@@ -58,6 +60,7 @@ def analyze_audio(samples: np.ndarray, sample_rate: int) -> AudioStats:
             correlation = float(np.corrcoef(left, right)[0, 1])
 
     lufs = integrated_lufs(samples, sample_rate)
+    short_term = _short_term_loudness(samples, sample_rate)
     true_peak = true_peak_dbfs(samples)
     spectral_centroid = _spectral_centroid(mono, sample_rate)
     spectral_balance = _spectral_balance(mono, sample_rate)
@@ -69,6 +72,8 @@ def analyze_audio(samples: np.ndarray, sample_rate: int) -> AudioStats:
         true_peak_dbfs=true_peak,
         rms_dbfs=rms_db,
         integrated_lufs=lufs,
+        short_term_lufs_max=short_term["max"],
+        loudness_range_lu_proxy=short_term["range"],
         crest_factor_db=peak_db - rms_db,
         dynamic_range_db=_dynamic_range(mono, sample_rate),
         stereo_correlation=correlation,
@@ -152,6 +157,31 @@ def _dynamic_range(mono: np.ndarray, sample_rate: int) -> float:
 
     db_values = amplitude_to_db(np.asarray(values, dtype=np.float64))
     return round(float(np.percentile(db_values, 95) - np.percentile(db_values, 10)), 4)
+
+
+def _short_term_loudness(samples: np.ndarray, sample_rate: int) -> dict[str, float]:
+    if samples.size == 0 or sample_rate <= 0:
+        return {"max": -120.0, "range": 0.0}
+
+    weighted = k_weight(samples, sample_rate)
+    window = max(int(sample_rate * 3.0), 1)
+    hop = max(int(sample_rate * 0.5), 1)
+    values = []
+    for start in range(0, max(weighted.shape[0] - window + 1, 1), hop):
+        block = weighted[start : min(start + window, weighted.shape[0])]
+        if block.size:
+            values.append(float(np.sum(np.mean(np.square(block), axis=0))))
+    if not values:
+        return {"max": -120.0, "range": 0.0}
+
+    lufs_like = -0.691 + (10.0 * np.log10(np.maximum(np.asarray(values, dtype=np.float64), EPSILON)))
+    audible = lufs_like[lufs_like > -70.0]
+    if audible.size == 0:
+        return {"max": -120.0, "range": 0.0}
+    return {
+        "max": round(float(np.max(audible)), 4),
+        "range": round(float(np.percentile(audible, 95) - np.percentile(audible, 10)), 4),
+    }
 
 
 def _stereo_width_score(samples: np.ndarray) -> float:

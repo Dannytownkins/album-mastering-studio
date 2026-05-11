@@ -107,6 +107,7 @@ def _eight_track(root: Path) -> dict:
         project_path,
         RenderOptions(
             preset="album-cohesion-cinematic",
+            delivery_profile="streaming-universal",
             target_lufs=-13.5,
             ceiling_dbfs=-1.0,
             interlude_duration=0.5,
@@ -155,6 +156,14 @@ def _check_render(
         failures.append("manifest.json missing")
     if not manifest.get("album_sequence") or not Path(manifest["album_sequence"]).exists():
         failures.append("continuous album WAV missing")
+    if not manifest.get("cue_sheet") or not Path(manifest["cue_sheet"]).exists():
+        failures.append("cue sheet missing")
+    if len(manifest.get("cue_points", [])) != expected_tracks + expected_interludes:
+        failures.append("cue point count mismatch")
+    if manifest.get("settings", {}).get("codec_preview", True) and expected_tracks:
+        codec_previews = manifest.get("codec_previews", [])
+        if len(codec_previews) < 2:
+            failures.append("codec QC previews missing")
     if len(list((render_dir / "masters").glob("*.wav"))) != expected_tracks:
         failures.append("individual mastered WAV count mismatch")
     if len(list((render_dir / "interludes").glob("*.wav"))) != expected_interludes:

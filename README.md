@@ -11,7 +11,7 @@ The main use case is a complete record: for example, an eight-track sequence tha
 ## What It Does
 
 - Imports WAV, AIFF, FLAC, MP3, M4A/AAC, OGG, and Opus through FFmpeg.
-- Analyzes loudness, true peak, dynamics, spectral balance, stereo image, transient density, and energy density.
+- Analyzes integrated LUFS, short-term loudness maximum, LRA-style loudness range proxy, true peak, dynamics, spectral balance, stereo image, transient density, and energy density.
 - Can analyze an optional reference track and include it in the render manifest/dashboard for comparison.
 - Infers broad track character: `acoustic_folk`, `transition`, `heavy_djent`, and `return_acoustic`.
 - Masters tracks with LUFS-style targeting, ceiling limiting, compression, high-pass cleanup, taste EQ, transient shaping, stereo width, and saturation.
@@ -21,6 +21,10 @@ The main use case is a complete record: for example, an eight-track sequence tha
 - Generates interludes from neighboring track audio using estimated root movement, filtered tail/head texture, harmonic pads, noise air, tape color, swells, and rhythmic gates.
 - Creates editable `.ams.json` album project files with track order, titles, character overrides, arc settings, and per-transition controls.
 - Renders transition previews so you can audition the important seams without re-rendering the whole album.
+- Exports dithered 24-bit or 16-bit WAV masters instead of defaulting to 32-bit float delivery files.
+- Adds delivery profiles for streaming, AES album-mode, Apple/AAC checking, YouTube/video, Amazon/speaker-safe, CD 16/44.1, vinyl premaster, and loud-rock references.
+- Writes sample-accurate cue files for the continuous album WAV and runs AAC/Opus codec QC previews when enabled.
+- Stores release metadata such as artist, album artist, genre, year, UPC, per-track artist, and ISRC in project files, manifests, and dashboards.
 - Scores its own renders from the actual album WAV plus manifest data, with optional LLM critique when API credentials are available.
 - Iterates projects over bounded render/score passes, applies at most one improvement per pass, and logs the decision.
 - Exports a standalone HTML dashboard/report with album arc, track roles, transition rationales, and scorecard.
@@ -56,13 +60,15 @@ or:
 album-master-studio
 ```
 
-The app is a plain Windows-friendly launcher: add up to 8 songs, reorder them, optionally choose a reference track, analyze, choose a preset and album arc, pick a target profile or manual LUFS/ceiling, adjust fine-tuning controls, set transition defaults or per-transition overrides, preview/listen where practical, render the album, then open the output folder or dashboard report.
+The app is a dark Windows-friendly launcher: add up to 8 songs, reorder them, optionally enter release metadata, choose a reference track, analyze, choose a preset and album arc, pick a delivery profile or manual LUFS/ceiling/sample-rate/bit-depth settings, adjust fine-tuning controls, set transition defaults or per-transition overrides, preview/listen where practical, render the album, then open the output folder or dashboard report.
 
 Core render outputs:
 
 - `masters/`: individual mastered WAVs or selected export format
 - `interludes/`: generated transition files
 - `album_sequence.wav`: continuous album master when full album render is selected
+- `album_sequence.cue` and `album_sequence.cue.json`: sample-accurate cue points for the continuous album
+- `codec_previews/`: AAC and Opus round-trip QC renders when codec preview is enabled
 - `manifest.json`: inputs, settings, analysis, warnings, output paths, and transition rationales
 - `scorecard.json`: local render-health score when run through the app or `score-render`
 - `dashboard.html`: readable report when run through the app or `export-dashboard`
@@ -70,7 +76,7 @@ Core render outputs:
 ## Quick Render
 
 ```powershell
-album-master render .\raw-tracks --output .\outputs\album-v1 --preset album-cohesion-cinematic --arc cinematic --interlude-style auto --interlude-duration 8 --album-wav
+album-master render .\raw-tracks --output .\outputs\album-v1 --preset album-cohesion-cinematic --delivery-profile streaming-universal --arc cinematic --interlude-style auto --interlude-duration 8 --album-wav
 album-master score-render .\outputs\album-v1\manifest.json --scorer local
 album-master export-dashboard .\outputs\album-v1\manifest.json --output .\outputs\album-v1\dashboard.html
 ```
@@ -80,6 +86,8 @@ The output folder contains:
 - `masters/`: mastered track files
 - `interludes/`: musical transitions between tracks
 - `album_sequence.wav`: continuous album render when `--album-wav` is used
+- `album_sequence.cue` / `album_sequence.cue.json`: cue sheet and JSON split map for the continuous album
+- `codec_previews/`: AAC/Opus lossy round-trip QC previews when enabled
 - `manifest.json`: settings, album story, arc plan, character inference, track analysis, render paths, per-track/per-transition rationales, edge-mastering moves, preset metadata
 
 ## Project Workflow
@@ -87,7 +95,7 @@ The output folder contains:
 Create an editable album project:
 
 ```powershell
-album-master init-project .\raw-tracks --project .\album.ams.json --title "Album Draft" --preset velvet-museum --arc cinematic --interlude-style auto --interlude-duration 8 --album-wav
+album-master init-project .\raw-tracks --project .\album.ams.json --title "Album Draft" --artist "Dan" --album-artist "Dan" --genre "Folk Metal" --year 2026 --preset velvet-museum --delivery-profile aes-album-mode --arc cinematic --interlude-style auto --interlude-duration 8 --album-wav
 ```
 
 Edit `album.ams.json` to adjust track titles, order, inferred/assigned character, and transition controls:
@@ -98,7 +106,9 @@ Edit `album.ams.json` to adjust track titles, order, inferred/assigned character
     {
       "path": "raw-tracks/04_djent_arrival.wav",
       "title": "The Door Gives Way",
-      "character": "heavy_djent"
+      "character": "heavy_djent",
+      "artist": "Dan",
+      "isrc": "USXXX2600001"
     }
   ],
   "transitions": [
@@ -179,7 +189,18 @@ Fine-tuning controls:
 --tweak-limiter 0.2
 ```
 
-The desktop app also includes target profile shortcuts for common album/export directions such as streaming, Apple-ish, YouTube-ish, quiet album, and loud rock. Those shortcuts simply set the manual LUFS/ceiling controls; you can still override them directly.
+The desktop app includes delivery profile shortcuts that set practical LUFS, ceiling, sample-rate, bit-depth, output-format, and codec-preview defaults. They are shortcuts, not laws: you can still override the manual controls after choosing one.
+
+Delivery profiles:
+
+- `streaming-universal`: practical -14 LUFS / -1 dBTP private streaming baseline.
+- `aes-album-mode`: album-oriented profile that preserves relative track intent.
+- `apple-aac-check`: conservative Apple/Sound Check-style reference with AAC clipping preview.
+- `youtube-video`: 48 kHz / 24-bit video-oriented delivery.
+- `amazon-alexa-safe`: -2 dBTP safety ceiling for lossy/speaker playback.
+- `cd-16`: 16-bit / 44.1 kHz WAV with final-stage dither.
+- `vinyl-premaster`: relaxed -18 LUFS / -3 dB headroom premaster.
+- `loud-rock`: competitive loud-rock reference that reports expected normalization penalty.
 
 The desktop `LU Offset` field is the same album-wide offset used by the iteration command. It is saved in `.ams.json` projects and is meant for small whole-album loudness moves after the preset and arc have done the broad shaping.
 
@@ -217,7 +238,7 @@ Use `--arc-intensity` to control how strongly track targets move around the pres
 The chain is deliberately transparent:
 
 1. Decode to stereo float audio through FFmpeg.
-2. Analyze duration, sample peak, true peak estimate, RMS, integrated LUFS-style loudness, crest factor, dynamic range, stereo image, spectral centroid, spectral balance, transient density, and energy density.
+2. Analyze duration, sample peak, true peak estimate, RMS, integrated LUFS-style loudness, short-term loudness maximum, LRA-style loudness range proxy, crest factor, dynamic range proxy, stereo image, spectral centroid, spectral balance, transient density, and energy density.
 3. Infer track character across the whole sequence, including return/acoustic after the heavy center.
 4. Plan album-level target loudness, track role, mastering bias, transition style, transition duration, and hard-handoff edge treatments.
 5. Remove DC and apply a protective high-pass.
@@ -228,7 +249,8 @@ The chain is deliberately transparent:
 10. Adjust stereo width through mid/side processing.
 11. Match the planned album-arc LUFS target.
 12. Apply tail/head edge treatment for the adjacent transitions.
-13. Apply ceiling limiting and write the selected output format.
+13. Apply ceiling limiting, dither when writing integer-depth WAV, write the selected output format, and optionally run AAC/Opus codec QC previews.
+14. Write manifest, dashboard, and sample-accurate cue sheet data for the continuous album.
 
 ## Transition Planning
 
@@ -257,7 +279,7 @@ python -m compileall -q src tests
 album-master smoke --output .\test-output\smoke
 ```
 
-The test suite includes an eight-track synthetic album that exercises the acoustic -> heavy/djent -> acoustic return workflow end to end, including render, interludes, full album WAV, transition preview, scorecard, dashboard, and narrative rationales. The smoke command also verifies 1-track, 2-track, and 8-track renders, individual mastered tracks, transition files, manifest/report artifacts, finite samples, and basic ceiling safety.
+The test suite includes an eight-track synthetic album that exercises the acoustic -> heavy/djent -> acoustic return workflow end to end, including render, interludes, full album WAV, transition preview, scorecard, dashboard, cue sheets, codec QC preview records, and narrative rationales. The smoke command also verifies 1-track, 2-track, and 8-track renders, individual mastered tracks, transition files, manifest/report artifacts, finite samples, and basic ceiling safety.
 
 ## Troubleshooting
 
@@ -265,6 +287,7 @@ The test suite includes an eight-track synthetic album that exercises the acoust
 - `Required audio tool is missing: ffprobe`: FFprobe ships with FFmpeg; add the FFmpeg `bin` folder to `PATH`.
 - The app opens but render fails immediately: run `album-master analyze .\path\to\song.wav` to confirm decode works outside the GUI.
 - MP3/M4A/Opus export fails: your FFmpeg build may not include that encoder. Use WAV or FLAC.
+- Codec QC warnings mean the rendered WAV survived, but the AAC/Opus round trip may clip or exceed the selected ceiling. Lower the ceiling or loudness target and rerender.
 - A track reports clipping or ceiling warnings: the render still completed, but inspect the source and output before trusting the loudness setting.
 - Long FFmpeg exports can raise a timeout; set `ALBUM_MASTER_FFMPEG_TIMEOUT` to a larger number of seconds before rendering.
 - LUFS and true peak are local approximations. For a real release, validate the final WAV in a trusted external meter.
