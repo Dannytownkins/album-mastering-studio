@@ -280,7 +280,33 @@ label {
 
 .button-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.compare-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--amber);
+  background: var(--amber-dim);
+  color: var(--amber);
+  padding: 10px 12px;
+}
+
+.compare-panel > span {
+  font-weight: 800;
+}
+
+.compare-panel > div {
+  display: flex;
+  gap: 8px;
+}
+
+.compare-panel button.active {
+  border-color: var(--green);
+  background: var(--green-dim);
+  color: var(--green);
 }
 
 .render-panel {

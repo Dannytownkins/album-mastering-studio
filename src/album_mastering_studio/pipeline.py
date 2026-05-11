@@ -359,6 +359,7 @@ def render_sequence(
         completed_steps += 1
 
     sequence: list[dict] = []
+    rendered_interludes: dict[int, np.ndarray] = {}
     for index, (track, audio, result, track_arc) in enumerate(mastered, start=1):
         source = track.path
         title = track.title or source.stem
@@ -413,6 +414,7 @@ def render_sequence(
                     ),
                     ceiling_dbfs=_interlude_ceiling(options),
                 )
+                rendered_interludes[index] = interlude
                 interlude_stats = analyze_audio(interlude, options.sample_rate)
                 interlude_warnings = _interlude_warnings(index, interlude_stats, transition.style)
                 warnings.extend(f"Transition {index}->{index + 1}: {warning}" for warning in interlude_warnings)
@@ -451,7 +453,13 @@ def render_sequence(
     if options.album_wav:
         _progress(progress, "album", "Rendering continuous album WAV", completed_steps, total_steps)
         album_path = output_dir / "album_sequence.wav"
-        album_audio, cue_points = _build_album_sequence_with_cues(mastered, options, transitions, album_title)
+        album_audio, cue_points = _build_album_sequence_with_cues(
+            mastered,
+            options,
+            transitions,
+            album_title,
+            rendered_interludes=rendered_interludes,
+        )
         write_audio(album_path, album_audio, options.sample_rate, bit_depth=options.bit_depth)
         album_analysis = analyze_audio(album_audio, options.sample_rate)
         album_warnings = _album_warnings(album_analysis, options.ceiling_dbfs)
@@ -674,6 +682,7 @@ def _build_album_sequence_with_cues(
     options: RenderOptions,
     transitions: list[TransitionSpec],
     album_title: str | None,
+    rendered_interludes: dict[int, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, list[dict]]:
     chunks: list[np.ndarray] = []
     cues: list[dict] = []
@@ -712,19 +721,22 @@ def _build_album_sequence_with_cues(
         )
         if not transition.enabled:
             continue
-        interlude = make_interlude(
-            audio,
-            mastered[index + 1][1],
-            options.sample_rate,
-            transition.duration_seconds,
-            transition.style,
-            target_lufs=_transition_target_lufs(
-                mastered[index][2].after.integrated_lufs,
-                mastered[index + 1][2].after.integrated_lufs,
+        transition_number = index + 1
+        interlude = (rendered_interludes or {}).get(transition_number)
+        if interlude is None:
+            interlude = make_interlude(
+                audio,
+                mastered[index + 1][1],
+                options.sample_rate,
+                transition.duration_seconds,
                 transition.style,
-            ),
-            ceiling_dbfs=_interlude_ceiling(options),
-        )
+                target_lufs=_transition_target_lufs(
+                    mastered[index][2].after.integrated_lufs,
+                    mastered[index + 1][2].after.integrated_lufs,
+                    transition.style,
+                ),
+                ceiling_dbfs=_interlude_ceiling(options),
+            )
         chunks.append(interlude)
         end = cursor + int(interlude.shape[0])
         cues.append(

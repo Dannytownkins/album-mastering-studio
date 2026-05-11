@@ -10,6 +10,7 @@ Keep the product useful before polishing architecture. Prefer complete vertical 
 
 - Work from the existing Python package in `src/album_mastering_studio`; do not restart from scratch unless the current implementation blocks the requested outcome.
 - Treat the Python CLI as the engine contract for the Tauri desktop app. Add missing workflow capabilities to the CLI before calling them from Tauri; do not port DSP to Rust.
+- Release builds bundle a frozen Python CLI sidecar and FFmpeg/FFprobe resources. Keep the dev fallback path, but do not reintroduce a repo/Python requirement for normal installed-app use.
 - Keep processing local/offline by default. Do not upload songs or require external services.
 - No hardcoded secrets, no global installs, and no cloud dependency for core processing.
 - Keep FFmpeg/FFprobe as the audio import/export boundary, and keep final WAV exports as integer PCM unless explicitly testing float intermediates.
@@ -50,6 +51,13 @@ Build the Windows desktop app/installer:
 cd desktop
 & cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
 ```
+
+`npm run tauri:build` runs `npm run build:sidecars`, which:
+
+- creates/uses the local `.venv`
+- installs the Python package and PyInstaller locally
+- builds `desktop/src-tauri/resources/engine/album-master-engine.exe`
+- copies `ffmpeg.exe` and `ffprobe.exe` into `desktop/src-tauri/resources/ffmpeg/`
 
 Launch the Tk fallback app:
 
@@ -93,7 +101,7 @@ npm run test:integration
 - `pipeline.py`: project loading, render sequencing, manifests, warnings, codec QC, cue sheets, and album WAV assembly.
 - `dashboard.py`: standalone HTML report.
 - `cli.py`: command contract used by both the Tk fallback and the Tauri shell.
-- `desktop/`: Tauri 2 shell with React/Vite/Tailwind frontend and Rust subprocess/file-dialog backend.
+- `desktop/`: Tauri 2 shell with React/Vite/Tailwind frontend, Rust subprocess/file-dialog/playback-cache backend, and release sidecar packaging.
 - `app.py`: Tkinter desktop fallback launcher for Windows.
 - `smoke.py`: synthetic workflow validation for 1-, 2-, and 8-track renders.
 
@@ -101,7 +109,7 @@ npm run test:integration
 
 - LUFS and true peak are practical local approximations, not replacements for release-meter validation.
 - Tempo/key/chroma are approximated only through local root and spectral heuristics.
-- The Tauri GUI is the primary surface, but the current installer expects this repo checkout plus Python/FFmpeg to remain available; Python is not bundled.
+- The Tauri GUI is the primary surface. Release builds bundle the Python engine and FFmpeg/FFprobe, but dev builds still use local Python when sidecars are absent.
 - Progress in the Tauri app is stage-level JSON from the CLI, not detailed per-frame FFmpeg progress.
 - Codec QC previews are local FFmpeg round trips, not a substitute for checking a final release in the destination platform tooling.
 - Optional LLM scoring is additive only and must never become required for the core render path.

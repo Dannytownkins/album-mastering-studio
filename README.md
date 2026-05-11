@@ -66,7 +66,17 @@ desktop\src-tauri\target\release\bundle\msi\Album Mastering Studio_0.1.0_x64_en-
 desktop\src-tauri\target\release\bundle\nsis\Album Mastering Studio_0.1.0_x64-setup.exe
 ```
 
-For this personal-workstation build, the installed shell expects this repo checkout and Python environment to remain available. The Rust backend sets `PYTHONPATH` to the repo's `src/` folder when it launches the CLI. Set `ALBUM_MASTER_PYTHON` if you want it to use a specific interpreter.
+The release build now bundles a frozen Python engine and FFmpeg/FFprobe resources. Development still falls back to `python -m album_mastering_studio.cli`, but the installed app does not need a repo checkout or user-managed Python environment for the core render path.
+
+Bundled release resources are generated during `npm run tauri:build`:
+
+```text
+desktop\src-tauri\resources\engine\album-master-engine.exe
+desktop\src-tauri\resources\ffmpeg\ffmpeg.exe
+desktop\src-tauri\resources\ffmpeg\ffprobe.exe
+```
+
+Set `ALBUM_MASTER_ENGINE` or `ALBUM_MASTER_PYTHON` only when debugging the engine path manually.
 
 From `desktop/`:
 
@@ -91,6 +101,8 @@ What the Tauri shell currently supports:
 - render full album or tracks/transitions only
 - stream JSON progress events from the Python CLI, with a cancel button that kills the active Python subprocess
 - play source, mastered track, album sequence, reference, and rendered transition files through an HTML5 audio transport with seek
+- convert any playback target through bundled FFmpeg into a cached browser-safe 16-bit stereo WAV before playback
+- compare selected source/master output in explicit A/B mode while preserving the playhead when switching
 - embed the rendered `dashboard.html` inside the app
 - open the output folder or standalone dashboard
 

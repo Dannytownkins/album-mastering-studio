@@ -34,22 +34,23 @@ The user also asked to "create a loop" like this handoff until every real bug, s
 Last pushed commit:
 
 ```text
-98c2b62 commit 3
+e9b3b5e Add Tauri desktop shell
 ```
 
-Current working tree is intentionally dirty with the latest listen/apply-loop patch. Do not commit unless the user asks.
+Current working tree is intentionally dirty with the standalone Tauri packaging, playback hardening, and interlude-cache patch. The user asked to test, commit, and push after this pass.
 
 Known modified/added files at this update include:
 
 - `.gitignore`
+- `AGENTS.md`
 - `README.md`
 - `docs/progress.md`
 - `docs/codex-active-handoff.md`
-- `src/album_mastering_studio/cli.py`
-- `src/album_mastering_studio/pipeline.py`
-- `src/album_mastering_studio/app.py`
-- `tests/test_pipeline.py`
 - `desktop/` source/config/lockfiles/tests
+- `desktop/engine/engine_entry.py`
+- `desktop/scripts/prepare-sidecars.ps1`
+- `src/album_mastering_studio/pipeline.py`
+- `tests/test_pipeline.py`
 
 Generated Tauri folders are intentionally ignored:
 
@@ -65,6 +66,14 @@ desktop\src-tauri\target\release\bundle\msi\Album Mastering Studio_0.1.0_x64_en-
 desktop\src-tauri\target\release\bundle\nsis\Album Mastering Studio_0.1.0_x64-setup.exe
 ```
 
+The release build now also bundles ignored sidecar resources generated from source:
+
+```text
+desktop\src-tauri\resources\engine\album-master-engine.exe
+desktop\src-tauri\resources\ffmpeg\ffmpeg.exe
+desktop\src-tauri\resources\ffmpeg\ffprobe.exe
+```
+
 ## Current Tauri Desktop Pass
 
 The user asked for a real Tauri shell and then approved installing prerequisites. Rustup and Visual Studio Build Tools were installed locally, and the Tauri build now succeeds.
@@ -73,16 +82,22 @@ What exists now:
 
 - `desktop/` Tauri 2 app using React + Vite + Tailwind + TypeScript.
 - Rust backend invokes the existing Python CLI, not DSP code in Rust.
-- Backend commands: `repo_root`, `read_json`, `write_project`, `open_path`, `cancel_cli`, `run_cli`.
+- Backend commands: `repo_root`, `default_output_dir`, `read_json`, `write_project`, `open_path`, `cancel_cli`, `run_cli`, and `prepare_playback_file`.
 - `run_cli` sets `PYTHONPATH` to the repo `src/`, streams stdout/stderr/status to the frontend, and stores one active child process so cancel can kill it.
 - Frontend supports drag/drop audio import, row reordering by drag, remove, inline rename, analyze with waveform thumbnails, preset/delivery/arc/transition/fine-tune controls, open/save `.ams.json`, render full album, render tracks/transitions only, cancel, embedded dashboard, output folder open, and HTML5 audio playback for source/master/album/reference/transitions.
 - Keyboard shortcuts implemented in the webview: Ctrl+O, Ctrl+S, Ctrl+R, Space for play/pause, Delete to remove selected track.
 - CLI now has `analyze --waveform-bins` and `render`/`render-project --json-events` for waveform thumbnails and stage-level render progress.
 - CLI render/init-project now have `--reference-track` parity.
+- Release builds now call the bundled `album-master-engine.exe` sidecar instead of `python -m ...`.
+- Release builds bundle FFmpeg/FFprobe resources and inject that folder into the engine subprocess `PATH`.
+- Playback is now FFmpeg-normalized before the webview receives it: `prepare_playback_file` creates a cached 16-bit stereo 48 kHz WAV for source/master/album/reference/transition playback.
+- Tauri now has explicit source/master A/B compare mode that switches A Source and B Master at the same playhead position.
+- Full-album assembly now reuses the already-rendered interlude arrays instead of synthesizing every interlude a second time for `album_sequence.wav`.
 
 Important honest caveats:
 
-- The installer is a personal-workstation shell. It does not bundle Python; it expects this repo checkout plus Python/FFmpeg to exist. `ALBUM_MASTER_PYTHON` can point the shell at a specific interpreter.
+- The installer now bundles the frozen Python engine and FFmpeg/FFprobe. The repo/Python fallback still exists only for development/debugging.
+- The sidecar engine is PyInstaller onefile, so each CLI invocation has some startup/extraction overhead. If that becomes annoying, convert the sidecar to PyInstaller onedir.
 - Progress is stage-level JSON from Python, not a detailed ETA from inside FFmpeg.
 - The Tauri shell has header buttons and shortcuts but not a native OS menubar yet.
 - Still not exposed in Tauri: single-track audition render, iteration pass diff/A-B, live arc-plan preview, per-track tuning values.
@@ -223,8 +238,9 @@ Run all of these fresh:
 ```powershell
 python -m compileall -q src tests
 python -m unittest discover -s tests
-python -m album_mastering_studio.cli smoke --output test-output\codex-tauri-progress-smoke
+python -m album_mastering_studio.cli smoke --output test-output\codex-final-solid-smoke
 cd desktop
+npm run build:sidecars
 npm run build
 npm run test:integration
 & cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
@@ -262,23 +278,31 @@ Latest verified run in this thread:
 ```text
 python -m compileall -q src tests
 python -m unittest discover -s tests
-python -m album_mastering_studio.cli smoke --output test-output\codex-tauri-progress-smoke
+python -m album_mastering_studio.cli smoke --output test-output\codex-final-solid-smoke
 cd desktop
+npm run build:sidecars
 npm run build
 npm run test:integration
 npm run tauri:build through VsDevCmd
+sidecar engine smoke
+bundled FFmpeg playback conversion
+built Tauri exe launch smoke
 ```
 
 Result:
 
 - Python compile passed.
-- 14 unit tests passed.
-- Smoke passed in `test-output\codex-tauri-progress-smoke`.
+- 15 unit tests passed.
+- Smoke passed in `test-output\codex-final-solid-smoke`.
+- Frozen engine sidecar smoke passed in `test-output\sidecar-postbuild-smoke-2`.
+- Bundled FFmpeg converted an album WAV to a browser-safe playback WAV.
 - Desktop TypeScript/Vite build passed.
 - Desktop integration test passed, including waveform analysis, render-project, manifest creation, and JSON progress events.
-- Tauri release build passed.
-- 8-track render: 8 masters, 7 interludes, album WAV, cue sheet, cue JSON, 2 codec preview files, dashboard, scorecard.
+- Tauri release build passed with bundled engine/FFmpeg resources.
+- Built Tauri app stayed alive for a 5-second launch smoke.
+- 8-track artifact audit: 8 tracks, 7 interludes, 15 sequence/cue items, continuous album duration exactly matches all sequence items, finite samples, album peak `0.824321`, 0 manifest warnings, dashboard and scorecard present.
 - Built artifacts: `album-mastering-studio.exe`, MSI installer, and NSIS setup EXE under `desktop\src-tauri\target\release`.
+- Installer sizes at this verification: NSIS setup EXE `142.8 MB`, MSI `169.3 MB`.
 
 ## Likely Next Product Fixes After Current Patch
 

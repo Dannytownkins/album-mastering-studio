@@ -46,10 +46,55 @@ Results:
 
 Remaining honest gaps:
 
-- The Tauri app is now the primary shell, but this first installer is still a personal-workstation build that expects the repo checkout and Python/FFmpeg environment to exist. Python is not bundled.
+- The first Tauri shell did not bundle Python/FFmpeg yet. This was fixed in the follow-up standalone packaging pass below.
 - Progress is stage-level from CLI JSON events, not per-sample or per-FFmpeg-frame ETA.
 - There is no native OS menu yet; Open/Save/Output/About are available in the app header and shortcuts are handled in the webview.
 - The Tauri shell does not yet expose single-track render, iteration pass diff/A-B, live arc preview, or per-track tuning values.
+
+### Standalone Packaging / Playback Pass
+
+- Added a PyInstaller engine entrypoint at `desktop/engine/engine_entry.py`.
+- Added `desktop/scripts/prepare-sidecars.ps1` and `npm run build:sidecars`.
+- Tauri release builds now generate and bundle:
+  - `resources/engine/album-master-engine.exe`
+  - `resources/ffmpeg/ffmpeg.exe`
+  - `resources/ffmpeg/ffprobe.exe`
+- Updated the Rust backend so release builds call the bundled engine exe directly, with bundled FFmpeg injected into `PATH`.
+- Kept dev fallback behavior: if sidecars are absent, the backend still calls `python -m album_mastering_studio.cli` with the repo `src/` on `PYTHONPATH`.
+- Added a default installed-app output folder under `Documents\Album Mastering Studio\Renders` instead of assuming a repo `outputs/` path.
+- Hardened playback by adding a Rust `prepare_playback_file` command. Every source/master/album/reference/transition play request is converted through FFmpeg to a cached browser-safe 16-bit stereo 48 kHz WAV before the HTML5 player sees it.
+- Added explicit source/master A/B compare mode in the Tauri UI. It prepares both playback files and switches between A Source and B Master while keeping the current playhead position.
+- Reused already-rendered interlude audio when assembling `album_sequence.wav` so full-album renders no longer synthesize the same transition twice.
+
+Verification:
+
+```powershell
+npm run build:sidecars
+$env:PATH = "desktop\src-tauri\resources\ffmpeg;$env:PATH"
+desktop\src-tauri\resources\engine\album-master-engine.exe smoke --output test-output\sidecar-postbuild-smoke-2
+& desktop\src-tauri\resources\ffmpeg\ffmpeg.exe -hide_banner -loglevel error -y -i test-output\sidecar-final-smoke\two-track\render\album_sequence.wav -vn -ac 2 -ar 48000 -c:a pcm_s16le test-output\sidecar-final-playback-cache.wav
+python -m compileall -q src tests
+python -m unittest discover -s tests
+python -m album_mastering_studio.cli smoke --output test-output\codex-final-solid-smoke
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+```
+
+Results:
+
+- Frozen engine sidecar smoke passed.
+- Bundled FFmpeg produced a browser-safe playback WAV from `album_sequence.wav`.
+- Python compile passed.
+- Python unit tests passed: 15 tests.
+- Product smoke passed, including 1-track, 2-track-with-transition, and 8-track renders.
+- Desktop TypeScript/Vite build passed.
+- Desktop integration test passed.
+- Tauri release build passed and bundled engine/FFmpeg resources.
+- Built Tauri app launch-smoke passed: process stayed alive for 5 seconds.
+- Final 8-track artifact audit passed: 8 tracks, 7 interludes, 15 sequence/cue items, matching continuous-album duration, finite samples, peak `0.824321`, and 0 manifest warnings.
+- Installer artifacts: NSIS setup EXE `142.8 MB`, MSI `169.3 MB`.
 
 ### Listen / Apply Loop Pass
 

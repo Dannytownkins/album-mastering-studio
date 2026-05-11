@@ -1,8 +1,10 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::{
+    collections::hash_map::DefaultHasher,
     env,
     fs,
+    hash::{Hash, Hasher},
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -33,6 +35,19 @@ struct CliResult {
 #[tauri::command]
 fn repo_root() -> Result<String, String> {
     Ok(repo_root_path().to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn default_output_dir() -> Result<String, String> {
+    let home = env::var("USERPROFILE")
+        .or_else(|_| env::var("HOME"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| env::temp_dir());
+    let documents = home.join("Documents");
+    let base = if documents.exists() { documents } else { home };
+    let output = base.join("Album Mastering Studio").join("Renders");
+    fs::create_dir_all(&output).map_err(|error| format!("Could not create default output folder: {error}"))?;
+    Ok(output.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -71,6 +86,53 @@ fn open_path(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn prepare_playback_file(app: AppHandle, path: String) -> Result<String, String> {
+    let source = PathBuf::from(&path);
+    if !source.exists() {
+        return Err(format!("Playback source does not exist: {}", source.display()));
+    }
+
+    let cache_dir = env::temp_dir()
+        .join("album-mastering-studio")
+        .join("playback-cache");
+    fs::create_dir_all(&cache_dir).map_err(|error| format!("Could not create playback cache: {error}"))?;
+
+    let cache_key = playback_cache_key(&source)?;
+    let output = cache_dir.join(format!("{cache_key}.wav"));
+    if output.exists() {
+        return Ok(output.to_string_lossy().to_string());
+    }
+
+    let ffmpeg = tool_path(&app, "ffmpeg.exe", "ffmpeg");
+    let output_result = Command::new(&ffmpeg)
+        .arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-y")
+        .arg("-i")
+        .arg(&source)
+        .arg("-vn")
+        .arg("-ac")
+        .arg("2")
+        .arg("-ar")
+        .arg("48000")
+        .arg("-c:a")
+        .arg("pcm_s16le")
+        .arg(&output)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|error| format!("Could not start FFmpeg for playback: {error}"))?;
+
+    if !output_result.status.success() {
+        let stderr = String::from_utf8_lossy(&output_result.stderr);
+        return Err(format!("FFmpeg playback conversion failed: {stderr}"));
+    }
+
+    Ok(output.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn cancel_cli(state: State<'_, ProcessState>) -> Result<bool, String> {
     let mut guard = state.child.lock().map_err(|_| "Process lock poisoned".to_string())?;
     if let Some(mut child) = guard.take() {
@@ -95,19 +157,15 @@ fn run_cli(
         }
     }
 
-    let root = cwd.map(PathBuf::from).unwrap_or_else(repo_root_path);
-    let python = env::var("ALBUM_MASTER_PYTHON").unwrap_or_else(|_| "python".to_string());
-    let mut command = Command::new(python);
-    command
-        .arg("-m")
-        .arg("album_mastering_studio.cli")
-        .args(&args)
-        .current_dir(&root)
-        .env("PYTHONPATH", python_path(&root))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    let root = cwd.map(PathBuf::from).unwrap_or_else(|| {
+        default_output_dir()
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| repo_root_path())
+    });
+    let (mut command, description) = engine_command(&app, &root, &args);
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-    emit(&app, "status", &format!("python -m album_mastering_studio.cli {}", args.join(" ")));
+    emit(&app, "status", &description);
     let mut child = command.spawn().map_err(|error| format!("Could not start Python CLI: {error}"))?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -195,6 +253,98 @@ fn join_lines(lines: &Arc<Mutex<Vec<String>>>) -> String {
     lines.lock().map(|guard| guard.join("\n")).unwrap_or_default()
 }
 
+fn playback_cache_key(source: &Path) -> Result<String, String> {
+    let metadata = fs::metadata(source).map_err(|error| format!("Could not inspect {}: {error}", source.display()))?;
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default();
+    let canonical = source.canonicalize().unwrap_or_else(|_| source.to_path_buf());
+    let mut hasher = DefaultHasher::new();
+    canonical.to_string_lossy().hash(&mut hasher);
+    metadata.len().hash(&mut hasher);
+    modified.hash(&mut hasher);
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
+fn tool_path(app: &AppHandle, bundled_name: &str, fallback_name: &str) -> PathBuf {
+    if let Some(candidate) = resource_file(app, "ffmpeg", bundled_name) {
+        return candidate;
+    }
+    PathBuf::from(fallback_name)
+}
+
+fn engine_command(app: &AppHandle, cwd: &Path, args: &[String]) -> (Command, String) {
+    let ffmpeg_dir = resource_dir(app, "ffmpeg");
+
+    if let Ok(engine) = env::var("ALBUM_MASTER_ENGINE") {
+        let mut command = Command::new(&engine);
+        command.args(args).current_dir(cwd);
+        apply_audio_tool_path(&mut command, ffmpeg_dir.as_deref());
+        return (command, format!("{engine} {}", args.join(" ")));
+    }
+
+    if let Some(engine) = resource_file(app, "engine", "album-master-engine.exe") {
+        let mut command = Command::new(&engine);
+        command.args(args).current_dir(cwd);
+        apply_audio_tool_path(&mut command, ffmpeg_dir.as_deref());
+        return (
+            command,
+            format!("{} {}", engine.to_string_lossy(), args.join(" ")),
+        );
+    }
+
+    let root = repo_root_path();
+    let python = env::var("ALBUM_MASTER_PYTHON").unwrap_or_else(|_| "python".to_string());
+    let mut command = Command::new(&python);
+    command
+        .arg("-m")
+        .arg("album_mastering_studio.cli")
+        .args(args)
+        .current_dir(&root)
+        .env("PYTHONPATH", python_path(&root));
+    apply_audio_tool_path(&mut command, ffmpeg_dir.as_deref());
+    (
+        command,
+        format!("python -m album_mastering_studio.cli {}", args.join(" ")),
+    )
+}
+
+fn apply_audio_tool_path(command: &mut Command, ffmpeg_dir: Option<&Path>) {
+    let Some(ffmpeg_dir) = ffmpeg_dir else {
+        return;
+    };
+    let existing = env::var("PATH").unwrap_or_default();
+    let merged = if existing.is_empty() {
+        ffmpeg_dir.to_string_lossy().to_string()
+    } else {
+        format!("{};{}", ffmpeg_dir.to_string_lossy(), existing)
+    };
+    command.env("PATH", merged);
+}
+
+fn resource_dir(app: &AppHandle, subdir: &str) -> Option<PathBuf> {
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        for candidate in [
+            resource_dir.join(subdir),
+            resource_dir.join("resources").join(subdir),
+        ] {
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn resource_file(app: &AppHandle, subdir: &str, file_name: &str) -> Option<PathBuf> {
+    resource_dir(app, subdir)
+        .map(|dir| dir.join(file_name))
+        .filter(|path| path.exists())
+}
+
 fn repo_root_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -219,9 +369,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             repo_root,
+            default_output_dir,
             read_json,
             write_project,
             open_path,
+            prepare_playback_file,
             cancel_cli,
             run_cli
         ])

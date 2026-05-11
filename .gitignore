@@ -10,5 +10,7 @@ outputs/
 test-output/
 desktop/node_modules/
 desktop/dist/
+desktop/build/
+desktop/src-tauri/resources/
 desktop/src-tauri/gen/
 desktop/src-tauri/target/

@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && npm run build:sidecars",
     "frontendDist": "../dist"
   },
   "app": {
@@ -26,6 +26,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.ico"]
+    "icon": ["icons/icon.ico"],
+    "resources": [
+      "resources/engine/album-master-engine.exe",
+      "resources/ffmpeg/ffmpeg.exe",
+      "resources/ffmpeg/ffprobe.exe"
+    ]
   }
 }

@@ -7,6 +7,7 @@ import {
   Disc3,
   FileDown,
   FolderOpen,
+  GitCompare,
   Info,
   Pause,
   Play,
@@ -109,7 +110,14 @@ const initialSettings: Settings = {
 type PlayItem = {
   label: string;
   path: string;
+  originalPath: string;
   kind: "source" | "master" | "album" | "transition" | "reference";
+};
+
+type ComparePair = {
+  label: string;
+  source: PlayItem;
+  master: PlayItem;
 };
 
 type CliEvent = {
@@ -141,10 +149,13 @@ function App() {
   const [projectPath, setProjectPath] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [playItem, setPlayItem] = useState<PlayItem | null>(null);
+  const [comparePair, setComparePair] = useState<ComparePair | null>(null);
+  const [compareSide, setCompareSide] = useState<"source" | "master">("source");
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const pendingSeekRef = useRef<number | null>(null);
 
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? tracks[0] ?? null;
   const transitions = useMemo(() => manifestTransitions(manifest), [manifest]);
@@ -153,7 +164,9 @@ function App() {
   useEffect(() => {
     invoke<string>("repo_root").then((root) => {
       setRepoRoot(root);
-      setSettings((current) => ({ ...current, outputDir: `${root}\\outputs\\tauri-render` }));
+    });
+    invoke<string>("default_output_dir").then((outputDir) => {
+      setSettings((current) => ({ ...current, outputDir }));
     });
     const unlistenCli = getCurrentWindow().listen<CliEvent>("cli-event", (event) => {
       const parsed = parseProgressEvent(event.payload.line);
@@ -198,6 +211,24 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [playItem, selectedTrackId, tracks, settings]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !playItem) return;
+    audio.load();
+    const playWhenReady = () => {
+      if (pendingSeekRef.current != null) {
+        audio.currentTime = Math.max(0, Math.min(pendingSeekRef.current, Math.max((audio.duration || 0) - 0.1, 0)));
+        pendingSeekRef.current = null;
+      }
+      audio.play().catch((error) => {
+        pushLog(`Playback failed: ${String(error)}`);
+        setProgressLabel("Playback failed. See log.");
+      });
+    };
+    audio.addEventListener("loadedmetadata", playWhenReady, { once: true });
+    return () => audio.removeEventListener("loadedmetadata", playWhenReady);
+  }, [playItem?.path]);
 
   function pushLog(message: string) {
     setLogs((current) => [...current.slice(-400), message]);
@@ -326,7 +357,7 @@ function App() {
     const selected =
       projectPath ||
       (await save({
-        defaultPath: `${repoRoot}\\album.ams.json`,
+        defaultPath: `${settings.outputDir || repoRoot}\\album.ams.json`,
         filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
       }));
     if (typeof selected !== "string") return;
@@ -463,9 +494,58 @@ function App() {
     });
   }
 
-  function setAudio(item: PlayItem) {
-    setPlayItem(item);
-    setTimeout(() => audioRef.current?.play(), 25);
+  async function setAudio(item: Omit<PlayItem, "originalPath">) {
+    setComparePair(null);
+    setProgressLabel(`Preparing ${item.kind} playback.`);
+    try {
+      const playbackPath = await invoke<string>("prepare_playback_file", { path: item.path });
+      setPlayItem({ ...item, originalPath: item.path, path: playbackPath });
+      pushLog(`Playback ready: ${item.label}`);
+    } catch (error) {
+      pushLog(`Playback prep failed for ${item.label}: ${String(error)}`);
+      setProgressLabel("Playback prep failed. See log.");
+    }
+  }
+
+  async function startCompare() {
+    if (!selectedTrack || !selectedMaster) return;
+    setProgressLabel("Preparing source/master A/B compare.");
+    try {
+      const [sourcePath, masterPath] = await Promise.all([
+        invoke<string>("prepare_playback_file", { path: selectedTrack.path }),
+        invoke<string>("prepare_playback_file", { path: selectedMaster }),
+      ]);
+      const pair: ComparePair = {
+        label: selectedTrack.title,
+        source: {
+          label: `${selectedTrack.title} - A Source`,
+          path: sourcePath,
+          originalPath: selectedTrack.path,
+          kind: "source",
+        },
+        master: {
+          label: `${selectedTrack.title} - B Master`,
+          path: masterPath,
+          originalPath: selectedMaster,
+          kind: "master",
+        },
+      };
+      setComparePair(pair);
+      setCompareSide("source");
+      pendingSeekRef.current = Math.min(audioRef.current?.currentTime ?? 0, Math.max(duration - 0.1, 0));
+      setPlayItem(pair.source);
+      pushLog(`A/B compare ready: ${selectedTrack.title}`);
+    } catch (error) {
+      pushLog(`A/B compare prep failed: ${String(error)}`);
+      setProgressLabel("A/B compare prep failed. See log.");
+    }
+  }
+
+  function switchCompare(side: "source" | "master") {
+    if (!comparePair) return;
+    pendingSeekRef.current = audioRef.current?.currentTime ?? 0;
+    setCompareSide(side);
+    setPlayItem(side === "source" ? comparePair.source : comparePair.master);
   }
 
   function togglePlay() {
@@ -556,7 +636,12 @@ function App() {
               <input className="seek" type="range" min={0} max={duration || 0} step={0.01} value={position} onChange={(event) => seek(Number(event.target.value))} />
               <div className="time-row"><span>{formatTime(position)}</span><span>{formatTime(duration)}</span></div>
             </div>
-            <button onClick={() => audioRef.current?.pause()}><Square size={17} /> Stop</button>
+            <button onClick={() => {
+              if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+              }
+            }}><Square size={17} /> Stop</button>
             <audio
               ref={audioRef}
               src={playItem ? convertFileSrc(playItem.path) : undefined}
@@ -564,15 +649,30 @@ function App() {
               onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime || 0)}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
+              onError={() => {
+                pushLog(playItem ? `Playback failed in browser for ${playItem.originalPath}` : "Playback failed in browser.");
+                setProgressLabel("Playback failed. See log.");
+              }}
             />
           </div>
 
           <div className="button-grid">
             <button disabled={!selectedTrack} onClick={() => selectedTrack && setAudio({ label: selectedTrack.title, path: selectedTrack.path, kind: "source" })}><Play size={16} /> Source</button>
             <button disabled={!selectedMaster} onClick={() => selectedTrack && selectedMaster && setAudio({ label: selectedTrack.title, path: selectedMaster, kind: "master" })}><Activity size={16} /> Master</button>
+            <button disabled={!selectedTrack || !selectedMaster} onClick={startCompare}><GitCompare size={16} /> A/B Compare</button>
             <button disabled={!manifest?.album_sequence} onClick={() => manifest?.album_sequence && setAudio({ label: "album_sequence.wav", path: manifest.album_sequence, kind: "album" })}><Disc3 size={16} /> Album</button>
             <button disabled={!settings.referenceTrack} onClick={() => setAudio({ label: "Reference", path: settings.referenceTrack, kind: "reference" })}><BarChart3 size={16} /> Reference</button>
           </div>
+
+          {comparePair && (
+            <div className="compare-panel">
+              <span>A/B Compare: {comparePair.label}</span>
+              <div>
+                <button className={compareSide === "source" ? "active" : ""} onClick={() => switchCompare("source")}>A Source</button>
+                <button className={compareSide === "master" ? "active" : ""} onClick={() => switchCompare("master")}>B Master</button>
+              </div>
+            </div>
+          )}
 
           <div className="render-panel">
             <div>

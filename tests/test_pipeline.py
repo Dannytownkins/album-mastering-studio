@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 from scipy.io import wavfile
@@ -68,6 +69,27 @@ class PipelineTest(unittest.TestCase):
             self.assertFalse(np.any(np.isnan(album)))
             self.assertLessEqual(float(np.max(np.abs(album))), 1.0)
             self.assertGreater(float(np.sqrt(np.mean(np.square(album)))), 0.01)
+
+    def test_album_sequence_reuses_rendered_interlude_audio(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "inputs"
+            output_dir = root / "outputs"
+            input_dir.mkdir()
+            self._write_sine(input_dir / "01_a.wav", 220.0, 0.35)
+            self._write_sine(input_dir / "02_b.wav", 261.63, 0.35)
+            self._write_sine(input_dir / "03_c.wav", 329.63, 0.35)
+
+            from album_mastering_studio import pipeline
+
+            with patch("album_mastering_studio.pipeline.make_interlude", wraps=pipeline.make_interlude) as wrapped:
+                render_album(
+                    [input_dir],
+                    output_dir,
+                    RenderOptions(interlude_duration=0.5, interlude_style="swell", album_wav=True, codec_preview=False),
+                )
+
+            self.assertEqual(wrapped.call_count, 2)
 
     def test_cli_render_command_creates_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
