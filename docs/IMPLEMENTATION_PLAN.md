@@ -609,6 +609,8 @@ Update locations:
 - `docs/progress.md`: detailed evidence and session notes.
 - `docs/IMPLEMENTATION_PLAN.md`: concise phase status changes or plan changes.
 - `docs/PRODUCT.md`: only after human-approved product canon changes.
+- `docs/PRIVATE_AUDIO_FIXTURES.md`: fixture convention for real-audio tests.
+- `docs/PARALLEL_BUILD_NOTES.md`: independence rules if the Claude build is active in parallel.
 
 No phase is complete just because something visually resembles the goal. It must satisfy the relevant product behavior and verification gates.
 
