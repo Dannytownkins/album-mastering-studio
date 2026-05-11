@@ -280,7 +280,7 @@ label {
 
 .button-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
 }
 
 .compare-panel {
@@ -307,6 +307,15 @@ label {
   border-color: var(--green);
   background: var(--green-dim);
   color: var(--green);
+}
+
+.stale-banner {
+  border: 1px solid var(--amber);
+  background: var(--amber-dim);
+  color: var(--amber);
+  padding: 9px 11px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .render-panel {

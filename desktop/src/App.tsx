@@ -37,10 +37,9 @@ const PRESETS = [
 
 const ARCS = [
   ["cinematic", "Cinematic rise"],
-  ["steady", "Steady cohesion"],
-  ["front_loaded", "Front loaded"],
-  ["late_peak", "Late peak"],
-  ["intimate_return", "Heavy return to intimate"],
+  ["afterhours", "Afterhours descent"],
+  ["club-peak", "Club peak"],
+  ["fever-dream", "Fever dream"],
 ];
 
 const DELIVERY = [
@@ -120,6 +119,13 @@ type ComparePair = {
   master: PlayItem;
 };
 
+type PreviewArtifact = {
+  trackId: string;
+  revision: number;
+  path: string;
+  outputDir: string;
+};
+
 type CliEvent = {
   stream: "stdout" | "stderr" | "status";
   line: string;
@@ -147,6 +153,9 @@ function App() {
   const [manifest, setManifest] = useState<RenderManifest | null>(null);
   const [dashboardPath, setDashboardPath] = useState("");
   const [projectPath, setProjectPath] = useState("");
+  const [sessionRevision, setSessionRevision] = useState(0);
+  const [renderRevision, setRenderRevision] = useState<number | null>(null);
+  const [previewArtifact, setPreviewArtifact] = useState<PreviewArtifact | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [playItem, setPlayItem] = useState<PlayItem | null>(null);
   const [comparePair, setComparePair] = useState<ComparePair | null>(null);
@@ -158,8 +167,14 @@ function App() {
   const pendingSeekRef = useRef<number | null>(null);
 
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? tracks[0] ?? null;
-  const transitions = useMemo(() => manifestTransitions(manifest), [manifest]);
-  const selectedMaster = selectedTrack?.masteredPath;
+  const hasCurrentRender = renderRevision !== null && renderRevision === sessionRevision;
+  const hasStaleRender = renderRevision !== null && renderRevision !== sessionRevision;
+  const transitions = useMemo(() => (hasStaleRender ? [] : manifestTransitions(manifest)), [manifest, hasStaleRender]);
+  const selectedPreviewMaster =
+    selectedTrack && previewArtifact?.trackId === selectedTrack.id && previewArtifact.revision === sessionRevision
+      ? previewArtifact.path
+      : undefined;
+  const selectedMaster = selectedPreviewMaster ?? (hasCurrentRender ? selectedTrack?.masteredPath : undefined);
 
   useEffect(() => {
     invoke<string>("repo_root").then((root) => {
@@ -200,6 +215,9 @@ function App() {
       } else if (event.ctrlKey && event.key.toLowerCase() === "r") {
         event.preventDefault();
         render(true);
+      } else if (event.key.toLowerCase() === "b" && comparePair) {
+        event.preventDefault();
+        toggleCompareSide();
       } else if (event.key === " " && playItem) {
         event.preventDefault();
         togglePlay();
@@ -210,7 +228,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playItem, selectedTrackId, tracks, settings]);
+  }, [playItem, selectedTrackId, tracks, settings, comparePair, compareSide]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -234,9 +252,27 @@ function App() {
     setLogs((current) => [...current.slice(-400), message]);
   }
 
+  function markDirty() {
+    setSessionRevision((current) => current + 1);
+    setPreviewArtifact(null);
+    setComparePair(null);
+    setPlayItem((current) =>
+      current && ["master", "album", "transition"].includes(current.kind) ? null : current
+    );
+  }
+
+  function updateSettings(patch: Partial<Settings>, options: { dirty?: boolean } = { dirty: true }) {
+    setSettings((current) => ({ ...current, ...patch }));
+    if (options.dirty !== false) markDirty();
+  }
+
   function addPaths(paths: string[]) {
     const audioPaths = paths.filter((path) => /\.(wav|flac|mp3|m4a|aac|aif|aiff|ogg|opus)$/i.test(path));
     if (!audioPaths.length) return;
+    markDirty();
+    setManifest(null);
+    setDashboardPath("");
+    setRenderRevision(null);
     setTracks((current) => {
       const seen = new Set(current.map((track) => track.path.toLowerCase()));
       const next = [...current];
@@ -272,7 +308,7 @@ function App() {
       multiple: false,
       filters: [{ name: "Audio", extensions: ["wav", "flac", "mp3", "m4a", "aac", "aif", "aiff", "ogg", "opus"] }],
     });
-    if (typeof selected === "string") setSettings((current) => ({ ...current, referenceTrack: selected }));
+    if (typeof selected === "string") updateSettings({ referenceTrack: selected });
   }
 
   async function analyze() {
@@ -303,6 +339,7 @@ function App() {
 
   async function render(albumWav: boolean) {
     if (!tracks.length || !settings.outputDir) return;
+    const revisionAtStart = sessionRevision;
     setBusy(true);
     setPhase(albumWav ? "Rendering full album" : "Rendering masters and transitions");
     setProgress(0);
@@ -316,20 +353,33 @@ function App() {
       await invoke("write_project", { path: generatedProjectPath, project });
       await runCli(["render-project", generatedProjectPath, "--output", outputDir, "--json-events"]);
       const manifestPath = `${outputDir}\\manifest.json`;
-      setProgressLabel("Scoring render.");
-      await runCli(["score-render", manifestPath, "--scorer", "local"]);
-      const dashboard = `${outputDir}\\dashboard.html`;
-      setProgressLabel("Exporting dashboard.");
-      await runCli(["export-dashboard", manifestPath, "--output", dashboard]);
       const loaded = await invoke<RenderManifest>("read_json", { path: manifestPath });
-      loaded.dashboard = dashboard;
       setManifest(loaded);
-      setDashboardPath(dashboard);
       setProjectPath(generatedProjectPath);
       setTracks((current) => attachMasterPaths(current, loaded));
+      setRenderRevision(revisionAtStart);
+      setPreviewArtifact(null);
+      pushLog(`Audio render complete: ${loaded.track_count} masters, ${loaded.interlude_count} transitions. ${outputDir}`);
+
+      setProgressLabel("Scoring render.");
+      try {
+        await runCli(["score-render", manifestPath, "--scorer", "local"]);
+      } catch (error) {
+        pushLog(`Score failed after audio render: ${String(error)}`);
+      }
+
+      const dashboard = `${outputDir}\\dashboard.html`;
+      setProgressLabel("Exporting dashboard.");
+      try {
+        await runCli(["export-dashboard", manifestPath, "--output", dashboard]);
+        loaded.dashboard = dashboard;
+        setManifest({ ...loaded });
+        setDashboardPath(dashboard);
+      } catch (error) {
+        pushLog(`Dashboard export failed after audio render: ${String(error)}`);
+      }
       setProgress(1);
       setProgressLabel("Render complete.");
-      pushLog(`Render complete: ${loaded.track_count} masters, ${loaded.interlude_count} transitions. ${outputDir}`);
     } catch (error) {
       pushLog(`Render failed: ${String(error)}`);
     } finally {
@@ -412,10 +462,15 @@ function App() {
     setTracks(loadedTracks);
     setSelectedTrackId(loadedTracks[0]?.id ?? null);
     setProjectPath(path);
+    setManifest(null);
+    setDashboardPath("");
+    setRenderRevision(null);
+    setPreviewArtifact(null);
+    setSessionRevision((current) => current + 1);
     pushLog(`Opened project: ${path}`);
   }
 
-  function buildProject(albumWav: boolean) {
+  function buildProject(albumWav: boolean, projectTracks: Track[] = tracks) {
     return {
       version: 1,
       album_title: settings.albumTitle || "Untitled Album",
@@ -451,7 +506,7 @@ function App() {
         tweak_width: settings.width,
         album_wav: albumWav,
       },
-      tracks: tracks.map((track) => ({
+      tracks: projectTracks.map((track) => ({
         path: track.path,
         title: track.title,
         artist: track.artist,
@@ -459,7 +514,7 @@ function App() {
         character: track.character,
         preset: track.preset,
       })),
-      transitions: tracks.slice(0, -1).map((_, index) => ({
+      transitions: projectTracks.slice(0, -1).map((_, index) => ({
         after_track: index + 1,
         duration_seconds: settings.transitionDuration,
         style: "inherit",
@@ -473,16 +528,25 @@ function App() {
   }
 
   function updateTrack(id: string, patch: Partial<Track>) {
+    markDirty();
     setTracks((current) => current.map((track) => (track.id === id ? { ...track, ...patch } : track)));
   }
 
   function removeTrack(id: string) {
+    markDirty();
+    setManifest(null);
+    setDashboardPath("");
+    setRenderRevision(null);
     setTracks((current) => current.filter((track) => track.id !== id));
     if (selectedTrackId === id) setSelectedTrackId(null);
   }
 
   function moveDragged(overId: string) {
     if (!draggingId || draggingId === overId) return;
+    markDirty();
+    setManifest(null);
+    setDashboardPath("");
+    setRenderRevision(null);
     setTracks((current) => {
       const from = current.findIndex((track) => track.id === draggingId);
       const to = current.findIndex((track) => track.id === overId);
@@ -507,13 +571,48 @@ function App() {
     }
   }
 
+  async function renderPreviewMaster(track: Track | null = selectedTrack): Promise<string | null> {
+    if (!track || !settings.outputDir) return null;
+    const revisionAtStart = sessionRevision;
+    setBusy(true);
+    setPhase("Previewing selected master");
+    setProgress(0);
+    setProgressLabel(`Rendering preview master for ${track.title}.`);
+    try {
+      const outputDir = `${settings.outputDir}\\preview-${timestamp()}`;
+      const project = buildProject(false, [track]);
+      const generatedProjectPath = `${outputDir}\\preview.ams.json`;
+      await invoke("write_project", { path: generatedProjectPath, project });
+      await runCli(["render-project", generatedProjectPath, "--output", outputDir, "--json-events"]);
+      const manifestPath = `${outputDir}\\manifest.json`;
+      const loaded = await invoke<RenderManifest>("read_json", { path: manifestPath });
+      const masterPath = ((loaded.sequence ?? []).find((item) => item.type === "track")?.output as string | undefined) ?? "";
+      if (!masterPath) throw new Error("Preview render did not produce a mastered track.");
+      setPreviewArtifact({ trackId: track.id, revision: revisionAtStart, path: masterPath, outputDir });
+      setTracks((current) => current.map((item) => (item.id === track.id ? { ...item, masteredPath: masterPath } : item)));
+      setProgress(1);
+      setProgressLabel("Preview master ready.");
+      pushLog(`Preview master ready: ${masterPath}`);
+      return masterPath;
+    } catch (error) {
+      pushLog(`Preview master failed: ${String(error)}`);
+      setProgressLabel("Preview master failed. See log.");
+      return null;
+    } finally {
+      setBusy(false);
+      setPhase("Idle");
+    }
+  }
+
   async function startCompare() {
-    if (!selectedTrack || !selectedMaster) return;
+    if (!selectedTrack) return;
+    const masteredOriginalPath = selectedMaster ?? (await renderPreviewMaster(selectedTrack));
+    if (!masteredOriginalPath) return;
     setProgressLabel("Preparing source/master A/B compare.");
     try {
-      const [sourcePath, masterPath] = await Promise.all([
+      const [sourcePath, masteredPlaybackPath] = await Promise.all([
         invoke<string>("prepare_playback_file", { path: selectedTrack.path }),
-        invoke<string>("prepare_playback_file", { path: selectedMaster }),
+        invoke<string>("prepare_playback_file", { path: masteredOriginalPath }),
       ]);
       const pair: ComparePair = {
         label: selectedTrack.title,
@@ -524,9 +623,9 @@ function App() {
           kind: "source",
         },
         master: {
-          label: `${selectedTrack.title} - B Master`,
-          path: masterPath,
-          originalPath: selectedMaster,
+          label: `${selectedTrack.title} - B Mastered`,
+          path: masteredPlaybackPath,
+          originalPath: masteredOriginalPath,
           kind: "master",
         },
       };
@@ -546,6 +645,11 @@ function App() {
     pendingSeekRef.current = audioRef.current?.currentTime ?? 0;
     setCompareSide(side);
     setPlayItem(side === "source" ? comparePair.source : comparePair.master);
+  }
+
+  function toggleCompareSide() {
+    if (!comparePair) return;
+    switchCompare(compareSide === "source" ? "master" : "source");
   }
 
   function togglePlay() {
@@ -577,20 +681,20 @@ function App() {
       <section className="session-strip">
         <label>
           Album
-          <input value={settings.albumTitle} onChange={(event) => setSettings({ ...settings, albumTitle: event.target.value })} />
+          <input value={settings.albumTitle} onChange={(event) => updateSettings({ albumTitle: event.target.value })} />
         </label>
         <label>
           Artist
-          <input value={settings.artist} onChange={(event) => setSettings({ ...settings, artist: event.target.value })} />
+          <input value={settings.artist} onChange={(event) => updateSettings({ artist: event.target.value })} />
         </label>
         <label className="wide">
           Output
-          <input value={settings.outputDir} onChange={(event) => setSettings({ ...settings, outputDir: event.target.value })} />
+          <input value={settings.outputDir} onChange={(event) => updateSettings({ outputDir: event.target.value }, { dirty: false })} />
         </label>
         <label className="wide">
           Reference
           <div className="inline-field">
-            <input value={settings.referenceTrack} onChange={(event) => setSettings({ ...settings, referenceTrack: event.target.value })} />
+            <input value={settings.referenceTrack} onChange={(event) => updateSettings({ referenceTrack: event.target.value })} />
             <button onClick={chooseReference}>Pick</button>
           </div>
         </label>
@@ -658,9 +762,10 @@ function App() {
 
           <div className="button-grid">
             <button disabled={!selectedTrack} onClick={() => selectedTrack && setAudio({ label: selectedTrack.title, path: selectedTrack.path, kind: "source" })}><Play size={16} /> Source</button>
-            <button disabled={!selectedMaster} onClick={() => selectedTrack && selectedMaster && setAudio({ label: selectedTrack.title, path: selectedMaster, kind: "master" })}><Activity size={16} /> Master</button>
-            <button disabled={!selectedTrack || !selectedMaster} onClick={startCompare}><GitCompare size={16} /> A/B Compare</button>
-            <button disabled={!manifest?.album_sequence} onClick={() => manifest?.album_sequence && setAudio({ label: "album_sequence.wav", path: manifest.album_sequence, kind: "album" })}><Disc3 size={16} /> Album</button>
+            <button disabled={!selectedTrack || busy} onClick={() => renderPreviewMaster()}><Activity size={16} /> Preview Master</button>
+            <button disabled={!selectedMaster} onClick={() => selectedTrack && selectedMaster && setAudio({ label: selectedTrack.title, path: selectedMaster, kind: "master" })}><Activity size={16} /> Mastered</button>
+            <button disabled={!selectedTrack || busy} onClick={startCompare}><GitCompare size={16} /> {selectedMaster ? "A/B Toggle" : "Preview + A/B"}</button>
+            <button disabled={!manifest?.album_sequence || hasStaleRender} onClick={() => manifest?.album_sequence && setAudio({ label: "album_sequence.wav", path: manifest.album_sequence, kind: "album" })}><Disc3 size={16} /> Album</button>
             <button disabled={!settings.referenceTrack} onClick={() => setAudio({ label: "Reference", path: settings.referenceTrack, kind: "reference" })}><BarChart3 size={16} /> Reference</button>
           </div>
 
@@ -668,8 +773,9 @@ function App() {
             <div className="compare-panel">
               <span>A/B Compare: {comparePair.label}</span>
               <div>
-                <button className={compareSide === "source" ? "active" : ""} onClick={() => switchCompare("source")}>A Source</button>
-                <button className={compareSide === "master" ? "active" : ""} onClick={() => switchCompare("master")}>B Master</button>
+                <button className={compareSide === "source" ? "active" : ""} onClick={() => switchCompare("source")}>Original</button>
+                <button className={compareSide === "master" ? "active" : ""} onClick={() => switchCompare("master")}>Mastered</button>
+                <button onClick={toggleCompareSide}>Toggle</button>
               </div>
             </div>
           )}
@@ -688,6 +794,7 @@ function App() {
               </button>
               <button className="danger" disabled={!busy} onClick={cancel}>Cancel</button>
             </div>
+            {hasStaleRender && <div className="stale-banner">Settings changed since the last render. Preview or render again before trusting mastered playback.</div>}
             <div className={`progress ${busy ? "running" : ""}`} />
             <div className="progress-readout">
               <span>{progressLabel}</span>
@@ -708,22 +815,22 @@ function App() {
         </section>
 
         <aside className="controls">
-          <ControlSelect label="Preset" value={settings.preset} options={PRESETS} onChange={(preset) => setSettings({ ...settings, preset })} />
-          <ControlSelect label="Album Arc" value={settings.arc} options={ARCS} onChange={(arc) => setSettings({ ...settings, arc })} />
-          <ControlSelect label="Delivery" value={settings.deliveryProfile} options={DELIVERY} onChange={(deliveryProfile) => setSettings({ ...settings, deliveryProfile })} />
-          <ControlSelect label="Transition" value={settings.transitionStyle} options={TRANSITIONS.map((item) => [item, item])} onChange={(transitionStyle) => setSettings({ ...settings, transitionStyle })} />
-          <NumberField label="Target LUFS" value={settings.targetLufs} onChange={(targetLufs) => setSettings({ ...settings, targetLufs })} />
-          <NumberField label="Ceiling dBFS" value={settings.ceilingDbfs} onChange={(ceilingDbfs) => setSettings({ ...settings, ceilingDbfs })} />
-          <Slider label="Arc Intensity" unit="x" min={0} max={2} step={0.05} value={settings.arcIntensity} onChange={(arcIntensity) => setSettings({ ...settings, arcIntensity })} />
-          <Slider label="Brightness" unit="dB" min={-3} max={3} step={0.05} value={settings.brightness} onChange={(brightness) => setSettings({ ...settings, brightness })} />
-          <Slider label="Bass Weight" unit="dB" min={-3} max={3} step={0.05} value={settings.bass} onChange={(bass) => setSettings({ ...settings, bass })} />
-          <Slider label="Presence" unit="dB" min={-3} max={3} step={0.05} value={settings.presence} onChange={(presence) => setSettings({ ...settings, presence })} />
-          <Slider label="Air" unit="dB" min={-3} max={3} step={0.05} value={settings.air} onChange={(air) => setSettings({ ...settings, air })} />
-          <Slider label="Warmth" unit="sat" min={-0.08} max={0.12} step={0.005} value={settings.warmth} onChange={(warmth) => setSettings({ ...settings, warmth })} />
-          <Slider label="Compression" unit="mix" min={-1} max={1} step={0.05} value={settings.compression} onChange={(compression) => setSettings({ ...settings, compression })} />
-          <Slider label="Limiter" unit="push" min={-1} max={1} step={0.05} value={settings.limiter} onChange={(limiter) => setSettings({ ...settings, limiter })} />
-          <Slider label="Stereo Width" unit="width" min={-0.35} max={0.35} step={0.01} value={settings.width} onChange={(width) => setSettings({ ...settings, width })} />
-          <button className="reset" onClick={() => setSettings({ ...settings, brightness: 0, bass: 0, presence: 0, air: 0, warmth: 0, compression: 0, limiter: 0, width: 0 })}>
+          <ControlSelect label="Preset" value={settings.preset} options={PRESETS} onChange={(preset) => updateSettings({ preset })} />
+          <ControlSelect label="Album Arc" value={settings.arc} options={ARCS} onChange={(arc) => updateSettings({ arc })} />
+          <ControlSelect label="Delivery" value={settings.deliveryProfile} options={DELIVERY} onChange={(deliveryProfile) => updateSettings({ deliveryProfile })} />
+          <ControlSelect label="Transition" value={settings.transitionStyle} options={TRANSITIONS.map((item) => [item, item])} onChange={(transitionStyle) => updateSettings({ transitionStyle })} />
+          <NumberField label="Target LUFS" value={settings.targetLufs} onChange={(targetLufs) => updateSettings({ targetLufs })} />
+          <NumberField label="Ceiling dBFS" value={settings.ceilingDbfs} onChange={(ceilingDbfs) => updateSettings({ ceilingDbfs })} />
+          <Slider label="Arc Intensity" unit="x" min={0} max={2} step={0.05} value={settings.arcIntensity} onChange={(arcIntensity) => updateSettings({ arcIntensity })} />
+          <Slider label="Brightness" unit="dB" min={-3} max={3} step={0.05} value={settings.brightness} onChange={(brightness) => updateSettings({ brightness })} />
+          <Slider label="Bass Weight" unit="dB" min={-3} max={3} step={0.05} value={settings.bass} onChange={(bass) => updateSettings({ bass })} />
+          <Slider label="Presence" unit="dB" min={-3} max={3} step={0.05} value={settings.presence} onChange={(presence) => updateSettings({ presence })} />
+          <Slider label="Air" unit="dB" min={-3} max={3} step={0.05} value={settings.air} onChange={(air) => updateSettings({ air })} />
+          <Slider label="Warmth" unit="sat" min={-0.08} max={0.12} step={0.005} value={settings.warmth} onChange={(warmth) => updateSettings({ warmth })} />
+          <Slider label="Compression" unit="mix" min={-1} max={1} step={0.05} value={settings.compression} onChange={(compression) => updateSettings({ compression })} />
+          <Slider label="Limiter" unit="push" min={-1} max={1} step={0.05} value={settings.limiter} onChange={(limiter) => updateSettings({ limiter })} />
+          <Slider label="Stereo Width" unit="width" min={-0.35} max={0.35} step={0.01} value={settings.width} onChange={(width) => updateSettings({ width })} />
+          <button className="reset" onClick={() => updateSettings({ brightness: 0, bass: 0, presence: 0, air: 0, warmth: 0, compression: 0, limiter: 0, width: 0 })}>
             <RotateCcw size={15} /> Reset tuning
           </button>
           <button onClick={analyze} disabled={busy || !tracks.length}><BarChart3 size={16} /> Analyze tracks</button>
