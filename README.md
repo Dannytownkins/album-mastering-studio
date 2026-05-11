@@ -22,6 +22,7 @@ The main use case is a complete record: for example, an eight-track sequence tha
 - Creates editable `.ams.json` album project files with track order, titles, character overrides, arc settings, and per-transition controls.
 - Renders transition previews so you can audition the important seams without re-rendering the whole album.
 - Exports dithered 24-bit or 16-bit WAV masters instead of defaulting to 32-bit float delivery files.
+- Ships a Tauri desktop shell in `desktop/` that uses the Python CLI as the engine contract, with the Tkinter app retained as a fallback launcher.
 - Adds delivery profiles for streaming, AES album-mode, Apple/AAC checking, YouTube/video, Amazon/speaker-safe, CD 16/44.1, vinyl premaster, and loud-rock references.
 - Writes sample-accurate cue files for the continuous album WAV and runs AAC/Opus codec QC previews when enabled.
 - Stores release metadata such as artist, album artist, genre, year, UPC, per-track artist, and ISRC in project files, manifests, and dashboards.
@@ -34,6 +35,7 @@ The main use case is a complete record: for example, an eight-track sequence tha
 - Python 3.11+
 - FFmpeg and FFprobe on `PATH`
 - Python packages: `numpy`, `scipy`, `pyloudnorm`
+- For building the Tauri shell: Node.js/npm, Rust/Cargo, and Visual Studio Build Tools with the C++ desktop toolchain.
 
 ## Windows Quick Start
 
@@ -48,7 +50,53 @@ ffmpeg -version
 ffprobe -version
 ```
 
-Launch the local desktop app:
+## Desktop App
+
+The primary app surface is now the Tauri desktop shell in `desktop/`. It keeps all DSP in Python and invokes:
+
+```powershell
+python -m album_mastering_studio.cli ...
+```
+
+The current Windows build artifacts are produced at:
+
+```text
+desktop\src-tauri\target\release\album-mastering-studio.exe
+desktop\src-tauri\target\release\bundle\msi\Album Mastering Studio_0.1.0_x64_en-US.msi
+desktop\src-tauri\target\release\bundle\nsis\Album Mastering Studio_0.1.0_x64-setup.exe
+```
+
+For this personal-workstation build, the installed shell expects this repo checkout and Python environment to remain available. The Rust backend sets `PYTHONPATH` to the repo's `src/` folder when it launches the CLI. Set `ALBUM_MASTER_PYTHON` if you want it to use a specific interpreter.
+
+From `desktop/`:
+
+```powershell
+npm install
+npm run tauri:dev
+```
+
+Build the Windows app/installer:
+
+```powershell
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+```
+
+What the Tauri shell currently supports:
+
+- drag-and-drop audio files into an 8-track list
+- reorder by dragging rows, remove tracks, and rename inline
+- analyze tracks through the CLI and draw waveform thumbnails in canvas
+- choose preset, delivery profile, album arc, transition style, and fine-tuning controls
+- open/save `.ams.json` projects
+- render full album or tracks/transitions only
+- stream JSON progress events from the Python CLI, with a cancel button that kills the active Python subprocess
+- play source, mastered track, album sequence, reference, and rendered transition files through an HTML5 audio transport with seek
+- embed the rendered `dashboard.html` inside the app
+- open the output folder or standalone dashboard
+
+## Tk Fallback
+
+The original local Tk desktop app remains available:
 
 ```powershell
 album-master app
@@ -61,6 +109,8 @@ album-master-studio
 ```
 
 The app is a dark Windows-friendly launcher: add up to 8 songs, reorder them, optionally enter release metadata, choose a reference track, analyze, choose a preset and album arc, pick a delivery profile or manual LUFS/ceiling/sample-rate/bit-depth settings, adjust fine-tuning controls, set transition defaults or per-transition overrides, preview/listen where practical, render the album, then open the output folder or dashboard report.
+
+The main listening loop is visible in the app: after changing presets or sliders, the Listen / Apply State panel marks the settings as pending. Use `Preview Master` to render the selected song with current settings, `A/B Compare` to hear original/mastered/original/mastered from an audible section, and `Auto Master Album (Full WAV + Transitions)` to write the final continuous album plus transition files. If no selected-song master exists yet, A/B Compare renders that preview first and then starts playback. Playback shows a time/progress bar, and source/master playback draws a playhead on the selected track waveform.
 
 Core render outputs:
 
@@ -277,6 +327,9 @@ The LUFS implementation is approximate and tested for consistency inside this to
 python -m unittest discover -s tests
 python -m compileall -q src tests
 album-master smoke --output .\test-output\smoke
+cd desktop
+npm run build
+npm run test:integration
 ```
 
 The test suite includes an eight-track synthetic album that exercises the acoustic -> heavy/djent -> acoustic return workflow end to end, including render, interludes, full album WAV, transition preview, scorecard, dashboard, cue sheets, codec QC preview records, and narrative rationales. The smoke command also verifies 1-track, 2-track, and 8-track renders, individual mastered tracks, transition files, manifest/report artifacts, finite samples, and basic ceiling safety.

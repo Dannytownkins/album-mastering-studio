@@ -2,6 +2,86 @@
 
 ## 2026-05-10
 
+### Tauri Desktop Shell Pass
+
+- Added a new Tauri 2 desktop app in `desktop/` using React, Vite, Tailwind, and TypeScript.
+- Kept the Python package and CLI as the engine contract. The Rust backend invokes `python -m album_mastering_studio.cli ...`, sets `PYTHONPATH` to the repo `src/`, streams stdout/stderr/status events, reads JSON artifacts, opens OS paths, and can kill the active Python subprocess.
+- Added drag-and-drop audio import, add/remove/reorder rows, inline track title edits, preset/delivery/arc/transition controls, fine-tuning sliders, project open/save, output folder open, and an embedded dashboard pane.
+- Added HTML5 audio playback for source, selected master, continuous album WAV, reference track, and rendered transition files with play/pause/seek/time display.
+- Added waveform thumbnail support through a CLI `analyze --waveform-bins` option, cached in frontend state and rendered on HTML canvas.
+- Added `--reference-track` parity to the CLI render/init-project paths and included reference assertions in tests.
+- Added `--json-events` for CLI render/render-project and wired the Tauri UI to show stage labels plus determinate progress while the Python engine runs.
+- Fixed remaining desktop/Tk issues from the latest critique that were cheap and real: preview folders no longer nest through `last_output_dir`, smoke check preflights FFmpeg, cancel is disabled while idle, Reset Tuning no longer clears track/transition overrides, and album-warning ceiling default now matches the render default.
+- Added desktop integration coverage for the CLI contract: synthesize dropped WAVs, analyze with waveform bins, render a manifest, and assert progress events.
+- Added generated Tauri folders to `.gitignore` so `desktop/node_modules/`, `desktop/dist/`, and `desktop/src-tauri/target/` do not pollute commits.
+
+Build outputs produced:
+
+```text
+desktop\src-tauri\target\release\album-mastering-studio.exe
+desktop\src-tauri\target\release\bundle\msi\Album Mastering Studio_0.1.0_x64_en-US.msi
+desktop\src-tauri\target\release\bundle\nsis\Album Mastering Studio_0.1.0_x64-setup.exe
+```
+
+Verification:
+
+```powershell
+python -m compileall -q src tests
+python -m unittest discover -s tests
+python -m album_mastering_studio.cli smoke --output test-output\codex-tauri-progress-smoke
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+```
+
+Results:
+
+- Compile passed.
+- Python unit tests passed: 14 tests.
+- Product smoke passed, including 1-track, 2-track, and 8-track renders.
+- Desktop TypeScript/Vite build passed.
+- Desktop integration test passed.
+- Tauri release build passed and produced both MSI and setup EXE installers.
+
+Remaining honest gaps:
+
+- The Tauri app is now the primary shell, but this first installer is still a personal-workstation build that expects the repo checkout and Python/FFmpeg environment to exist. Python is not bundled.
+- Progress is stage-level from CLI JSON events, not per-sample or per-FFmpeg-frame ETA.
+- There is no native OS menu yet; Open/Save/Output/About are available in the app header and shortcuts are handled in the webview.
+- The Tauri shell does not yet expose single-track render, iteration pass diff/A-B, live arc preview, or per-track tuning values.
+
+### Listen / Apply Loop Pass
+
+- Responded to real app-use feedback that the controls existed but did not make it obvious what was pending, what was rendered, or whether playback was source/master/current settings.
+- Added a Listen / Apply State panel that marks settings as `PENDING`, `PREVIEWING`, `RENDERING`, `APPLIED`, `CANCELED`, or `ERROR`.
+- Added quick preset buttons for Natural, Metal, Djent, Warm, Bright, Loud, and Cinematic so choosing a direction is less combobox-heavy.
+- Added selected-track master preview rendering, A/B compare playback, full-album playback, and rendered-transition playback controls.
+- A/B Compare now automatically renders the selected master preview first when no current master exists, then starts the comparison.
+- Added a playback time/progress bar and waveform playhead for selected source/master playback.
+- Made A/B compare choose an audible 10-second section instead of blindly using a possibly silent intro.
+- Made Play Master/A-B warn when it is using an older preview/render while current settings are pending.
+- Invalidated stale render pointers after adding, removing, or reordering tracks so old output cannot masquerade as the current album.
+- Renamed the full render action to `Auto Master Album (Full WAV + Transitions)` and the partial render action to `Render Masters + Transition Files Only`.
+- Render completion logs now explicitly report master count, transition count, continuous album WAV path, and transition output folder.
+
+Verification:
+
+```powershell
+python -m compileall -q src tests
+python -m unittest discover -s tests
+python -m album_mastering_studio.cli smoke --output test-output\codex-listen-loop-smoke-2
+```
+
+Results:
+
+- Compile passed.
+- Unit tests passed: 13 tests.
+- Hidden Tk app instantiation passed.
+- Smoke passed.
+- Eight-track smoke render produced 8 masters, 7 interludes, `album_sequence.wav`, cue files, `manifest.json`, `scorecard.json`, `dashboard.html`, and 2 codec preview files.
+- Eight-track album WAV is stereo 48 kHz, 24-bit PCM.
+
 ### Partner Review Fix Pass
 
 - Treated the screenshot review as product requirements, including previously scoped UX items.
@@ -99,7 +179,7 @@ Remaining partner-review items:
 
 - Cancel is cooperative. It can skip post-render scoring/dashboard if requested late, but it does not hard-kill FFmpeg or interrupt the core render mid-file.
 - Reference-track support is analysis/reporting only. It does not yet automatically match tonal balance or loudness to the reference.
-- In-app playback is intentionally basic and Windows-first; no transport timeline or A/B compare yet.
+- In-app playback is intentionally basic and Windows-first. It now has progress/time, source/master play, A/B clip, transition play, album play, and waveform playhead, but not pause/seek/scrub or true realtime DSP while a slider is moving.
 - LUFS uses `pyloudnorm` when installed, but this local environment did not have it installed during verification, so the fallback path was used here.
 - Mastering EQ/interlude filters still use zero-phase `filtfilt`/`sosfiltfilt` in several places; this is a known DSP quality target for a future minimum-phase pass.
 - Character inference still uses filename hints and positional return-acoustic logic. Overrides make it controllable, but the classifier is not yet a robust genre model.
@@ -212,7 +292,7 @@ Results:
 
 ### Weak Spots
 
-- GUI is workflow-complete and dark themed, but waveform and playback are still basic rather than DAW-like.
+- GUI is workflow-complete and dark themed, with a basic transport, A/B clip, waveform playhead, and source/master/transition/album playback. It is still not a DAW-style scrubber or real-time streaming processor.
 - True peak remains a local oversampling proxy, and LUFS falls back to the local approximation when `pyloudnorm` is not installed.
 - Tempo/key/chroma are not full musicology features; transition roots are estimated from local spectra.
 - Reference matching is not automatic yet; the app only analyzes/reports the reference track.
@@ -220,6 +300,6 @@ Results:
 
 ### Next Move
 
-- Add A/B comparison between source, master, transition preview, and album sequence.
-- Add real transport/A-B playback with level matching between source, master, transition preview, and album sequence.
+- Add a richer transport with pause/seek/scrub and a true source/master toggle if the Tk/winsound path remains the app surface.
+- Consider level-matched A/B mode after the current non-level-matched comparison has been tested on real songs.
 - Add actual reference-track matching once the core workflow has been used on real songs.

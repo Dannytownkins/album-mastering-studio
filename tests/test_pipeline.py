@@ -91,6 +91,8 @@ class PipelineTest(unittest.TestCase):
                     "0.75",
                     "--interlude-style",
                     "tape",
+                    "--reference-track",
+                    str(input_dir / "01_a.wav"),
                     "--album-wav",
                 ],
                 check=True,
@@ -103,6 +105,35 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(summary["interlude_count"], 1)
             self.assertTrue((output_dir / "manifest.json").exists())
             self.assertTrue((output_dir / "album_sequence.wav").exists())
+            manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["reference"]["path"], str(input_dir / "01_a.wav"))
+            self.assertIn("integrated_lufs", manifest["reference"]["analysis"])
+
+    def test_cli_analyze_includes_waveform_bins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "source.wav"
+            self._write_sine(input_path, 220.0, 0.25)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "album_mastering_studio.cli",
+                    "analyze",
+                    str(input_path),
+                    "--waveform-bins",
+                    "16",
+                ],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+            rows = json.loads(result.stdout)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(len(rows[0]["waveform"]), 16)
+            self.assertIn("integrated_lufs", rows[0]["analysis"])
 
     def test_interlude_styles_render_finite_audio(self) -> None:
         sample_rate = 48_000

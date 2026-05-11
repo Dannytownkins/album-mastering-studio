@@ -8,3 +8,7 @@ build/
 *.egg-info/
 outputs/
 test-output/
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/gen/
+desktop/src-tauri/target/

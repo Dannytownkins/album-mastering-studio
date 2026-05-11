@@ -7,6 +7,7 @@ from pathlib import Path
 from .arc import ARC_PRESETS
 from .analysis import analyze_audio
 from .audio_io import collect_audio_files, load_audio
+from .constants import DEFAULT_SAMPLE_RATE
 from .dashboard import export_dashboard
 from .iteration import iterate_project
 from .mastering import PRESETS
@@ -55,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--no-codec-preview", action="store_true", help="Skip AAC/Opus round-trip QC preview for album WAV renders.")
     render.add_argument("--target-lufs", type=float, default=None, help="Optional album base LUFS target while preserving arc offsets.")
     render.add_argument("--ceiling-dbfs", type=float, default=None, help="Optional true-peak ceiling proxy in dBFS.")
+    render.add_argument("--reference-track", type=Path, default=None, help="Optional reference track to analyze in the manifest.")
     render.add_argument(
         "--interlude-duration",
         type=float,
@@ -98,6 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also render a continuous album_sequence.wav file.",
     )
+    render.add_argument("--json-events", action="store_true", help="Print newline-delimited JSON progress events during render.")
 
     init_project = subparsers.add_parser(
         "init-project",
@@ -130,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_project.add_argument("--no-codec-preview", action="store_true", help="Disable AAC/Opus round-trip QC preview in the project.")
     init_project.add_argument("--target-lufs", type=float, default=None, help="Optional album base LUFS target while preserving arc offsets.")
     init_project.add_argument("--ceiling-dbfs", type=float, default=None, help="Optional true-peak ceiling proxy in dBFS.")
+    init_project.add_argument("--reference-track", type=Path, default=None, help="Optional reference track to analyze in the manifest.")
     init_project.add_argument(
         "--interlude-duration",
         type=float,
@@ -176,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render_project_parser.add_argument("project", type=Path, help="Project JSON path.")
     render_project_parser.add_argument("--output", "-o", type=Path, required=True, help="Output folder.")
+    render_project_parser.add_argument("--json-events", action="store_true", help="Print newline-delimited JSON progress events during render.")
 
     preview = subparsers.add_parser(
         "preview-transition",
@@ -227,7 +232,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     analyze = subparsers.add_parser("analyze", help="Analyze source tracks without rendering.")
     analyze.add_argument("inputs", nargs="+", type=Path, help="Audio files or folders to analyze.")
-    analyze.add_argument("--sample-rate", type=int, default=48_000, help="Analysis sample rate.")
+    analyze.add_argument("--sample-rate", type=int, default=DEFAULT_SAMPLE_RATE, help="Analysis sample rate.")
+    analyze.add_argument("--waveform-bins", type=int, default=128, help="Number of waveform thumbnail bins to include in JSON output.")
 
     app = subparsers.add_parser("app", help="Launch the local Windows desktop mastering studio.")
     app.add_argument("--output", "-o", type=Path, default=None, help="Default output folder for app renders.")
@@ -249,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
             args.inputs,
             args.output,
             options,
+            progress=_json_event_progress if args.json_events else None,
         )
         print(json.dumps(_render_summary(manifest), indent=2))
         return 0
@@ -282,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "render-project":
-        manifest = render_project(args.project, args.output)
+        manifest = render_project(args.project, args.output, progress=_json_event_progress if args.json_events else None)
         print(json.dumps(_render_summary(manifest), indent=2))
         return 0
 
@@ -327,7 +334,13 @@ def main(argv: list[str] | None = None) -> int:
         rows = []
         for path in collect_audio_files(args.inputs):
             samples = load_audio(path, args.sample_rate)
-            rows.append({"source": str(path), "analysis": analyze_audio(samples, args.sample_rate).to_dict()})
+            rows.append(
+                {
+                    "source": str(path),
+                    "analysis": analyze_audio(samples, args.sample_rate).to_dict(),
+                    "waveform": _waveform(samples, bins=args.waveform_bins),
+                }
+            )
         print(json.dumps(rows, indent=2))
         return 0
 
@@ -356,6 +369,10 @@ def _render_summary(manifest: dict) -> dict:
     }
 
 
+def _json_event_progress(event: dict) -> None:
+    print(json.dumps(event, separators=(",", ":")), flush=True)
+
+
 def _options_from_args(args) -> RenderOptions:
     profile = delivery_profile(args.delivery_profile)
     return RenderOptions(
@@ -381,7 +398,25 @@ def _options_from_args(args) -> RenderOptions:
         tweak_intensity=args.tweak_intensity,
         tweak_limiter=args.tweak_limiter,
         album_wav=args.album_wav,
+        reference_track=args.reference_track,
     )
+
+
+def _waveform(samples, bins: int = 128) -> list[float]:
+    import numpy as np
+
+    if samples.size == 0 or bins <= 0:
+        return []
+    mono = np.max(np.abs(samples), axis=1) if samples.ndim == 2 else np.abs(samples)
+    edges = np.linspace(0, mono.size, bins + 1, dtype=int)
+    chunks = []
+    for start, end in zip(edges[:-1], edges[1:]):
+        chunk = mono[start : max(end, start + 1)]
+        chunks.append(float(chunk.max()) if chunk.size else 0.0)
+    peak = max(chunks) if chunks else 0.0
+    if peak <= 0.0:
+        return chunks
+    return [round(float(value / peak), 6) for value in chunks]
 
 
 if __name__ == "__main__":

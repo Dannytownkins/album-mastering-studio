@@ -9,6 +9,7 @@ import queue
 import shutil
 import threading
 import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -101,11 +102,27 @@ class MasteringStudioApp:
         self.last_output_dir: Path | None = None
         self.last_dashboard_path: Path | None = None
         self.last_manifest: dict[str, Any] | None = None
+        self.last_preview_dir: Path | None = None
         self.last_preview_path: Path | None = None
+        self.last_master_preview_path: Path | None = None
+        self.last_master_preview_track_index: int | None = None
+        self.pending_ab_after_preview_index: int | None = None
         self.current_project_path: Path | None = None
         self.missing_audio_tools = check_audio_tools()
         self.playback_temp_dir = Path(tempfile.mkdtemp(prefix="album-master-playback-"))
         self.playback_cache: dict[tuple[str, int, int], Path] = {}
+        self.playback_active = False
+        self.playback_started_at = 0.0
+        self.playback_duration_seconds = 0.0
+        self.playback_track_index: int | None = None
+        self.waveform_playhead_fraction: float | None = None
+        self.playback_progress = tk.DoubleVar(value=0.0)
+        self.playback_time = tk.StringVar(value="00:00 / 00:00")
+        self.playback_now = tk.StringVar(value="No playback")
+        self.settings_state = tk.StringVar(value="READY: choose a sound, then preview or render.")
+        self.last_applied_state = tk.StringVar(value="Nothing has been previewed or rendered in this session.")
+        self._tracking_changes = False
+        self._settings_dirty = False
         self.cancel_requested = False
         self.editing_track_index: int | None = None
         self.editing_transition_index: int | None = None
@@ -156,6 +173,8 @@ class MasteringStudioApp:
         self._configure_theme()
         self._build_ui()
         self._refresh_tracks()
+        self._bind_setting_change_markers()
+        self._tracking_changes = True
         self._poll_queue()
         self._bind_shortcuts()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -372,7 +391,7 @@ class MasteringStudioApp:
         menu.add_cascade(label="File", menu=file_menu)
         run_menu = tk.Menu(menu, tearoff=False)
         run_menu.add_command(label="Analyze", command=self._analyze_tracks)
-        run_menu.add_command(label="Render Full Album", accelerator="Ctrl+R", command=lambda: self._render(album_wav=True))
+        run_menu.add_command(label="Render Full Album + Transitions", accelerator="Ctrl+R", command=lambda: self._render(album_wav=True))
         run_menu.add_command(label="Smoke Check", command=self._run_smoke_check)
         menu.add_cascade(label="Run", menu=run_menu)
         for item in (menu, file_menu, run_menu):
@@ -396,8 +415,11 @@ class MasteringStudioApp:
             ("Move Up", lambda: self._move_track(-1), "Ghost.TButton"),
             ("Move Down", lambda: self._move_track(1), "Ghost.TButton"),
             ("Analyze", self._analyze_tracks, "Accent.TButton"),
+            ("Preview Master", self._preview_selected_master, "Primary.TButton"),
             ("Play Source", self._play_selected_source, "TButton"),
             ("Play Master", self._play_selected_master, "TButton"),
+            ("A/B Compare", self._play_ab_clip, "Accent.TButton"),
+            ("Play Album", self._play_album_sequence, "TButton"),
             ("Stop", self._stop_playback, "Ghost.TButton"),
         ):
             ttk.Button(toolbar, text=text, command=command, style=style_name).pack(side=tk.LEFT, padx=(0, 6))
@@ -498,6 +520,7 @@ class MasteringStudioApp:
         ttk.Button(controls, text="Apply Transition", command=self._apply_transition_override, style="Accent.TButton").pack(side=tk.LEFT, padx=(0, 6))
         ttk.Button(controls, text="Preview Transition", command=self._preview_transition, style="Primary.TButton").pack(side=tk.LEFT)
         ttk.Button(controls, text="Play Preview", command=self._play_last_preview).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(controls, text="Play Rendered", command=self._play_rendered_transition).pack(side=tk.LEFT, padx=(6, 0))
 
         waveform_box = ttk.LabelFrame(parent, text="Selected Track Waveform / Analysis", padding=8)
         waveform_box.grid(row=4, column=0, sticky="ew", pady=(8, 0))
@@ -534,6 +557,26 @@ class MasteringStudioApp:
         arc_label = tk.StringVar()
         self._bind_slider_label("arc", self.arc_intensity, arc_label, "{:.2f}x")
         ttk.Label(settings, textvariable=arc_label, width=9).grid(row=2, column=2, sticky="e", pady=(8, 0))
+        quick_presets = ttk.Frame(settings)
+        quick_presets.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        for column, (label, key) in enumerate(
+            (
+                ("Natural", "acoustic-natural"),
+                ("Metal", "heavy-rock-metal"),
+                ("Djent", "djent-modern-metal"),
+                ("Warm", "warm-glue"),
+                ("Bright", "bright-air"),
+                ("Loud", "loud-aggressive"),
+                ("Cinematic", "album-cohesion-cinematic"),
+            )
+        ):
+            quick_presets.columnconfigure(column, weight=1)
+            ttk.Button(
+                quick_presets,
+                text=label,
+                command=lambda preset_key=key: self._choose_preset(preset_key),
+                style="Ghost.TButton",
+            ).grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 3, 0))
 
         render = ttk.LabelFrame(parent, text="Render Settings", padding=10)
         render.grid(row=1, column=0, sticky="ew", pady=(8, 0))
@@ -583,11 +626,31 @@ class MasteringStudioApp:
             ttk.Scale(tune, variable=var, from_=low, to=high, orient=tk.HORIZONTAL).grid(row=row, column=1, sticky="ew", padx=8, pady=2)
             ttk.Label(tune, textvariable=value_label, width=10).grid(row=row, column=2, sticky="e", pady=2)
 
+        listen = ttk.LabelFrame(parent, text="Listen / Apply State", padding=10)
+        listen.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        listen.columnconfigure(0, weight=1)
+        ttk.Label(listen, textvariable=self.settings_state, style="Console.TLabel").grid(row=0, column=0, columnspan=4, sticky="ew")
+        ttk.Label(listen, textvariable=self.last_applied_state, style="Muted.TLabel", wraplength=520).grid(
+            row=1, column=0, columnspan=4, sticky="ew", pady=(4, 8)
+        )
+        for column, (text, command, style_name) in enumerate(
+            (
+                ("Preview Master", self._preview_selected_master, "Primary.TButton"),
+                ("A/B Compare", self._play_ab_clip, "Accent.TButton"),
+                ("Play Source", self._play_selected_source, "TButton"),
+                ("Play Master", self._play_selected_master, "TButton"),
+            )
+        ):
+            listen.columnconfigure(column, weight=1)
+            ttk.Button(listen, text=text, command=command, style=style_name).grid(
+                row=2, column=column, sticky="ew", padx=(0 if column == 0 else 4, 0)
+            )
+
         actions = ttk.LabelFrame(parent, text="Actions", padding=10)
-        actions.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        actions.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         for text, command, style_name in (
-            ("Render Full Album", lambda: self._render(album_wav=True), "Primary.TButton"),
-            ("Render Tracks Only", lambda: self._render(album_wav=False), "Accent.TButton"),
+            ("Auto Master Album (Full WAV + Transitions)", lambda: self._render(album_wav=True), "Primary.TButton"),
+            ("Render Masters + Transition Files Only", lambda: self._render(album_wav=False), "Accent.TButton"),
             ("Open Report", self._open_report, "TButton"),
             ("Open Output Folder", self._open_output_folder, "TButton"),
             ("Open Project", self._open_project, "Ghost.TButton"),
@@ -607,8 +670,17 @@ class MasteringStudioApp:
         ttk.Label(status_row, textvariable=self.status, style="Console.TLabel").grid(row=0, column=0, sticky="w")
         self.progress = ttk.Progressbar(status_row, mode="indeterminate")
         self.progress.grid(row=0, column=1, sticky="ew", padx=10)
-        ttk.Button(status_row, text="Cancel", command=self._request_cancel, style="Danger.TButton").grid(row=0, column=2, sticky="e", padx=(0, 6))
+        self.cancel_button = ttk.Button(status_row, text="Cancel", command=self._request_cancel, style="Danger.TButton", state=tk.DISABLED)
+        self.cancel_button.grid(row=0, column=2, sticky="e", padx=(0, 6))
         ttk.Button(status_row, text="Clear Log", command=self._clear_log, style="Ghost.TButton").grid(row=0, column=3, sticky="e")
+        playback_row = ttk.Frame(log_frame)
+        playback_row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 6))
+        playback_row.columnconfigure(1, weight=1)
+        ttk.Label(playback_row, textvariable=self.playback_now, style="Muted.TLabel", width=28).grid(row=0, column=0, sticky="w")
+        ttk.Progressbar(playback_row, variable=self.playback_progress, maximum=100.0, mode="determinate").grid(
+            row=0, column=1, sticky="ew", padx=10
+        )
+        ttk.Label(playback_row, textvariable=self.playback_time, style="Console.TLabel", width=16).grid(row=0, column=2, sticky="e")
         self.log = tk.Text(log_frame, height=8, wrap=tk.WORD)
         self.log.configure(
             background=UI_COLORS["input"],
@@ -622,16 +694,18 @@ class MasteringStudioApp:
             highlightbackground=UI_COLORS["line"],
             font=("Cascadia Mono", 9),
         )
-        self.log.grid(row=1, column=0, sticky="ew")
+        self.log.grid(row=2, column=0, sticky="ew")
         self.log.tag_configure("time", foreground=UI_COLORS["faint"])
         self.log.tag_configure("normal", foreground=UI_COLORS["text"])
         self.log.tag_configure("ok", foreground=UI_COLORS["primary"])
         self.log.tag_configure("warning", foreground=UI_COLORS["accent"])
         self.log.tag_configure("error", foreground=UI_COLORS["danger"])
         scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log.yview)
-        scrollbar.grid(row=1, column=1, sticky="ns")
+        scrollbar.grid(row=2, column=1, sticky="ns")
         self.log.configure(yscrollcommand=scrollbar.set)
-        self._log(f"Ready. Add up to {MAX_TRACKS} songs, analyze, choose a direction, then render.")
+        self._log(
+            f"Ready. Add up to {MAX_TRACKS} songs, choose a preset, use Preview Master or A/B Compare to hear changes, then Auto Master Album."
+        )
 
     def _entry(self, parent: ttk.Frame, label: str, variable: tk.Variable, row: int, column: int) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=column, sticky="w", pady=(8 if row else 0, 0))
@@ -649,6 +723,67 @@ class MasteringStudioApp:
         variable.trace_add("write", update)
         self.slider_labels[name] = label
         update()
+
+    def _bind_setting_change_markers(self) -> None:
+        watched: tuple[tk.Variable, ...] = (
+            self.album_title,
+            self.artist,
+            self.album_artist,
+            self.release_year,
+            self.genre,
+            self.upc,
+            self.reference_path,
+            self.sample_rate,
+            self.bit_depth,
+            self.target_profile,
+            self.codec_preview,
+            self.preset,
+            self.arc,
+            self.arc_intensity,
+            self.output_format,
+            self.transition_style,
+            self.transition_duration,
+            self.target_lufs,
+            self.ceiling_dbfs,
+            self.tweak_lufs,
+            self.brightness,
+            self.bass_weight,
+            self.mid_presence,
+            self.air,
+            self.warmth,
+            self.compression,
+            self.limiter,
+            self.width,
+        )
+        for variable in watched:
+            variable.trace_add("write", lambda *_args: self._mark_settings_pending())
+        for variable in (self.transition_style, self.transition_duration):
+            variable.trace_add("write", lambda *_args: self._refresh_transitions())
+
+    def _mark_settings_pending(self) -> None:
+        if not self._tracking_changes:
+            return
+        self._settings_dirty = True
+        self.settings_state.set("PENDING: click Preview Master, A/B Compare, or Auto Master Album to hear these settings.")
+
+    def _mark_applied(self, message: str) -> None:
+        self._settings_dirty = False
+        self.settings_state.set("APPLIED: the current settings have a fresh preview/render.")
+        self.last_applied_state.set(message)
+
+    def _invalidate_render_outputs(self) -> None:
+        self.last_manifest = None
+        self.last_dashboard_path = None
+        self.last_preview_dir = None
+        self.last_preview_path = None
+        self.last_master_preview_path = None
+        self.last_master_preview_track_index = None
+        self.pending_ab_after_preview_index = None
+        self.pending_ab_after_preview_index = None
+
+    def _choose_preset(self, key: str) -> None:
+        self.preset.set(_preset_choice(key))
+        self._log(f"Preset selected: {PRESETS[key].display_name}. Preview or render to hear it.")
 
     def _bind_shortcuts(self) -> None:
         self.root.bind("<Control-o>", lambda _event: self._open_project())
@@ -691,7 +826,6 @@ class MasteringStudioApp:
 
     def _request_cancel(self) -> None:
         if not self.busy:
-            self.status.set("Ready")
             return
         self.cancel_requested = True
         self.status.set("Cancel requested...")
@@ -745,6 +879,12 @@ class MasteringStudioApp:
         base_dir = project_path.resolve().parent
         settings = project.get("settings", {})
         metadata = project.get("metadata", {})
+        self.last_manifest = None
+        self.last_dashboard_path = None
+        self.last_preview_dir = None
+        self.last_preview_path = None
+        self.last_master_preview_path = None
+        self.last_master_preview_track_index = None
         self.album_title.set(str(project.get("album_title") or "Untitled Album"))
         self.artist.set(str(metadata.get("artist", "")))
         self.album_artist.set(str(metadata.get("album_artist", "")))
@@ -813,6 +953,9 @@ class MasteringStudioApp:
         self.editing_transition_index = None
         self._sync_transitions()
         self._refresh_tracks()
+        self._settings_dirty = True
+        self.settings_state.set("PENDING: opened project needs a fresh preview or render.")
+        self.last_applied_state.set(f"Opened project: {project_path}")
 
     def _add_files(self) -> None:
         if len(self.tracks) >= MAX_TRACKS:
@@ -833,6 +976,8 @@ class MasteringStudioApp:
         if added:
             self._sync_transitions()
             self._refresh_tracks()
+            self._invalidate_render_outputs()
+            self._mark_settings_pending()
             self._log(f"Added {added} track(s).")
             self._analyze_tracks()
 
@@ -846,6 +991,8 @@ class MasteringStudioApp:
         self.editing_transition_index = None
         self._sync_transitions()
         self._refresh_tracks()
+        self._invalidate_render_outputs()
+        self._mark_settings_pending()
         self._log(f"Removed {removed.path.name}.")
 
     def _move_track(self, delta: int) -> None:
@@ -861,6 +1008,8 @@ class MasteringStudioApp:
         self.editing_transition_index = None
         self._sync_transitions()
         self._refresh_tracks(select=new_index)
+        self._invalidate_render_outputs()
+        self._mark_settings_pending()
         self._log("Track order updated.")
 
     def _load_selected_track(self) -> None:
@@ -884,6 +1033,7 @@ class MasteringStudioApp:
             return
         self._save_track_editor(index, silent=False)
         self._refresh_tracks(select=index)
+        self._mark_settings_pending()
 
     def _save_track_editor(self, index: int, silent: bool) -> None:
         if index < 0 or index >= len(self.tracks):
@@ -893,11 +1043,15 @@ class MasteringStudioApp:
             preset = _preset_key_or_auto(self.track_preset.get())
         except ValueError:
             preset = track.preset
+        before = (track.title, track.artist, track.isrc, track.character, track.preset)
         track.title = self.track_title.get().strip() or track.path.stem
         track.artist = self.track_artist.get().strip()
         track.isrc = self.track_isrc.get().strip().upper()
         track.character = self.track_character.get()
         track.preset = preset
+        after = (track.title, track.artist, track.isrc, track.character, track.preset)
+        if before != after:
+            self._mark_settings_pending()
         if not silent:
             self._log(f"Updated track {index + 1} overrides.")
 
@@ -919,6 +1073,7 @@ class MasteringStudioApp:
             return
         if self._save_transition_editor(index, silent=False):
             self._refresh_transitions(select=index)
+            self._mark_settings_pending()
 
     def _save_transition_editor(self, index: int, silent: bool) -> bool:
         if index < 0 or index >= len(self.transitions):
@@ -929,11 +1084,15 @@ class MasteringStudioApp:
             if not silent:
                 messagebox.showerror("Invalid transition", str(exc))
             return False
-        self.transitions[index] = TransitionState(
+        current = self.transitions[index]
+        updated = TransitionState(
             style=self.transition_override_style.get(),
             duration_seconds=duration,
             enabled=bool(self.transition_enabled.get()),
         )
+        self.transitions[index] = updated
+        if current != updated:
+            self._mark_settings_pending()
         if not silent:
             self._log(f"Updated transition {index + 1}.")
         return True
@@ -987,6 +1146,8 @@ class MasteringStudioApp:
         except ValueError as exc:
             messagebox.showerror("Invalid settings", str(exc))
             return
+        self.settings_state.set("RENDERING: applying current settings to the album.")
+        self.last_applied_state.set("Rendering now. The output folder, album WAV, transitions, and report will update when it finishes.")
         self._start_background(self._render_worker, project, output_dir)
 
     def _render_worker(self, project: dict, output_dir: Path) -> None:
@@ -1015,7 +1176,30 @@ class MasteringStudioApp:
             self.queue.put(("manifest", manifest))
             self.queue.put(("paths", output_dir, dashboard_path))
             score_text = f" Score {score['overall']:.2f}." if score else ""
-            self.queue.put(("log", f"Render complete.{score_text}"))
+            track_count = manifest.get("track_count", 0)
+            interlude_count = manifest.get("interlude_count", 0)
+            album_sequence = manifest.get("album_sequence")
+            summary = (
+                f"Render complete: {track_count} masters, "
+                f"{interlude_count} transitions"
+            )
+            if album_sequence:
+                summary += ", continuous album WAV"
+            elif project.get("settings", {}).get("album_wav"):
+                summary += ", no album WAV"
+            self.queue.put(("log", f"{summary}.{score_text}"))
+            self.queue.put(
+                (
+                    "applied_state",
+                    f"Last render used current settings: {track_count} masters, {interlude_count} transitions. Output: {output_dir}",
+                )
+            )
+            if album_sequence:
+                self.queue.put(("log", f"Continuous album WAV: {album_sequence}"))
+            if interlude_count:
+                self.queue.put(("log", f"Transition files: {manifest.get('outputs', {}).get('interludes_dir')}"))
+            if project.get("settings", {}).get("album_wav") and len(project.get("tracks", [])) > 1 and manifest.get("interlude_count", 0) == 0:
+                self.queue.put(("log", "Warning: full album render produced zero transitions; check whether transitions are disabled."))
             for warning in manifest.get("warnings", []):
                 self.queue.put(("log", f"Warning: {warning}"))
         except Exception as exc:
@@ -1032,11 +1216,12 @@ class MasteringStudioApp:
             return
         try:
             project = self._project_dict(album_wav=False)
-            output_dir = (self.last_output_dir or Path(self.output_dir.get()).expanduser()) / "previews"
+            output_dir = Path(self.output_dir.get()).expanduser() / "previews" / "transitions"
             self._validate_output_dir(output_dir)
         except ValueError as exc:
             messagebox.showerror("Invalid settings", str(exc))
             return
+        self.settings_state.set("PREVIEWING: applying current transition settings.")
         self._start_background(self._preview_worker, project, output_dir, index)
 
     def _preview_worker(self, project: dict, output_dir: Path, index: int) -> None:
@@ -1049,9 +1234,56 @@ class MasteringStudioApp:
                 return
             preview_path = output_dir / f"transition_{index + 1:02d}_to_{index + 2:02d}.wav"
             summary = render_transition_preview(project_path, index + 1, preview_path, tail_seconds=8.0, head_seconds=8.0)
-            self.queue.put(("paths", output_dir, None))
+            self.queue.put(("preview_dir", output_dir))
             self.queue.put(("preview_path", preview_path))
-            self.queue.put(("log", f"Preview rendered: {summary['output']}"))
+            self.queue.put(("log", f"Preview rendered and queued for playback: {summary['output']}"))
+            self.queue.put(("applied_state", f"Transition preview used current settings: {preview_path}"))
+            self.queue.put(("play_path", str(preview_path), "Transition preview"))
+        except Exception as exc:
+            self.queue.put(("error", str(exc)))
+        finally:
+            self.queue.put(("done",))
+
+    def _preview_selected_master(self, auto_play: bool = True) -> None:
+        index = self._selected_track_index()
+        if index is None:
+            messagebox.showinfo("No track", "Select a track first.")
+            return
+        if self.missing_audio_tools:
+            messagebox.showerror("Missing FFmpeg", f"Missing required audio tools: {', '.join(self.missing_audio_tools)}")
+            return
+        try:
+            project = self._project_dict(album_wav=False)
+            project["tracks"] = [project["tracks"][index]]
+            project["transitions"] = []
+            output_dir = Path(self.output_dir.get()).expanduser() / "previews" / f"master_{index + 1:02d}"
+            self._validate_output_dir(output_dir)
+        except ValueError as exc:
+            messagebox.showerror("Invalid settings", str(exc))
+            return
+        self.settings_state.set("PREVIEWING: applying current settings to the selected song.")
+        self._start_background(self._preview_master_worker, project, output_dir, index, auto_play)
+
+    def _preview_master_worker(self, project: dict, output_dir: Path, original_index: int, auto_play: bool) -> None:
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            project_path = output_dir / "master-preview.ams.json"
+            project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+            self.queue.put(("log", f"Rendering selected-track master preview to {output_dir}..."))
+            if self.cancel_requested:
+                self.queue.put(("log", "Master preview canceled before render started."))
+                return
+            manifest = render_project(project_path, output_dir)
+            tracks = [item for item in manifest.get("sequence", []) if item.get("type") == "track"]
+            if not tracks:
+                raise RuntimeError("Master preview did not produce a track output.")
+            preview_path = Path(tracks[0]["output"])
+            self.queue.put(("preview_dir", output_dir))
+            self.queue.put(("preview_master_path", str(preview_path), original_index))
+            self.queue.put(("log", f"Master preview rendered: {preview_path}"))
+            self.queue.put(("applied_state", f"Master preview used current settings for track {original_index + 1}: {preview_path}"))
+            if auto_play:
+                self.queue.put(("play_path", str(preview_path), "Master preview", original_index))
         except Exception as exc:
             self.queue.put(("error", str(exc)))
         finally:
@@ -1062,39 +1294,98 @@ class MasteringStudioApp:
         if index is None:
             messagebox.showinfo("No track", "Select a track first.")
             return
-        self._play_audio_path(self.tracks[index].path)
+        self._play_audio_path(self.tracks[index].path, label=f"Original: {self.tracks[index].title}", track_index=index)
 
     def _play_selected_master(self) -> None:
         index = self._selected_track_index()
         if index is None:
             messagebox.showinfo("No track", "Select a track first.")
             return
-        if not self.last_manifest:
-            messagebox.showinfo("No render yet", "Render first, then play the selected master.")
+        master_path = self._selected_master_path(index)
+        if master_path is None:
+            self._log("No fresh master preview exists yet; rendering Preview Master first.")
+            self._preview_selected_master(auto_play=True)
             return
-        tracks = [item for item in self.last_manifest.get("sequence", []) if item.get("type") == "track"]
-        if index >= len(tracks):
-            messagebox.showinfo("No master", "No rendered master exists for that selection.")
+        if self._settings_dirty:
+            self._log("Warning: Play Master is using the last preview/render. Current control changes are pending; click Preview Master to hear them.")
+        self._play_audio_path(master_path, label=f"Mastered: {self.tracks[index].title}", track_index=index)
+
+    def _play_ab_clip(self) -> None:
+        index = self._selected_track_index()
+        if index is None:
+            messagebox.showinfo("No track", "Select a track first.")
             return
-        self._play_audio_path(Path(tracks[index]["output"]))
+        master_path = self._selected_master_path(index)
+        if master_path is None:
+            self.pending_ab_after_preview_index = index
+            self._log("No fresh master preview exists yet; rendering Preview Master first, then A/B Compare will start.")
+            self._preview_selected_master(auto_play=False)
+            return
+        if self._settings_dirty:
+            self._log("Warning: A/B Compare is using the last preview/render. Current control changes are pending; click Preview Master first for a fresh comparison.")
+        try:
+            sample_rate = _read_int(self.sample_rate, "Sample rate", minimum=8_000, maximum=192_000)
+            source = load_audio(self.tracks[index].path, sample_rate)
+            master = load_audio(master_path, sample_rate)
+            start, end = _audible_preview_window(source, sample_rate, seconds=10.0)
+            frames = min(end - start, max(master.shape[0] - start, 0), int(sample_rate * 10.0))
+            if frames <= 0:
+                raise ValueError("selected track has no playable audio")
+            gap = np.zeros((int(sample_rate * 0.25), 2), dtype=np.float32)
+            source_segment = source[start : start + frames]
+            master_segment = master[start : start + frames]
+            clip = np.concatenate([source_segment, gap, master_segment, gap, source_segment, gap, master_segment], axis=0)
+            path = self.playback_temp_dir / f"ab_track_{index + 1:02d}.wav"
+            write_audio(path, clip, sample_rate, bit_depth=24)
+            self._log(f"A/B clip rendered from {_time_label(start / sample_rate)}: original -> mastered -> original -> mastered.")
+            self._play_audio_path(path, label="A/B original/mastered", track_index=index)
+        except Exception as exc:
+            messagebox.showerror("A/B clip failed", str(exc))
+
+    def _play_album_sequence(self) -> None:
+        album_path = self._album_sequence_path()
+        if album_path is None:
+            messagebox.showinfo("No album render yet", "Use Render Full Album + Transitions first.")
+            return
+        self._play_audio_path(album_path, label="Full album")
+
+    def _play_rendered_transition(self) -> None:
+        index = self._selected_transition_index()
+        if index is None:
+            messagebox.showinfo("No transition", "Select a transition first.")
+            return
+        transition_path = self._rendered_transition_path(index)
+        if transition_path is None:
+            messagebox.showinfo("No rendered transition yet", "Use Preview Transition or Render Full Album + Transitions first.")
+            return
+        self._play_audio_path(transition_path, label=f"Rendered transition {index + 1}")
 
     def _play_last_preview(self) -> None:
         if self.last_preview_path and self.last_preview_path.exists():
-            self._play_audio_path(self.last_preview_path)
+            self._play_audio_path(self.last_preview_path, label="Transition preview")
         else:
             messagebox.showinfo("No preview yet", "Render a transition preview first.")
 
     def _stop_playback(self) -> None:
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
+        self.playback_active = False
+        self.playback_track_index = None
+        self.waveform_playhead_fraction = None
+        self.playback_progress.set(0.0)
+        self.playback_time.set("00:00 / 00:00")
+        self.playback_now.set("Stopped")
+        self._redraw_selected_waveform()
         self._log("Stopped playback.")
 
-    def _play_audio_path(self, path: Path) -> None:
+    def _play_audio_path(self, path: Path, label: str | None = None, track_index: int | None = None) -> None:
         if not path.exists():
             messagebox.showinfo("Missing file", f"Audio file does not exist: {path}")
             return
         if winsound is None:
             _open_path(path)
+            self._start_playback_meter(path, _audio_duration(path), label or path.stem, track_index=track_index)
+            self._log(f"Opened {label or path.stem}: {path}")
             return
         try:
             playback_path = path
@@ -1109,12 +1400,79 @@ class MasteringStudioApp:
                     write_audio(playback_path, samples, sample_rate)
                     self.playback_cache[key] = playback_path
             winsound.PlaySound(str(playback_path), winsound.SND_FILENAME | winsound.SND_ASYNC)
-            self._log(f"Playing: {path}")
+            self._start_playback_meter(path, _audio_duration(path), label or path.stem, track_index=track_index)
+            self._log(f"Playing {label or path.stem}: {path}")
         except Exception as exc:
             self._log(f"Playback fallback: {exc}")
             _open_path(path)
+            self._start_playback_meter(path, _audio_duration(path), label or path.stem, track_index=track_index)
+
+    def _start_playback_meter(self, path: Path, duration_seconds: float, label: str, track_index: int | None = None) -> None:
+        self.playback_active = True
+        self.playback_started_at = time.monotonic()
+        self.playback_duration_seconds = max(float(duration_seconds), 0.0)
+        self.playback_track_index = track_index
+        self.waveform_playhead_fraction = 0.0 if track_index is not None else None
+        self.playback_now.set(label)
+        self.playback_progress.set(0.0)
+        self.playback_time.set(f"00:00 / {_time_label(self.playback_duration_seconds)}")
+        self._redraw_selected_waveform()
+        self._update_playback_meter()
+
+    def _update_playback_meter(self) -> None:
+        if not self.playback_active:
+            return
+        elapsed = max(time.monotonic() - self.playback_started_at, 0.0)
+        duration = self.playback_duration_seconds
+        if duration > 0:
+            fraction = min(elapsed / duration, 1.0)
+            self.playback_progress.set(fraction * 100.0)
+            if self.playback_track_index is not None:
+                self.waveform_playhead_fraction = fraction
+                self._redraw_selected_waveform()
+            self.playback_time.set(f"{_time_label(min(elapsed, duration))} / {_time_label(duration)}")
+            if elapsed >= duration:
+                self.playback_active = False
+                self.playback_progress.set(100.0)
+                self.waveform_playhead_fraction = 1.0 if self.playback_track_index is not None else None
+                self._redraw_selected_waveform()
+                self.playback_now.set("Finished")
+                return
+        else:
+            self.playback_time.set(f"{_time_label(elapsed)} / --:--")
+        self.root.after(250, self._update_playback_meter)
+
+    def _selected_master_path(self, index: int) -> Path | None:
+        if self.last_master_preview_track_index == index and self.last_master_preview_path and self.last_master_preview_path.exists():
+            return self.last_master_preview_path
+        if self.last_manifest:
+            tracks = [item for item in self.last_manifest.get("sequence", []) if item.get("type") == "track"]
+            if index < len(tracks):
+                path = Path(tracks[index]["output"])
+                if path.exists():
+                    return path
+        return None
+
+    def _album_sequence_path(self) -> Path | None:
+        if not self.last_manifest or not self.last_manifest.get("album_sequence"):
+            return None
+        path = Path(self.last_manifest["album_sequence"])
+        return path if path.exists() else None
+
+    def _rendered_transition_path(self, index: int) -> Path | None:
+        if not self.last_manifest:
+            return None
+        for item in self.last_manifest.get("sequence", []):
+            if item.get("type") == "interlude" and item.get("between") == [index + 1, index + 2]:
+                path = Path(item.get("output", ""))
+                if path.exists():
+                    return path
+        return None
 
     def _run_smoke_check(self) -> None:
+        if self.missing_audio_tools:
+            messagebox.showerror("Missing FFmpeg", f"Missing required audio tools: {', '.join(self.missing_audio_tools)}")
+            return
         output_dir = Path(self.output_dir.get()).expanduser() / "smoke-check"
         self._start_background(self._smoke_worker, output_dir)
 
@@ -1152,24 +1510,9 @@ class MasteringStudioApp:
         self.codec_preview.set(True)
         self.tweak_lufs.set("0.0")
         self.target_profile.set(delivery_choice("streaming-universal"))
-        self.track_character.set("auto")
-        self.track_preset.set("auto")
-        self.transition_override_style.set("inherit")
-        self.transition_override_duration.set(_safe_float(self.transition_duration, 8.0))
-        self.transition_enabled.set(True)
-        for track in self.tracks:
-            track.character = "auto"
-            track.preset = "auto"
-        for index in range(len(self.transitions)):
-            self.transitions[index] = TransitionState(
-                style="inherit",
-                duration_seconds=_safe_float(self.transition_duration, 8.0),
-                enabled=True,
-            )
-        self.editing_track_index = None
-        self.editing_transition_index = None
         self._refresh_tracks()
-        self._log("Reset tuning controls.")
+        self._mark_settings_pending()
+        self._log("Reset global tuning controls. Track and transition overrides were preserved.")
 
     def _project_dict(self, album_wav: bool) -> dict:
         self._save_open_editors()
@@ -1331,6 +1674,8 @@ class MasteringStudioApp:
         self.transition_tree.delete(*self.transition_tree.get_children())
         for index, transition in enumerate(self.transitions):
             tags = ("disabled",) if not transition.enabled else ("even" if index % 2 == 0 else "odd",)
+            duration = _safe_float(self.transition_duration, transition.duration_seconds) if transition.style == "inherit" else transition.duration_seconds
+            style = f"inherit -> {self.transition_style.get()}" if transition.style == "inherit" else transition.style
             self.transition_tree.insert(
                 "",
                 tk.END,
@@ -1338,8 +1683,8 @@ class MasteringStudioApp:
                 tags=tags,
                 values=(
                     f"{index + 1} -> {index + 2}",
-                    transition.style,
-                    f"{transition.duration_seconds:.2f}",
+                    style,
+                    f"{duration:.2f}",
                     "yes" if transition.enabled else "no",
                 ),
             )
@@ -1386,6 +1731,14 @@ class MasteringStudioApp:
             x = index * step
             amp = max(0.0, min(float(value), 1.0)) * (height * 0.44)
             canvas.create_line(x, mid - amp, x, mid + amp, fill=UI_COLORS["wave"])
+        selected = self._selected_track_index()
+        if (
+            self.waveform_playhead_fraction is not None
+            and self.playback_track_index is not None
+            and selected == self.playback_track_index
+        ):
+            x = max(0.0, min(self.waveform_playhead_fraction, 1.0)) * width
+            canvas.create_line(x, 0, x, height, fill=UI_COLORS["accent"], width=2)
 
     def _start_background(self, target, *args) -> None:
         if self.busy:
@@ -1394,6 +1747,7 @@ class MasteringStudioApp:
         self.busy = True
         self.cancel_requested = False
         self.status.set("Working...")
+        self.cancel_button.configure(state=tk.NORMAL)
         self.progress.start(12)
         thread = threading.Thread(target=target, args=args, daemon=True)
         thread.start()
@@ -1416,17 +1770,49 @@ class MasteringStudioApp:
                 elif kind == "paths":
                     self.last_output_dir = Path(item[1])
                     self.last_dashboard_path = Path(item[2]) if item[2] else self.last_dashboard_path
+                elif kind == "preview_dir":
+                    self.last_preview_dir = Path(item[1])
                 elif kind == "manifest":
                     self.last_manifest = item[1]
                 elif kind == "preview_path":
                     self.last_preview_path = Path(item[1])
+                elif kind == "preview_master_path":
+                    self.last_master_preview_path = Path(item[1])
+                    self.last_master_preview_track_index = int(item[2])
+                elif kind == "play_path":
+                    self._play_audio_path(
+                        Path(item[1]),
+                        label=item[2] if len(item) > 2 else None,
+                        track_index=int(item[3]) if len(item) > 3 and item[3] is not None else None,
+                    )
+                elif kind == "applied_state":
+                    self._mark_applied(str(item[1]))
                 elif kind == "error":
                     self._log(f"Error: {item[1]}")
+                    self._settings_dirty = True
+                    self.settings_state.set("ERROR: current settings were not applied. Fix the message below and try again.")
                     messagebox.showerror("Album Mastering Studio", item[1])
                 elif kind == "done":
                     self.busy = False
                     self.status.set("Canceled" if self.cancel_requested else "Ready")
+                    if self.cancel_requested:
+                        self._settings_dirty = True
+                        self.settings_state.set("CANCELED: current settings still need a fresh preview or render.")
                     self.progress.stop()
+                    self.cancel_button.configure(state=tk.DISABLED)
+                    pending_ab = self.pending_ab_after_preview_index
+                    self.pending_ab_after_preview_index = None
+                    if (
+                        pending_ab is not None
+                        and not self.cancel_requested
+                        and self.last_master_preview_track_index == pending_ab
+                        and self.last_master_preview_path
+                        and self.last_master_preview_path.exists()
+                        and 0 <= pending_ab < len(self.tracks)
+                    ):
+                        self.track_tree.selection_set(str(pending_ab))
+                        self.track_tree.focus(str(pending_ab))
+                        self.root.after(50, self._play_ab_clip)
         except queue.Empty:
             pass
         self.root.after(150, self._poll_queue)
@@ -1546,6 +1932,39 @@ def _safe_float(variable: tk.Variable, default: float) -> float:
         return float(variable.get())
     except (tk.TclError, TypeError, ValueError):
         return default
+
+
+def _audio_duration(path: Path) -> float:
+    try:
+        info = probe(path)
+        return float((info.get("format") or {}).get("duration") or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _time_label(value: float) -> str:
+    seconds = max(float(value), 0.0)
+    minutes, whole_seconds = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{whole_seconds:02d}"
+    return f"{minutes:02d}:{whole_seconds:02d}"
+
+
+def _audible_preview_window(samples: np.ndarray, sample_rate: int, seconds: float) -> tuple[int, int]:
+    frame_count = int(max(seconds, 1.0) * sample_rate)
+    if samples.shape[0] <= frame_count:
+        return 0, samples.shape[0]
+    mono = np.mean(np.square(samples.astype(np.float64)), axis=1) if samples.ndim == 2 else np.square(samples.astype(np.float64))
+    hop = max(sample_rate // 2, 1)
+    best_start = 0
+    best_energy = -1.0
+    for start in range(0, samples.shape[0] - frame_count + 1, hop):
+        energy = float(np.mean(mono[start : start + frame_count]))
+        if energy > best_energy:
+            best_energy = energy
+            best_start = start
+    return best_start, best_start + frame_count
 
 
 def _seconds(value: Any) -> str:

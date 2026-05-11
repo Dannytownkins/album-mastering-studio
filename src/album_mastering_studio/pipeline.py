@@ -4,6 +4,7 @@ import json
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
@@ -15,6 +16,8 @@ from .constants import DEFAULT_SAMPLE_RATE, MAX_TRACKS
 from .interludes import INTERLUDE_STYLE_CHOICES, make_interlude
 from .mastering import PRESETS, FineTune, MasterResult, apply_edge_treatment, limit_ceiling, master_track
 from .standards import delivery_profile
+
+ProgressCallback = Callable[[dict], None]
 
 
 @dataclass(frozen=True)
@@ -67,7 +70,7 @@ class LoadedTrack:
     samples: np.ndarray
 
 
-def render_album(inputs: list[Path], output_dir: Path, options: RenderOptions) -> dict:
+def render_album(inputs: list[Path], output_dir: Path, options: RenderOptions, progress: ProgressCallback | None = None) -> dict:
     tracks = collect_audio_files(inputs)
     track_specs = [TrackSpec(path=track) for track in tracks]
     transitions = [
@@ -78,10 +81,10 @@ def render_album(inputs: list[Path], output_dir: Path, options: RenderOptions) -
         )
         for _ in range(max(len(track_specs) - 1, 0))
     ]
-    return render_sequence(track_specs, output_dir, options, transitions, project_path=None, album_title=None, album_metadata={})
+    return render_sequence(track_specs, output_dir, options, transitions, project_path=None, album_title=None, album_metadata={}, progress=progress)
 
 
-def render_project(project_path: Path, output_dir: Path) -> dict:
+def render_project(project_path: Path, output_dir: Path, progress: ProgressCallback | None = None) -> dict:
     project = load_project(project_path)
     base_dir = project_path.resolve().parent
     settings = project.get("settings", {})
@@ -134,6 +137,7 @@ def render_project(project_path: Path, output_dir: Path) -> dict:
         project_path=project_path,
         album_title=project.get("album_title"),
         album_metadata=dict(project.get("metadata", {})),
+        progress=progress,
     )
 
 
@@ -280,21 +284,32 @@ def render_sequence(
     project_path: Path | None,
     album_title: str | None,
     album_metadata: dict | None = None,
+    progress: ProgressCallback | None = None,
 ) -> dict:
     if len(tracks) > MAX_TRACKS:
         raise ValueError(f"Album Mastering Studio supports up to {MAX_TRACKS} tracks per render.")
+    total_steps = len(tracks) + max(len(tracks) - 1, 0) + (1 if options.album_wav else 0) + 5
+    completed_steps = 0
+    _progress(progress, "prepare", "Preparing output folders", completed_steps, total_steps)
     output_dir.mkdir(parents=True, exist_ok=True)
     masters_dir = output_dir / "masters"
     interludes_dir = output_dir / "interludes"
     masters_dir.mkdir(parents=True, exist_ok=True)
     interludes_dir.mkdir(parents=True, exist_ok=True)
 
+    _progress(progress, "load", f"Decoding {len(tracks)} source track(s)", completed_steps, total_steps)
     loaded_tracks = _load_tracks(tracks, options.sample_rate)
+    completed_steps += 1
+    _progress(progress, "analyze", "Analyzing source tracks", completed_steps, total_steps)
     source_stats = [analyze_audio(track.samples, options.sample_rate) for track in loaded_tracks]
+    completed_steps += 1
     warnings: list[str] = []
+    _progress(progress, "reference", "Checking reference track", completed_steps, total_steps)
     reference = _reference_report(options.reference_track, options.sample_rate)
     if reference and reference.get("warning"):
         warnings.append(f"Reference: {reference['warning']}")
+    completed_steps += 1
+    _progress(progress, "plan", "Planning album arc and transitions", completed_steps, total_steps)
     characters = infer_album_characters(
         source_stats,
         [track.spec.title or track.spec.path.stem for track in loaded_tracks],
@@ -311,11 +326,13 @@ def render_sequence(
         characters=characters,
     )
     transitions = _resolve_transition_plan(transitions, arc_plan)
+    completed_steps += 1
 
     mastered: list[tuple[TrackSpec, np.ndarray, MasterResult, dict]] = []
     fine_tune = _fine_tune(options)
 
     for index, loaded in enumerate(loaded_tracks, start=1):
+        _progress(progress, "master", f"Mastering track {index} of {len(loaded_tracks)}", completed_steps, total_steps, track=index)
         track = loaded.spec
         source = track.path
         track_arc = arc_plan.tracks[index - 1].to_dict()
@@ -339,6 +356,7 @@ def render_sequence(
         output_path = masters_dir / f"{index:02d}_{_slug(title)}_mastered.{options.output_format}"
         write_audio(output_path, result.samples, options.sample_rate, bit_depth=options.bit_depth)
         mastered.append((track, result.samples, result, track_arc))
+        completed_steps += 1
 
     sequence: list[dict] = []
     for index, (track, audio, result, track_arc) in enumerate(mastered, start=1):
@@ -378,6 +396,7 @@ def render_sequence(
         if index <= len(mastered) - 1:
             transition = transitions[index - 1]
             if transition.enabled:
+                _progress(progress, "transition", f"Rendering transition {index} to {index + 1}", completed_steps, total_steps, transition=index)
                 left_track, left_audio, _, _ = mastered[index - 1]
                 right_track, right_audio, _, _ = mastered[index]
                 transition_arc = arc_plan.transitions[index - 1].to_dict()
@@ -422,6 +441,7 @@ def render_sequence(
                         "rationale": _actual_transition_rationale(transition_arc, transition),
                     }
                 )
+            completed_steps += 1
 
     album_path: Path | None = None
     cue_json_path: Path | None = None
@@ -429,6 +449,7 @@ def render_sequence(
     cue_points: list[dict] = []
     codec_previews: list[dict] = []
     if options.album_wav:
+        _progress(progress, "album", "Rendering continuous album WAV", completed_steps, total_steps)
         album_path = output_dir / "album_sequence.wav"
         album_audio, cue_points = _build_album_sequence_with_cues(mastered, options, transitions, album_title)
         write_audio(album_path, album_audio, options.sample_rate, bit_depth=options.bit_depth)
@@ -442,10 +463,12 @@ def render_sequence(
         codec_previews = _codec_preview_report(album_audio, output_dir, options, album_analysis)
         for preview in codec_previews:
             warnings.extend(f"Codec {preview['codec']}: {warning}" for warning in preview.get("warnings", []))
+        completed_steps += 1
     else:
         album_analysis = None
         album_warnings = []
 
+    _progress(progress, "manifest", "Writing manifest and render report inputs", completed_steps, total_steps)
     profile = delivery_profile(options.delivery_profile)
     metadata = _clean_metadata(album_metadata or {})
     manifest = {
@@ -506,6 +529,7 @@ def render_sequence(
     }
     manifest_path = output_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    _progress(progress, "complete", "Render complete", total_steps, total_steps)
     return manifest
 
 
@@ -581,6 +605,31 @@ def load_project(project_path: Path) -> dict:
     if int(project.get("version", 0)) != 1:
         raise ValueError(f"Unsupported project version in {project_path}")
     return project
+
+
+def _progress(
+    callback: ProgressCallback | None,
+    stage: str,
+    message: str,
+    current: int,
+    total: int,
+    **extra,
+) -> None:
+    if callback is None:
+        return
+    total = max(int(total), 1)
+    current = max(0, min(int(current), total))
+    callback(
+        {
+            "type": "progress",
+            "stage": stage,
+            "message": message,
+            "current": current,
+            "total": total,
+            "fraction": round(current / total, 4),
+            **extra,
+        }
+    )
 
 
 def _build_album_sequence(
@@ -1072,7 +1121,7 @@ def _interlude_ceiling(options: RenderOptions) -> float:
 
 def _album_warnings(stats, ceiling_dbfs: float | None) -> list[str]:
     warnings: list[str] = []
-    ceiling = ceiling_dbfs if ceiling_dbfs is not None else -0.8
+    ceiling = ceiling_dbfs if ceiling_dbfs is not None else -1.0
     if stats.true_peak_dbfs > ceiling + 0.2:
         warnings.append(
             f"continuous album true-peak proxy {stats.true_peak_dbfs:.2f} dBFS is above the safety ceiling {ceiling:.2f} dBFS"

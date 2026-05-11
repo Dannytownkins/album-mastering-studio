@@ -1,6 +1,6 @@
 # Codex Active Handoff
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 ## Mission
 
@@ -34,32 +34,58 @@ The user also asked to "create a loop" like this handoff until every real bug, s
 Last pushed commit:
 
 ```text
-3174074 Build album mastering studio workflow
+98c2b62 commit 3
 ```
 
-Current working tree is intentionally dirty with an in-progress review-fix patch. Do not commit until verification is green.
+Current working tree is intentionally dirty with the latest listen/apply-loop patch. Do not commit unless the user asks.
 
-Known modified/new files at handoff time:
+Known modified/added files at this update include:
 
-- `AGENTS.md`
+- `.gitignore`
 - `README.md`
-- `src/album_mastering_studio/app.py`
-- `src/album_mastering_studio/audio_io.py`
-- `src/album_mastering_studio/dashboard.py`
-- `src/album_mastering_studio/interludes.py`
-- `src/album_mastering_studio/iteration.py`
-- `src/album_mastering_studio/loudness.py`
-- `src/album_mastering_studio/mastering.py`
-- `src/album_mastering_studio/pipeline.py`
-- `src/album_mastering_studio/scoring.py`
-- `src/album_mastering_studio/smoke.py`
-- `src/album_mastering_studio/standards.py`
-- `tests/test_pipeline.py`
-- `pyproject.toml`
-- `src/album_mastering_studio/constants.py`
 - `docs/progress.md`
-- `docs/research-implementation-notes.md`
-- this file
+- `docs/codex-active-handoff.md`
+- `src/album_mastering_studio/cli.py`
+- `src/album_mastering_studio/pipeline.py`
+- `src/album_mastering_studio/app.py`
+- `tests/test_pipeline.py`
+- `desktop/` source/config/lockfiles/tests
+
+Generated Tauri folders are intentionally ignored:
+
+- `desktop/node_modules/`
+- `desktop/dist/`
+- `desktop/src-tauri/target/`
+
+The current Tauri build artifacts exist locally but are ignored:
+
+```text
+desktop\src-tauri\target\release\album-mastering-studio.exe
+desktop\src-tauri\target\release\bundle\msi\Album Mastering Studio_0.1.0_x64_en-US.msi
+desktop\src-tauri\target\release\bundle\nsis\Album Mastering Studio_0.1.0_x64-setup.exe
+```
+
+## Current Tauri Desktop Pass
+
+The user asked for a real Tauri shell and then approved installing prerequisites. Rustup and Visual Studio Build Tools were installed locally, and the Tauri build now succeeds.
+
+What exists now:
+
+- `desktop/` Tauri 2 app using React + Vite + Tailwind + TypeScript.
+- Rust backend invokes the existing Python CLI, not DSP code in Rust.
+- Backend commands: `repo_root`, `read_json`, `write_project`, `open_path`, `cancel_cli`, `run_cli`.
+- `run_cli` sets `PYTHONPATH` to the repo `src/`, streams stdout/stderr/status to the frontend, and stores one active child process so cancel can kill it.
+- Frontend supports drag/drop audio import, row reordering by drag, remove, inline rename, analyze with waveform thumbnails, preset/delivery/arc/transition/fine-tune controls, open/save `.ams.json`, render full album, render tracks/transitions only, cancel, embedded dashboard, output folder open, and HTML5 audio playback for source/master/album/reference/transitions.
+- Keyboard shortcuts implemented in the webview: Ctrl+O, Ctrl+S, Ctrl+R, Space for play/pause, Delete to remove selected track.
+- CLI now has `analyze --waveform-bins` and `render`/`render-project --json-events` for waveform thumbnails and stage-level render progress.
+- CLI render/init-project now have `--reference-track` parity.
+
+Important honest caveats:
+
+- The installer is a personal-workstation shell. It does not bundle Python; it expects this repo checkout plus Python/FFmpeg to exist. `ALBUM_MASTER_PYTHON` can point the shell at a specific interpreter.
+- Progress is stage-level JSON from Python, not a detailed ETA from inside FFmpeg.
+- The Tauri shell has header buttons and shortcuts but not a native OS menubar yet.
+- Still not exposed in Tauri: single-track audition render, iteration pass diff/A-B, live arc-plan preview, per-track tuning values.
 
 ## Screenshot Critiques To Re-Check
 
@@ -163,6 +189,13 @@ These have code changes started and should be preserved unless found broken:
   - Validates output folder writability before render/preview.
   - Adds a dark early-2000s-clean-cyberpunk theme with styled menus, tables, waveform canvas, log severity colors, and clearer primary/secondary/destructive button hierarchy.
   - Adds release metadata fields, per-track artist/ISRC fields, delivery profile, bit-depth, and codec QC controls.
+  - Adds a Listen / Apply State panel that marks current settings as pending, previewing, rendering, applied, canceled, or errored.
+  - Adds quick preset buttons for common mastering directions.
+  - Adds selected-track master preview rendering, A/B compare playback, full-album playback, rendered-transition playback, a playback progress bar, and a selected-track waveform playhead.
+  - A/B Compare automatically renders the selected master preview first when no current master exists.
+  - Warns when Play Master or A/B Compare is using an older preview/render while current settings are pending.
+  - Invalidates stale render pointers after track add/remove/reorder so old output cannot masquerade as the current album.
+  - Render completion logs now call out master count, transition count, continuous album WAV path, and transition folder.
 - `loudness.py`
   - Uses `pyloudnorm` when installed, with the local LUFS approximation retained as a fallback.
 - `dashboard.py`
@@ -171,13 +204,7 @@ These have code changes started and should be preserved unless found broken:
 
 ## Current Status
 
-The app patch has been completed enough to instantiate and pass smoke. The playback/waveform handlers named below have been implemented:
-
-- `_play_selected_master`
-- `_stop_playback`
-- `_play_last_preview`
-- waveform drawing/update helpers
-- analysis worker waveform capture
+The Tauri shell is now buildable and is the primary app surface. The older Tk app remains in the repo as a fallback and has several of the earlier bug/UX fixes, but new desktop product work should start in `desktop/` unless the user specifically asks for the Tk launcher.
 
 The two deep-research reports were read and converted into `docs/research-implementation-notes.md`. Implemented now: delivery profiles, integer/dithered WAV exports, codec QC, cue sheets, metadata, normalization preview, and richer metering. Deferred deliberately: JUCE/C++ rewrite, plugin hosting, Demucs/stem separation, cloud AI transition providers, full Essentia/madmom key/tempo stack, real metadata container tagging, and full reference matching.
 
@@ -196,10 +223,14 @@ Run all of these fresh:
 ```powershell
 python -m compileall -q src tests
 python -m unittest discover -s tests
-python -m album_mastering_studio.cli smoke --output test-output\codex-research-smoke
+python -m album_mastering_studio.cli smoke --output test-output\codex-tauri-progress-smoke
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
 ```
 
-Then instantiate the app:
+If touching the Tk fallback, also instantiate it:
 
 ```powershell
 @'
@@ -231,36 +262,38 @@ Latest verified run in this thread:
 ```text
 python -m compileall -q src tests
 python -m unittest discover -s tests
-python -m album_mastering_studio.cli smoke --output test-output\codex-research-smoke
-hidden Tk app instantiation
+python -m album_mastering_studio.cli smoke --output test-output\codex-tauri-progress-smoke
+cd desktop
+npm run build
+npm run test:integration
+npm run tauri:build through VsDevCmd
 ```
 
 Result:
 
-- 13 unit tests passed.
-- Smoke passed in `test-output\codex-research-smoke`.
-- App instantiated.
+- Python compile passed.
+- 14 unit tests passed.
+- Smoke passed in `test-output\codex-tauri-progress-smoke`.
+- Desktop TypeScript/Vite build passed.
+- Desktop integration test passed, including waveform analysis, render-project, manifest creation, and JSON progress events.
+- Tauri release build passed.
 - 8-track render: 8 masters, 7 interludes, album WAV, cue sheet, cue JSON, 2 codec preview files, dashboard, scorecard.
-- 8-track warnings: 0.
-- Album true peak proxy: -1.14 dBFS.
-- Album integrated loudness: -14.29 LUFS.
-- Album WAV: stereo 48 kHz, 24-bit PCM (`sample_width` 3).
-- Delivery profile in 8-track smoke: `streaming-universal`.
-- Interlude LUFS in smoke ranged about -20.0 to -14.9 LUFS, now style/context-relative instead of fixed quiet.
-- Reference render/dashboard support was verified earlier in the thread and remains covered by project/render paths, but it was not separately re-run in this last research pass.
+- Built artifacts: `album-mastering-studio.exe`, MSI installer, and NSIS setup EXE under `desktop\src-tauri\target\release`.
 
 ## Likely Next Product Fixes After Current Patch
 
 Prioritize these before handing back "ready to run":
 
-1. Real A/B transport and timeline playback for source/master/transition/album.
-2. Hard cancellation or resumable render checkpoints if long real-song renders are painful.
-3. Actual reference-track matching, not just reference analysis/reporting.
-4. Optional LLM critique/provider surfacing in the GUI.
-5. Minimum-phase EQ/filtering pass to remove remaining `filtfilt`/`sosfiltfilt` mastering/interlude artifacts.
-6. Character classifier cleanup: filename hints should be weak evidence, and `return_acoustic` should be album-role metadata rather than only a hard label.
-7. Split `app.py` into project state, track pane, render controls, playback, and project I/O once behavior stabilizes.
-8. Commit/push only after the user asks or after explicit approval.
+1. Real-world Tauri run on the user's actual Crooked Hymns tracks: drag, reorder, analyze, render, play album, play transitions, inspect embedded dashboard.
+2. Native Tauri menubar and better About dialog. Header actions and shortcuts exist, but not a real OS menubar yet.
+3. Single-track audition render in Tauri so a selected song can be rendered quickly without waiting for all tracks.
+4. Live arc/transition plan preview after analyze, before render.
+5. Iteration pass diff/A-B in Tauri for `iterate-project` outputs.
+6. Actual reference-track matching, not just reference analysis/reporting.
+7. Minimum-phase EQ/filtering pass to remove remaining `filtfilt`/`sosfiltfilt` mastering/interlude artifacts.
+8. Character classifier cleanup: filename hints should be weak evidence, and `return_acoustic` should be album-role metadata rather than only a hard label.
+9. Split the old `app.py` only if the Tk fallback will keep receiving product work; otherwise keep new UI work in `desktop/`.
+10. Commit/push only after the user asks or after explicit approval.
 
 ## Important Product Judgment
 
