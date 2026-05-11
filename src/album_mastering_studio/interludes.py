@@ -36,6 +36,8 @@ def make_interlude(
     sample_rate: int,
     duration_seconds: float,
     style: str = "ambient",
+    target_lufs: float = -23.0,
+    ceiling_dbfs: float = -1.0,
 ) -> np.ndarray:
     if style not in INTERLUDE_STYLES:
         choices = ", ".join(INTERLUDE_STYLES)
@@ -44,15 +46,29 @@ def make_interlude(
     frame_count = max(int(sample_rate * duration_seconds), sample_rate // 4)
     root_a = _estimate_root_frequency(previous_track[-sample_rate * 12 :], sample_rate)
     root_b = _estimate_root_frequency(next_track[: sample_rate * 12], sample_rate)
+    tempo_bpm = _estimate_transition_tempo(previous_track, next_track, sample_rate)
+
+    if style == "crossfade":
+        interlude = _actual_crossfade(previous_track, next_track, frame_count)
+        return prepare_interlude_level(interlude, sample_rate, target_lufs=target_lufs, ceiling_dbfs=ceiling_dbfs)
+    if style == "hard-cut":
+        return np.zeros((frame_count, 2), dtype=np.float32)
 
     frequency_curve = _frequency_glide(root_a, root_b, frame_count)
     pad = _harmonic_pad(frequency_curve, sample_rate)
     texture = _transition_texture(previous_track, next_track, sample_rate, frame_count)
     air = _filtered_noise(frame_count, sample_rate, root_a, root_b)
 
-    interlude = _compose_style(style, pad, texture, air, frequency_curve, sample_rate)
+    interlude = _compose_style(style, pad, texture, air, frequency_curve, sample_rate, tempo_bpm)
     interlude *= _fade(np.ones(frame_count, dtype=np.float32), sample_rate, 0.75)[:, np.newaxis]
-    return prepare_interlude_level(interlude, sample_rate)
+    if style == "breath-gap":
+        return prepare_interlude_level(
+            interlude,
+            sample_rate,
+            target_lufs=min(target_lufs - 8.0, -28.0),
+            ceiling_dbfs=ceiling_dbfs,
+        )
+    return prepare_interlude_level(interlude, sample_rate, target_lufs=target_lufs, ceiling_dbfs=ceiling_dbfs)
 
 
 def _compose_style(
@@ -62,6 +78,7 @@ def _compose_style(
     air: np.ndarray,
     frequency_curve: np.ndarray,
     sample_rate: int,
+    tempo_bpm: float,
 ) -> np.ndarray:
     if style == "ambient":
         return pad + texture + air
@@ -70,7 +87,7 @@ def _compose_style(
     if style == "swell":
         return (pad * 0.70) + _reverse_swell(texture) + (air * 0.35)
     if style == "rhythmic":
-        return _rhythmic_gate((pad * 0.85) + (texture * 0.65), frequency_curve, sample_rate) + (air * 0.20)
+        return _rhythmic_gate((pad * 0.85) + (texture * 0.65), tempo_bpm, sample_rate) + (air * 0.20)
     if style == "minimal":
         return (texture * 0.55) + (pad * 0.18)
     if style == "crossfade":
@@ -90,12 +107,31 @@ def _compose_style(
     if style == "ring-out":
         return _ring_out(texture, pad)
     if style == "pulsed-swell":
-        return _pulsed_swell(pad + (texture * 0.55), frequency_curve, sample_rate) + (air * 0.25)
+        return _pulsed_swell(pad + (texture * 0.55), tempo_bpm, sample_rate) + (air * 0.25)
     if style == "drone-pad":
         return (pad * 1.35) + (texture * 0.30) + (air * 0.18)
     if style == "hard-cut":
         return _hard_cut_marker(air)
     raise AssertionError(f"Unhandled interlude style: {style}")
+
+
+def _actual_crossfade(previous_track: np.ndarray, next_track: np.ndarray, frame_count: int) -> np.ndarray:
+    tail = _fit_or_pad(_fit_stereo(previous_track), frame_count, from_end=True)
+    head = _fit_or_pad(_fit_stereo(next_track), frame_count, from_end=False)
+    out_env = np.cos(np.linspace(0.0, np.pi / 2.0, frame_count, dtype=np.float32))[:, np.newaxis]
+    in_env = np.sin(np.linspace(0.0, np.pi / 2.0, frame_count, dtype=np.float32))[:, np.newaxis]
+    return ((tail * out_env) + (head * in_env)).astype(np.float32)
+
+
+def _fit_or_pad(samples: np.ndarray, frame_count: int, from_end: bool) -> np.ndarray:
+    if samples.shape[0] >= frame_count:
+        return samples[-frame_count:] if from_end else samples[:frame_count]
+    output = np.zeros((frame_count, 2), dtype=np.float32)
+    if from_end:
+        output[-samples.shape[0] :] = samples
+    else:
+        output[: samples.shape[0]] = samples
+    return output
 
 
 def _clean_crossfade(texture: np.ndarray, sample_rate: int) -> np.ndarray:
@@ -169,8 +205,8 @@ def _ring_out(texture: np.ndarray, pad: np.ndarray) -> np.ndarray:
     return ((texture * 1.25 * decay) + (pad * 0.22)).astype(np.float32)
 
 
-def _pulsed_swell(samples: np.ndarray, frequency_curve: np.ndarray, sample_rate: int) -> np.ndarray:
-    pulsed = _rhythmic_gate(samples, frequency_curve, sample_rate)
+def _pulsed_swell(samples: np.ndarray, tempo_bpm: float, sample_rate: int) -> np.ndarray:
+    pulsed = _rhythmic_gate(samples, tempo_bpm, sample_rate)
     if pulsed.shape[0] == 0:
         return pulsed
     lift = np.linspace(0.25, 1.0, pulsed.shape[0], dtype=np.float32)[:, np.newaxis]
@@ -192,7 +228,7 @@ def _estimate_root_frequency(samples: np.ndarray, sample_rate: int) -> float:
     if samples.size == 0:
         return 110.0
 
-    mono = np.mean(samples, axis=1)
+    mono = samples.astype(np.float32, copy=False) if samples.ndim == 1 else np.mean(samples, axis=1)
     mono = mono[np.isfinite(mono)]
     if mono.size < sample_rate // 2 or np.max(np.abs(mono)) < EPSILON:
         return 110.0
@@ -211,6 +247,49 @@ def _estimate_root_frequency(samples: np.ndarray, sample_rate: int) -> float:
         return 110.0
 
     return _fold_to_comfortable_octave(strongest)
+
+
+def _estimate_transition_tempo(previous_track: np.ndarray, next_track: np.ndarray, sample_rate: int) -> float:
+    candidates = [
+        _estimate_tempo_bpm(previous_track[-sample_rate * 20 :], sample_rate),
+        _estimate_tempo_bpm(next_track[: sample_rate * 20], sample_rate),
+    ]
+    usable = [value for value in candidates if value is not None]
+    return float(np.median(usable)) if usable else 96.0
+
+
+def _estimate_tempo_bpm(samples: np.ndarray, sample_rate: int) -> float | None:
+    if samples.size == 0 or sample_rate <= 0:
+        return None
+    mono = np.mean(_fit_stereo(samples), axis=1)
+    if mono.size < sample_rate or np.max(np.abs(mono)) < EPSILON:
+        return None
+
+    hop = max(int(sample_rate * 0.020), 1)
+    frame = max(int(sample_rate * 0.060), hop)
+    energies = []
+    for start in range(0, max(mono.size - frame + 1, 1), hop):
+        block = mono[start : start + frame]
+        if block.size:
+            energies.append(float(np.sqrt(np.mean(np.square(block)))))
+    if len(energies) < 16:
+        return None
+
+    envelope = np.asarray(energies, dtype=np.float64)
+    envelope = np.maximum(np.diff(envelope, prepend=envelope[0]), 0.0)
+    envelope -= float(np.mean(envelope))
+    if np.max(np.abs(envelope)) < EPSILON:
+        return None
+
+    corr = signal.correlate(envelope, envelope, mode="full", method="fft")[len(envelope) - 1 :]
+    frame_rate = sample_rate / hop
+    min_lag = max(int(frame_rate * 60.0 / 180.0), 1)
+    max_lag = min(int(frame_rate * 60.0 / 48.0), corr.size - 1)
+    if max_lag <= min_lag:
+        return None
+    lag = min_lag + int(np.argmax(corr[min_lag:max_lag]))
+    bpm = 60.0 * frame_rate / lag
+    return float(np.clip(bpm, 48.0, 180.0))
 
 
 def _fold_to_comfortable_octave(frequency: float) -> float:
@@ -242,7 +321,7 @@ def _harmonic_pad(frequency_curve: np.ndarray, sample_rate: int) -> np.ndarray:
 
 
 def _oscillator(frequency_curve: np.ndarray, sample_rate: int, multiplier: float) -> np.ndarray:
-    phase = np.cumsum(frequency_curve * multiplier) * (2.0 * np.pi / sample_rate)
+    phase = np.cumsum(frequency_curve.astype(np.float64) * float(multiplier)) * (2.0 * np.pi / sample_rate)
     return np.sin(phase).astype(np.float32)
 
 
@@ -303,22 +382,21 @@ def _reverse_swell(texture: np.ndarray) -> np.ndarray:
 
 def _rhythmic_gate(
     samples: np.ndarray,
-    frequency_curve: np.ndarray,
+    tempo_bpm: float,
     sample_rate: int,
 ) -> np.ndarray:
     frame_count = samples.shape[0]
     if frame_count == 0:
         return samples
 
-    estimated_bpm = float(np.clip(np.median(frequency_curve) * 1.35, 72.0, 138.0))
-    beats_per_second = estimated_bpm / 60.0
+    beats_per_second = float(np.clip(tempo_bpm, 48.0, 180.0)) / 60.0
     phase = np.arange(frame_count, dtype=np.float32) / sample_rate
     pulse = 0.45 + (0.55 * np.maximum(0.0, np.sin(2.0 * np.pi * beats_per_second * phase)) ** 2.4)
     return (samples * pulse[:, np.newaxis]).astype(np.float32)
 
 
 def _filtered_noise(frame_count: int, sample_rate: int, root_a: float, root_b: float) -> np.ndarray:
-    seed_text = f"{root_a:.4f}:{root_b:.4f}:{frame_count}"
+    seed_text = f"{root_a:.4f}:{root_b:.4f}:{frame_count}:{sample_rate}"
     seed = int(hashlib.sha256(seed_text.encode("utf-8")).hexdigest()[:8], 16)
     rng = np.random.default_rng(seed)
     noise = rng.normal(0.0, 0.035, (frame_count, 2)).astype(np.float32)

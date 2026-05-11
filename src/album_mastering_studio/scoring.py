@@ -152,8 +152,12 @@ def _album_stats(manifest: dict, manifest_path: Path) -> dict | None:
     if not path.exists():
         return None
 
-    samples = load_audio(path, int(manifest.get("settings", {}).get("sample_rate", 48_000)))
-    return analyze_audio(samples, int(manifest.get("settings", {}).get("sample_rate", 48_000))).to_dict()
+    try:
+        sample_rate = int(manifest.get("settings", {}).get("sample_rate", 48_000))
+        samples = load_audio(path, sample_rate)
+        return analyze_audio(samples, sample_rate).to_dict()
+    except Exception:
+        return None
 
 
 def _arc_shape_score(tracks: list[dict]) -> float:
@@ -164,8 +168,19 @@ def _arc_shape_score(tracks: list[dict]) -> float:
     actual = np.array([float(track["after"]["integrated_lufs"]) for track in tracks], dtype=np.float64)
     if np.std(planned) < 1e-6 or np.std(actual) < 1e-6:
         return 0.72
-    correlation = float(np.corrcoef(planned, actual)[0, 1])
+    if len(tracks) < 4:
+        correlation = _spearman(planned, actual)
+    else:
+        correlation = float(np.corrcoef(planned, actual)[0, 1])
     return _clamp01((correlation + 1.0) / 2.0)
+
+
+def _spearman(left: np.ndarray, right: np.ndarray) -> float:
+    left_rank = np.argsort(np.argsort(left))
+    right_rank = np.argsort(np.argsort(right))
+    if np.std(left_rank) < 1e-6 or np.std(right_rank) < 1e-6:
+        return 0.0
+    return float(np.corrcoef(left_rank, right_rank)[0, 1])
 
 
 def _peak_score(tracks: list[dict], album_stats: dict | None) -> float:
@@ -200,16 +215,19 @@ def _interlude_score(tracks: list[dict], interludes: list[dict]) -> float:
 def _identity_score(tracks: list[dict]) -> float:
     if not tracks:
         return 0.0
-    preset = tracks[0].get("preset", {})
-    taste_fields = [
-        abs(float(preset.get("low_shelf_db", 0.0))),
-        abs(float(preset.get("low_mid_db", 0.0))),
-        abs(float(preset.get("presence_db", 0.0))),
-        abs(float(preset.get("air_db", 0.0))),
-        abs(float(preset.get("stereo_width", 1.0)) - 1.0) * 10.0,
-        abs(float(preset.get("warmth", 0.0))) * 18.0,
-    ]
-    return _clamp01(0.48 + (sum(taste_fields) / 13.0))
+    per_track = []
+    for track in tracks:
+        preset = track.get("preset", {})
+        taste_fields = [
+            abs(float(preset.get("low_shelf_db", 0.0))),
+            abs(float(preset.get("low_mid_db", 0.0))),
+            abs(float(preset.get("presence_db", 0.0))),
+            abs(float(preset.get("air_db", 0.0))),
+            abs(float(preset.get("stereo_width", 1.0)) - 1.0) * 10.0,
+            abs(float(preset.get("warmth", 0.0))) * 18.0,
+        ]
+        per_track.append(_clamp01(0.48 + (sum(taste_fields) / 13.0)))
+    return float(np.mean(per_track))
 
 
 def _continuity_score(tracks: list[dict], interludes: list[dict], album_stats: dict | None) -> float:
@@ -265,7 +283,7 @@ def _rationale_score(manifest: dict, tracks: list[dict], interludes: list[dict])
         *(track.get("rationale") for track in tracks),
         *(item.get("rationale") for item in interludes),
     ]
-    present = sum(1 for item in narrative_items if isinstance(item, str) and len(item.split()) >= 10)
+    present = sum(1 for item in narrative_items if isinstance(item, str) and len(item.strip()) >= 40)
     decision_log = manifest.get("decision_log", {})
     has_album_story = bool(manifest.get("album_story") or decision_log.get("album"))
     score = present / expected

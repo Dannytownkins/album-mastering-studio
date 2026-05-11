@@ -12,7 +12,7 @@ from scipy.io import wavfile
 
 from album_mastering_studio.dashboard import export_dashboard
 from album_mastering_studio.iteration import iterate_project
-from album_mastering_studio.mastering import PRESETS, master_track
+from album_mastering_studio.mastering import PRESETS, limit_ceiling, master_track
 from album_mastering_studio.analysis import analyze_audio
 from album_mastering_studio.audio_io import load_audio
 from album_mastering_studio.interludes import INTERLUDE_STYLES, make_interlude
@@ -105,8 +105,34 @@ class PipelineTest(unittest.TestCase):
                 stats = analyze_audio(interlude, sample_rate)
                 self.assertEqual(interlude.shape, (sample_rate, 2))
                 self.assertFalse(np.any(np.isnan(interlude)))
-                self.assertGreater(stats.integrated_lufs, -80.0)
+                if style == "hard-cut":
+                    self.assertLess(float(np.max(np.abs(interlude))), 0.0001)
+                else:
+                    self.assertGreater(stats.integrated_lufs, -80.0)
                 self.assertLessEqual(stats.true_peak_dbfs, -2.5)
+
+    def test_rhythmic_interlude_uses_onset_tempo_not_root_pitch(self) -> None:
+        from album_mastering_studio.interludes import _estimate_transition_tempo
+
+        sample_rate = 48_000
+        source = self._click_track(120.0, seconds=4.0)
+        tempo = _estimate_transition_tempo(source, source, sample_rate)
+        self.assertGreater(tempo, 110.0)
+        self.assertLess(tempo, 130.0)
+
+    def test_limiter_does_not_global_trim_for_single_spike(self) -> None:
+        sample_rate = 48_000
+        source = self._sine_array(220.0, 0.18, seconds=2.0)
+        source[sample_rate, :] = 1.4
+
+        limited = limit_ceiling(source, -1.0, sample_rate)
+        far_before = source[: sample_rate // 2]
+        far_after = limited[: sample_rate // 2]
+        before_rms = float(np.sqrt(np.mean(np.square(far_before))))
+        after_rms = float(np.sqrt(np.mean(np.square(far_after))))
+
+        self.assertLessEqual(float(np.max(np.abs(limited))), 0.9)
+        self.assertGreater(after_rms / before_rms, 0.98)
 
     def test_project_file_controls_transition_style_duration_and_enabled_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -140,6 +166,52 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(interludes[0]["duration_seconds"], 0.5)
             self.assertTrue(Path(interludes[0]["output"]).exists())
             self.assertTrue((output_dir / "album_sequence.wav").exists())
+
+    def test_project_preserves_tweak_lufs_and_inherit_transition_semantics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "inputs"
+            output_dir = root / "outputs"
+            project_path = root / "album.ams.json"
+            input_dir.mkdir()
+            self._write_sine(input_dir / "01_a.wav", 220.0, 0.35)
+            self._write_sine(input_dir / "02_b.wav", 261.63, 0.35)
+
+            project = create_project(
+                [input_dir],
+                project_path,
+                RenderOptions(interlude_duration=0.75, interlude_style="tape", tweak_lufs=-1.25, album_wav=True),
+                album_title="Inherit Test",
+            )
+            project["transitions"][0]["style"] = "inherit"
+            project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+
+            manifest = render_project(project_path, output_dir)
+            interlude = next(item for item in manifest["sequence"] if item["type"] == "interlude")
+
+            self.assertEqual(manifest["settings"]["tweak_lufs"], -1.25)
+            self.assertEqual(interlude["style"], "tape")
+
+    def test_hard_cut_silence_is_not_reported_as_unintentional(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "inputs"
+            output_dir = root / "outputs"
+            project_path = root / "album.ams.json"
+            input_dir.mkdir()
+            self._write_sine(input_dir / "01_a.wav", 220.0, 0.35)
+            self._write_sine(input_dir / "02_b.wav", 261.63, 0.35)
+
+            project = create_project(
+                [input_dir],
+                project_path,
+                RenderOptions(interlude_duration=0.5, interlude_style="hard-cut", album_wav=True),
+                album_title="Hard Cut Test",
+            )
+            project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+
+            manifest = render_project(project_path, output_dir)
+            self.assertFalse(any("almost silent" in warning for warning in manifest["warnings"]))
 
     def test_transition_preview_renders_tail_interlude_and_head(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -348,6 +420,17 @@ class PipelineTest(unittest.TestCase):
         seconds = 3.0
         stereo = self._sine_array(frequency, amplitude, seconds)
         wavfile.write(path, sample_rate, stereo)
+
+    def _click_track(self, bpm: float, seconds: float) -> np.ndarray:
+        sample_rate = 48_000
+        frame_count = int(sample_rate * seconds)
+        audio = np.zeros(frame_count, dtype=np.float32)
+        interval = int(sample_rate * 60.0 / bpm)
+        click_len = int(sample_rate * 0.020)
+        envelope = np.exp(-np.linspace(0.0, 8.0, click_len, dtype=np.float32))
+        for start in range(0, frame_count - click_len, interval):
+            audio[start : start + click_len] += envelope * 0.45
+        return np.column_stack([audio, audio]).astype(np.float32)
 
     def _sine_array(self, frequency: float, amplitude: float, seconds: float) -> np.ndarray:
         sample_rate = 48_000

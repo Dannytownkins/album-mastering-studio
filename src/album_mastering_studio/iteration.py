@@ -106,11 +106,12 @@ def _apply_iteration(project: dict, scorecard: dict) -> tuple[dict, dict]:
         }
 
     if dimensions.get("preset_identity", {}).get("score", 1.0) < 0.85:
-        settings["preset"] = "velvet-museum"
+        settings["tweak_warmth"] = min(float(settings.get("tweak_warmth", 0.0)) + 0.015, 0.12)
+        settings["tweak_air_db"] = float(settings.get("tweak_air_db", 0.0)) + 0.25
         return updated, {
             "applied": True,
             "dimension": "preset_identity",
-            "rationale": "Moved to velvet-museum because the selected preset did not have enough audible identity.",
+            "rationale": "Kept the selected preset and added a small warmth/air move because preset identity scored too generic.",
         }
 
     if dimensions.get("genre_shift_handling", {}).get("score", 1.0) < 0.86:
@@ -132,13 +133,11 @@ def _apply_iteration(project: dict, scorecard: dict) -> tuple[dict, dict]:
 def _needs_iteration(scorecard: dict) -> bool:
     dimensions = scorecard.get("dimensions", {})
     thresholds = {
-        "album_arc": 0.88,
+        "album_arc": 0.86,
         "interlude_cohesion": 0.90,
         "translation_safety": 0.92,
         "preset_identity": 0.85,
-        "sequence_continuity": 0.86,
         "genre_shift_handling": 0.86,
-        "decision_rationales": 0.92,
     }
     return any(
         dimensions.get(name, {}).get("score", 1.0) < threshold

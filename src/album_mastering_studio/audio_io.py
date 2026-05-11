@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,10 +21,15 @@ AUDIO_EXTENSIONS = {
     ".opus",
     ".wav",
 }
+DEFAULT_AUDIO_TOOL_TIMEOUT = 900.0
 
 
 class AudioToolError(RuntimeError):
     """Raised when FFmpeg or FFprobe cannot process an audio file."""
+
+
+def check_audio_tools() -> list[str]:
+    return [tool for tool in ("ffmpeg", "ffprobe") if shutil.which(tool) is None]
 
 
 def collect_audio_files(paths: list[Path]) -> list[Path]:
@@ -90,6 +97,10 @@ def write_audio(path: Path, samples: np.ndarray, sample_rate: int) -> None:
     suffix = path.suffix.lower()
     samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
 
+    if suffix == ".wav":
+        wavfile.write(path, sample_rate, samples)
+        return
+
     with tempfile.TemporaryDirectory(prefix="album-master-encode-") as tmpdir:
         source = Path(tmpdir) / "source.wav"
         wavfile.write(source, sample_rate, samples)
@@ -134,21 +145,27 @@ def _codec_args(suffix: str) -> list[str]:
         return ["-c:a", "libmp3lame", "-q:a", "2"]
     if suffix in {".m4a", ".aac"}:
         return ["-c:a", "aac", "-b:a", "256k"]
-    if suffix in {".ogg", ".opus"}:
+    if suffix == ".ogg":
+        return ["-c:a", "libvorbis", "-q:a", "5"]
+    if suffix == ".opus":
         return ["-c:a", "libopus", "-b:a", "192k"]
     raise ValueError(f"Unsupported output extension: {suffix}")
 
 
 def _run(args: list[str], capture: bool = False) -> subprocess.CompletedProcess:
+    timeout = float(os.environ.get("ALBUM_MASTER_FFMPEG_TIMEOUT", DEFAULT_AUDIO_TOOL_TIMEOUT))
     try:
         return subprocess.run(
             args,
             check=True,
             text=True,
             capture_output=capture,
+            timeout=timeout,
         )
     except FileNotFoundError as exc:
         raise AudioToolError(f"Required audio tool is missing: {args[0]}") from exc
     except subprocess.CalledProcessError as exc:
         detail = exc.stderr.strip() if exc.stderr else str(exc)
         raise AudioToolError(detail) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise AudioToolError(f"{args[0]} timed out while processing audio.") from exc

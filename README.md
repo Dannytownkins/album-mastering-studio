@@ -12,6 +12,7 @@ The main use case is a complete record: for example, an eight-track sequence tha
 
 - Imports WAV, AIFF, FLAC, MP3, M4A/AAC, OGG, and Opus through FFmpeg.
 - Analyzes loudness, true peak, dynamics, spectral balance, stereo image, transient density, and energy density.
+- Can analyze an optional reference track and include it in the render manifest/dashboard for comparison.
 - Infers broad track character: `acoustic_folk`, `transition`, `heavy_djent`, and `return_acoustic`.
 - Masters tracks with LUFS-style targeting, ceiling limiting, compression, high-pass cleanup, taste EQ, transient shaping, stereo width, and saturation.
 - Plans album-level emotional arcs instead of flattening every track to the same loudness.
@@ -28,7 +29,7 @@ The main use case is a complete record: for example, an eight-track sequence tha
 
 - Python 3.11+
 - FFmpeg and FFprobe on `PATH`
-- Python packages: `numpy`, `scipy`
+- Python packages: `numpy`, `scipy`, `pyloudnorm`
 
 ## Windows Quick Start
 
@@ -55,7 +56,7 @@ or:
 album-master-studio
 ```
 
-The app is a plain Windows-friendly launcher: add up to 8 songs, reorder them, analyze, choose a preset and album arc, adjust fine-tuning controls, set transition defaults or per-transition overrides, render the album, then open the output folder or dashboard report.
+The app is a plain Windows-friendly launcher: add up to 8 songs, reorder them, optionally choose a reference track, analyze, choose a preset and album arc, pick a target profile or manual LUFS/ceiling, adjust fine-tuning controls, set transition defaults or per-transition overrides, preview/listen where practical, render the album, then open the output folder or dashboard report.
 
 Core render outputs:
 
@@ -178,6 +179,10 @@ Fine-tuning controls:
 --tweak-limiter 0.2
 ```
 
+The desktop app also includes target profile shortcuts for common album/export directions such as streaming, Apple-ish, YouTube-ish, quiet album, and loud rock. Those shortcuts simply set the manual LUFS/ceiling controls; you can still override them directly.
+
+The desktop `LU Offset` field is the same album-wide offset used by the iteration command. It is saved in `.ams.json` projects and is meant for small whole-album loudness moves after the preset and arc have done the broad shaping.
+
 ## Album Arcs
 
 - `cinematic`: invitation, climb, centerpiece, release, afterglow.
@@ -261,4 +266,5 @@ The test suite includes an eight-track synthetic album that exercises the acoust
 - The app opens but render fails immediately: run `album-master analyze .\path\to\song.wav` to confirm decode works outside the GUI.
 - MP3/M4A/Opus export fails: your FFmpeg build may not include that encoder. Use WAV or FLAC.
 - A track reports clipping or ceiling warnings: the render still completed, but inspect the source and output before trusting the loudness setting.
+- Long FFmpeg exports can raise a timeout; set `ALBUM_MASTER_FFMPEG_TIMEOUT` to a larger number of seconds before rendering.
 - LUFS and true peak are local approximations. For a real release, validate the final WAV in a trusted external meter.

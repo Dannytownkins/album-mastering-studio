@@ -11,13 +11,14 @@ from .analysis import analyze_audio
 from .arc import AlbumArcPlan, build_album_arc
 from .audio_io import collect_audio_files, load_audio, probe, write_audio
 from .character import infer_album_characters
+from .constants import DEFAULT_SAMPLE_RATE, MAX_TRACKS
 from .interludes import INTERLUDE_STYLE_CHOICES, make_interlude
 from .mastering import PRESETS, FineTune, MasterResult, apply_edge_treatment, limit_ceiling, master_track
 
 
 @dataclass(frozen=True)
 class RenderOptions:
-    sample_rate: int = 48_000
+    sample_rate: int = DEFAULT_SAMPLE_RATE
     preset: str = "streaming"
     output_format: str = "wav"
     target_lufs: float | None = None
@@ -36,6 +37,7 @@ class RenderOptions:
     tweak_intensity: float = 0.0
     tweak_limiter: float = 0.0
     album_wav: bool = False
+    reference_track: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -78,16 +80,16 @@ def render_project(project_path: Path, output_dir: Path) -> dict:
     base_dir = project_path.resolve().parent
     settings = project.get("settings", {})
     options = RenderOptions(
-        sample_rate=int(settings.get("sample_rate", 48_000)),
+        sample_rate=int(settings.get("sample_rate", DEFAULT_SAMPLE_RATE)),
         preset=str(settings.get("preset", "streaming")),
         output_format=str(settings.get("output_format", "wav")),
         target_lufs=_optional_float(settings.get("target_lufs")),
         ceiling_dbfs=_optional_float(settings.get("ceiling_dbfs")),
         interlude_duration=float(settings.get("default_interlude_duration", 8.0)),
-        interlude_style=str(settings.get("default_interlude_style", "auto")),
-        arc=str(settings.get("arc", "cinematic")),
+        interlude_style=str(settings.get("default_interlude_style", "auto")).strip().lower(),
+        arc=str(settings.get("arc", "cinematic")).strip().lower(),
         arc_intensity=float(settings.get("arc_intensity", 1.0)),
-        tweak_lufs=float(settings.get("tweak_lufs", 0.0)),
+        tweak_lufs=float(_optional_float(settings.get("tweak_lufs")) or 0.0),
         tweak_brightness_db=float(settings.get("tweak_brightness_db", 0.0)),
         tweak_warmth=float(settings.get("tweak_warmth", 0.0)),
         tweak_low_end_db=float(settings.get("tweak_low_end_db", 0.0)),
@@ -97,6 +99,7 @@ def render_project(project_path: Path, output_dir: Path) -> dict:
         tweak_intensity=float(settings.get("tweak_intensity", 0.0)),
         tweak_limiter=float(settings.get("tweak_limiter", 0.0)),
         album_wav=bool(settings.get("album_wav", False)),
+        reference_track=_optional_project_path(base_dir, settings.get("reference_track")),
     )
 
     track_specs = [
@@ -133,16 +136,16 @@ def render_transition_preview(
     base_dir = project_path.resolve().parent
     settings = project.get("settings", {})
     options = RenderOptions(
-        sample_rate=int(settings.get("sample_rate", 48_000)),
+        sample_rate=int(settings.get("sample_rate", DEFAULT_SAMPLE_RATE)),
         preset=str(settings.get("preset", "streaming")),
         output_format=output_path.suffix.lower().lstrip(".") or str(settings.get("output_format", "wav")),
         target_lufs=_optional_float(settings.get("target_lufs")),
         ceiling_dbfs=_optional_float(settings.get("ceiling_dbfs")),
         interlude_duration=float(settings.get("default_interlude_duration", 8.0)),
-        interlude_style=str(settings.get("default_interlude_style", "auto")),
-        arc=str(settings.get("arc", "cinematic")),
+        interlude_style=str(settings.get("default_interlude_style", "auto")).strip().lower(),
+        arc=str(settings.get("arc", "cinematic")).strip().lower(),
         arc_intensity=float(settings.get("arc_intensity", 1.0)),
-        tweak_lufs=float(settings.get("tweak_lufs", 0.0)),
+        tweak_lufs=float(_optional_float(settings.get("tweak_lufs")) or 0.0),
         tweak_brightness_db=float(settings.get("tweak_brightness_db", 0.0)),
         tweak_warmth=float(settings.get("tweak_warmth", 0.0)),
         tweak_low_end_db=float(settings.get("tweak_low_end_db", 0.0)),
@@ -152,6 +155,7 @@ def render_transition_preview(
         tweak_intensity=float(settings.get("tweak_intensity", 0.0)),
         tweak_limiter=float(settings.get("tweak_limiter", 0.0)),
         album_wav=False,
+        reference_track=_optional_project_path(base_dir, settings.get("reference_track")),
     )
 
     track_specs = [
@@ -228,6 +232,8 @@ def render_transition_preview(
                 options.sample_rate,
                 transition.duration_seconds,
                 transition.style,
+                target_lufs=_transition_target_lufs(left_result.after.integrated_lufs, right_result.after.integrated_lufs, transition.style),
+                ceiling_dbfs=_interlude_ceiling(options),
             )
         )
     chunks.append(_head(right_master, options.sample_rate, head_seconds))
@@ -257,8 +263,8 @@ def render_sequence(
     project_path: Path | None,
     album_title: str | None,
 ) -> dict:
-    if len(tracks) > 8:
-        raise ValueError("Album Mastering Studio supports up to 8 tracks per render.")
+    if len(tracks) > MAX_TRACKS:
+        raise ValueError(f"Album Mastering Studio supports up to {MAX_TRACKS} tracks per render.")
     output_dir.mkdir(parents=True, exist_ok=True)
     masters_dir = output_dir / "masters"
     interludes_dir = output_dir / "interludes"
@@ -267,6 +273,10 @@ def render_sequence(
 
     loaded_tracks = _load_tracks(tracks, options.sample_rate)
     source_stats = [analyze_audio(track.samples, options.sample_rate) for track in loaded_tracks]
+    warnings: list[str] = []
+    reference = _reference_report(options.reference_track, options.sample_rate)
+    if reference and reference.get("warning"):
+        warnings.append(f"Reference: {reference['warning']}")
     characters = infer_album_characters(
         source_stats,
         [track.spec.title or track.spec.path.stem for track in loaded_tracks],
@@ -313,12 +323,11 @@ def render_sequence(
         mastered.append((track, result.samples, result, track_arc))
 
     sequence: list[dict] = []
-    warnings: list[str] = []
     for index, (track, audio, result, track_arc) in enumerate(mastered, start=1):
         source = track.path
         title = track.title or source.stem
         output_path = masters_dir / f"{index:02d}_{_slug(title)}_mastered.{options.output_format}"
-        track_warnings = _track_warnings(title, result.before, result.after, result.ceiling_dbfs)
+        track_warnings = _track_warnings(title, result.before, result.after, result.ceiling_dbfs, result.target_lufs, result.applied_gain_db)
         warnings.extend(f"Track {index}: {warning}" for warning in track_warnings)
         sequence.append(
             {
@@ -358,9 +367,15 @@ def render_sequence(
                     options.sample_rate,
                     transition.duration_seconds,
                     transition.style,
+                    target_lufs=_transition_target_lufs(
+                        result.after.integrated_lufs,
+                        mastered[index][2].after.integrated_lufs,
+                        transition.style,
+                    ),
+                    ceiling_dbfs=_interlude_ceiling(options),
                 )
                 interlude_stats = analyze_audio(interlude, options.sample_rate)
-                interlude_warnings = _interlude_warnings(index, interlude_stats)
+                interlude_warnings = _interlude_warnings(index, interlude_stats, transition.style)
                 warnings.extend(f"Transition {index}->{index + 1}: {warning}" for warning in interlude_warnings)
                 output_path = (
                     interludes_dir
@@ -422,7 +437,9 @@ def render_sequence(
             "tweak_intensity": options.tweak_intensity,
             "tweak_limiter": options.tweak_limiter,
             "album_wav": options.album_wav,
+            "reference_track": str(options.reference_track) if options.reference_track else None,
         },
+        "reference": reference,
         "album_title": album_title,
         "album_story": _album_story(arc_plan),
         "arc": arc_plan.to_dict(),
@@ -454,8 +471,8 @@ def create_project(
     album_title: str = "Untitled Album",
 ) -> dict:
     tracks = collect_audio_files(inputs)
-    if len(tracks) > 8:
-        raise ValueError("Album Mastering Studio supports up to 8 tracks per project.")
+    if len(tracks) > MAX_TRACKS:
+        raise ValueError(f"Album Mastering Studio supports up to {MAX_TRACKS} tracks per project.")
     base_dir = project_path.resolve().parent
     project = {
         "version": 1,
@@ -480,6 +497,7 @@ def create_project(
             "tweak_intensity": options.tweak_intensity,
             "tweak_limiter": options.tweak_limiter,
             "album_wav": options.album_wav,
+            "reference_track": str(options.reference_track) if options.reference_track else None,
         },
         "tracks": [
             {
@@ -535,6 +553,12 @@ def _build_album_sequence(
                     options.sample_rate,
                     transition.duration_seconds,
                     transition.style,
+                    target_lufs=_transition_target_lufs(
+                        mastered[index][2].after.integrated_lufs,
+                        mastered[index + 1][2].after.integrated_lufs,
+                        transition.style,
+                    ),
+                    ceiling_dbfs=_interlude_ceiling(options),
                 )
             )
 
@@ -557,7 +581,9 @@ def _project_transitions(project: dict, options: RenderOptions, track_count: int
         if after_track < 1 or after_track >= track_count:
             raise ValueError(f"Invalid transition after_track value: {after_track}")
 
-        style = str(raw.get("style", options.interlude_style))
+        style = str(raw.get("style", options.interlude_style)).strip().lower()
+        if style == "inherit":
+            style = options.interlude_style
         if style not in INTERLUDE_STYLE_CHOICES:
             choices = ", ".join(INTERLUDE_STYLE_CHOICES)
             raise ValueError(f"Unknown interlude style '{style}'. Choose one of: {choices}")
@@ -635,8 +661,11 @@ def _shape_master_edges(
         head_treatment=head_treatment,
         tail_treatment=tail_treatment,
     )
-    shaped = limit_ceiling(shaped, result.ceiling_dbfs)
-    return replace(result, samples=shaped, after=analyze_audio(shaped, sample_rate))
+    shaped = limit_ceiling(shaped, result.ceiling_dbfs, sample_rate=sample_rate)
+    after = analyze_audio(shaped, sample_rate)
+    gain_delta = after.integrated_lufs - result.after.integrated_lufs
+    applied_gain = result.applied_gain_db + (gain_delta if np.isfinite(gain_delta) else 0.0)
+    return replace(result, samples=shaped, after=after, applied_gain_db=applied_gain)
 
 
 def _album_story(arc_plan: AlbumArcPlan) -> str:
@@ -690,6 +719,19 @@ def _safe_probe(path: Path) -> dict | None:
         return None
 
 
+def _reference_report(path: Path | None, sample_rate: int) -> dict | None:
+    if path is None:
+        return None
+    report: dict = {"path": str(path)}
+    try:
+        samples = load_audio(path, sample_rate)
+        report["analysis"] = analyze_audio(samples, sample_rate).to_dict()
+        report["probe"] = _safe_probe(path)
+    except Exception as exc:
+        report["warning"] = f"could not analyze reference track {path}: {exc}"
+    return report
+
+
 def _slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return slug or "track"
@@ -709,6 +751,12 @@ def _resolve_project_path(base_dir: Path, path: Path) -> Path:
     return path if path.is_absolute() else base_dir / path
 
 
+def _optional_project_path(base_dir: Path, value: object) -> Path | None:
+    if value is None or str(value).strip().lower() in {"", "auto"}:
+        return None
+    return _resolve_project_path(base_dir, Path(str(value)))
+
+
 def _project_relative_path(base_dir: Path, path: Path) -> str:
     try:
         return str(path.resolve().relative_to(base_dir))
@@ -717,7 +765,7 @@ def _project_relative_path(base_dir: Path, path: Path) -> str:
 
 
 def _optional_float(value: object) -> float | None:
-    if value in (None, "", "auto"):
+    if value is None or str(value).strip().lower() in {"", "auto"}:
         return None
     return float(value)
 
@@ -739,7 +787,7 @@ def _target_lufs_for_track(planned_lufs: float, options: RenderOptions, preset) 
     return target + options.tweak_lufs
 
 
-def _track_warnings(title: str, before, after, ceiling_dbfs: float) -> list[str]:
+def _track_warnings(title: str, before, after, ceiling_dbfs: float, target_lufs: float, applied_gain_db: float) -> list[str]:
     warnings: list[str] = []
     if before.peak_dbfs > -0.1 or before.true_peak_dbfs > -0.1:
         warnings.append("source is near 0 dBFS; inspect for clipping before trusting a loud master")
@@ -751,6 +799,8 @@ def _track_warnings(title: str, before, after, ceiling_dbfs: float) -> list[str]
         )
     if after.integrated_lufs > -8.5:
         warnings.append("rendered loudness is extremely hot for an album master")
+    if abs(applied_gain_db) >= 17.95 and abs(after.integrated_lufs - target_lufs) > 2.0:
+        warnings.append("rendered loudness may be far from the requested target")
     if after.stereo_correlation is not None and after.stereo_correlation < -0.25:
         warnings.append("stereo correlation is strongly negative; mono compatibility may suffer")
     if not _stats_are_finite(after):
@@ -758,15 +808,44 @@ def _track_warnings(title: str, before, after, ceiling_dbfs: float) -> list[str]
     return [f"{title}: {warning}" for warning in warnings]
 
 
-def _interlude_warnings(index: int, stats) -> list[str]:
+def _transition_target_lufs(left_lufs: float, right_lufs: float, style: str) -> float:
+    adjacent = (float(left_lufs) + float(right_lufs)) * 0.5
+    offsets = {
+        "crossfade": -2.0,
+        "rhythmic": -3.0,
+        "pulsed-swell": -3.0,
+        "tape": -3.0,
+        "noise-riser": -3.5,
+        "filtered-fade": -4.0,
+        "reverse-swell": -4.0,
+        "sub-drop": -4.0,
+        "tape-stop": -4.0,
+        "swell": -5.0,
+        "ring-out": -5.5,
+        "ambient": -6.0,
+        "drone-pad": -6.0,
+        "minimal": -7.0,
+        "breath-gap": -12.0,
+    }
+    target = adjacent + offsets.get(style, -5.0)
+    lower = min(float(left_lufs), float(right_lufs)) - 12.0
+    upper = max(float(left_lufs), float(right_lufs)) - 1.5
+    return float(np.clip(target, lower, upper))
+
+
+def _interlude_warnings(index: int, stats, style: str) -> list[str]:
     warnings: list[str] = []
-    if stats.integrated_lufs < -65.0:
+    if style != "hard-cut" and stats.integrated_lufs < -65.0:
         warnings.append("transition is almost silent; verify that this is intentional")
     if stats.true_peak_dbfs > -1.0:
         warnings.append("transition true-peak proxy is close to the ceiling")
     if not _stats_are_finite(stats):
         warnings.append("transition analysis contains non-finite values")
     return [f"after track {index}: {warning}" for warning in warnings]
+
+
+def _interlude_ceiling(options: RenderOptions) -> float:
+    return float(options.ceiling_dbfs if options.ceiling_dbfs is not None else -1.0)
 
 
 def _album_warnings(stats, ceiling_dbfs: float | None) -> list[str]:

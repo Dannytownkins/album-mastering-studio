@@ -3,10 +3,28 @@ from __future__ import annotations
 import numpy as np
 from scipy import signal
 
+try:
+    import pyloudnorm as pyln
+except ImportError:  # pragma: no cover - fallback is covered by the same public API.
+    pyln = None
+
 EPSILON = 1e-12
 
 
 def integrated_lufs(samples: np.ndarray, sample_rate: int) -> float:
+    if pyln is not None:
+        try:
+            samples = _as_meter_input(samples)
+            if samples.size == 0:
+                return -120.0
+            value = float(pyln.Meter(sample_rate).integrated_loudness(samples))
+            return value if np.isfinite(value) else -120.0
+        except Exception:
+            pass
+    return _integrated_lufs_fallback(samples, sample_rate)
+
+
+def _integrated_lufs_fallback(samples: np.ndarray, sample_rate: int) -> float:
     weighted = k_weight(samples, sample_rate)
     if weighted.size == 0:
         return -120.0
@@ -29,6 +47,15 @@ def integrated_lufs(samples: np.ndarray, sample_rate: int) -> float:
         return float(preliminary)
 
     return float(_energy_to_lufs(np.array([float(np.mean(gated))]))[0])
+
+
+def _as_meter_input(samples: np.ndarray) -> np.ndarray:
+    samples = np.asarray(samples, dtype=np.float64)
+    if samples.ndim == 1:
+        return samples
+    if samples.ndim == 2:
+        return samples
+    return np.reshape(samples, (samples.shape[0], -1))
 
 
 def true_peak_dbfs(samples: np.ndarray, oversample: int = 4) -> float:

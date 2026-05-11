@@ -27,6 +27,7 @@ def _html(manifest: dict, scorecard: dict | None) -> str:
     score = scorecard.get("overall") if scorecard else None
     story = manifest.get("album_story") or manifest.get("arc", {}).get("description", "")
     warnings = manifest.get("warnings", [])
+    reference = manifest.get("reference")
 
     return f"""<!doctype html>
 <html lang="en">
@@ -270,6 +271,11 @@ def _html(manifest: dict, scorecard: dict | None) -> str:
     </section>
 
     <section>
+      <h2>Reference</h2>
+      <div class="plate">{_reference(reference)}</div>
+    </section>
+
+    <section>
       <h2>Outputs</h2>
       <div class="plate paths">{_outputs(manifest, tracks, interludes)}</div>
     </section>
@@ -395,6 +401,21 @@ def _warnings(warnings: list) -> str:
     if not warnings:
         return "<p class='ok'>No render warnings were emitted by the local checks.</p>"
     return "".join(f"<p class='warning'>{_e(item)}</p>" for item in warnings)
+
+
+def _reference(reference: dict | None) -> str:
+    if not reference:
+        return "<p>No reference track was selected for this render.</p>"
+    if reference.get("warning"):
+        return f"<p class='warning'>{_e(reference['warning'])}</p><p>{_e(reference.get('path', ''))}</p>"
+    analysis = reference.get("analysis", {})
+    return (
+        f"<p><strong>{_e(reference.get('path', 'Reference track'))}</strong></p>"
+        f"{_metric('LUFS', _num(analysis.get('integrated_lufs')))}"
+        f"{_metric('True Peak', _num(analysis.get('true_peak_dbfs')))}"
+        f"{_metric('Dynamics', _num(analysis.get('dynamic_range_db')))}"
+        f"{_metric('Brightness', _num(analysis.get('spectral_centroid_hz')))}"
+    )
 
 
 def _outputs(manifest: dict, tracks: list[dict], interludes: list[dict]) -> str:

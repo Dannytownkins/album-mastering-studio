@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 import numpy as np
-from scipy import signal
+from scipy import ndimage, signal
 
 from .analysis import AudioStats, analyze_audio, db_to_amplitude
-from .loudness import integrated_lufs
+from .loudness import integrated_lufs, true_peak_dbfs
 
 EPSILON = 1e-12
 
@@ -43,6 +43,7 @@ class MasterResult:
     applied_gain_db: float
     preset: MasterPreset
     ceiling_dbfs: float
+    target_lufs: float
 
 
 @dataclass(frozen=True)
@@ -373,7 +374,8 @@ def master_track(
         sample_rate,
         (target_lufs if target_lufs is not None else preset.target_lufs) + fine_tune.lufs_offset,
     )
-    processed = limit_ceiling(processed, ceiling_dbfs)
+    resolved_target_lufs = (target_lufs if target_lufs is not None else preset.target_lufs) + fine_tune.lufs_offset
+    processed = limit_ceiling(processed, ceiling_dbfs, sample_rate=sample_rate)
 
     return MasterResult(
         samples=processed.astype(np.float32),
@@ -382,12 +384,18 @@ def master_track(
         applied_gain_db=gain_db,
         preset=preset,
         ceiling_dbfs=ceiling_dbfs,
+        target_lufs=resolved_target_lufs,
     )
 
 
-def prepare_interlude_level(samples: np.ndarray, sample_rate: int, target_lufs: float = -23.0) -> np.ndarray:
+def prepare_interlude_level(
+    samples: np.ndarray,
+    sample_rate: int,
+    target_lufs: float = -23.0,
+    ceiling_dbfs: float = -1.0,
+) -> np.ndarray:
     matched, _ = _match_lufs(samples, sample_rate, target_lufs)
-    return limit_ceiling(matched, -3.0).astype(np.float32)
+    return limit_ceiling(matched, ceiling_dbfs, sample_rate=sample_rate).astype(np.float32)
 
 
 def apply_edge_treatment(
@@ -397,6 +405,14 @@ def apply_edge_treatment(
     tail_treatment: dict | None = None,
 ) -> np.ndarray:
     processed = samples.astype(np.float32, copy=True)
+    total_frames = processed.shape[0]
+    if head_treatment and tail_treatment and total_frames > 0:
+        head_frames = min(int(sample_rate * max(float(head_treatment.get("seconds", 0.0)), 0.0)), total_frames)
+        tail_frames = min(int(sample_rate * max(float(tail_treatment.get("seconds", 0.0)), 0.0)), total_frames)
+        if head_frames + tail_frames > total_frames:
+            scale = max((total_frames - 1) / max(head_frames + tail_frames, 1), 0.0)
+            head_treatment = {**head_treatment, "seconds": (head_frames * scale) / sample_rate}
+            tail_treatment = {**tail_treatment, "seconds": (tail_frames * scale) / sample_rate}
     if head_treatment:
         processed = _apply_edge_segment(processed, sample_rate, head_treatment, is_head=True)
     if tail_treatment:
@@ -404,15 +420,51 @@ def apply_edge_treatment(
     return processed.astype(np.float32)
 
 
-def limit_ceiling(samples: np.ndarray, ceiling_dbfs: float) -> np.ndarray:
+def limit_ceiling(samples: np.ndarray, ceiling_dbfs: float, sample_rate: int = 48_000) -> np.ndarray:
     ceiling = float(db_to_amplitude(ceiling_dbfs))
-    if ceiling <= 0:
+    if ceiling <= 0 or samples.size == 0:
         return np.zeros_like(samples, dtype=np.float32)
 
-    limited = ceiling * np.tanh(samples / max(ceiling, EPSILON))
-    peak = float(np.max(np.abs(limited))) if limited.size else 0.0
-    if peak > ceiling:
-        limited *= ceiling / peak
+    audio = samples.astype(np.float64, copy=False)
+    was_mono = audio.ndim == 1
+    if was_mono:
+        audio = audio[:, np.newaxis]
+
+    oversample = 4
+    guard = float(db_to_amplitude(-0.05))
+    ceiling *= guard
+    oversampled = signal.resample_poly(audio, oversample, 1, axis=0)
+    detector = np.max(np.abs(oversampled), axis=1)
+    lookahead = max(int(sample_rate * oversample * 0.004), 3)
+    if lookahead % 2 == 0:
+        lookahead += 1
+    future_peak = ndimage.maximum_filter1d(
+        detector,
+        size=lookahead,
+        mode="nearest",
+        origin=-(lookahead // 2),
+    )
+    gain = np.minimum(1.0, ceiling / np.maximum(future_peak, EPSILON))
+
+    release = max(int(sample_rate * oversample * 0.045), 3)
+    if release % 2 == 0:
+        release += 1
+    gain = ndimage.minimum_filter1d(
+        gain,
+        size=release,
+        mode="nearest",
+        origin=release // 2,
+    )
+
+    limited_os = oversampled * gain[:, np.newaxis]
+    limited = signal.resample_poly(limited_os, 1, oversample, axis=0)[: audio.shape[0]]
+    sample_peak = float(np.max(np.abs(limited))) if limited.size else 0.0
+    if sample_peak > ceiling:
+        local_peak = np.max(np.abs(limited), axis=1)
+        over = local_peak > ceiling
+        limited[over] *= (ceiling / np.maximum(local_peak[over], EPSILON))[:, np.newaxis]
+    if was_mono:
+        limited = limited[:, 0]
     return limited.astype(np.float32)
 
 
@@ -494,16 +546,11 @@ def _linked_compressor(
     if samples.size == 0:
         return samples
 
-    detector = np.max(np.abs(samples), axis=1)
-    envelope = np.empty_like(detector)
-    attack = np.exp(-1.0 / (0.015 * sample_rate))
-    release = np.exp(-1.0 / (0.180 * sample_rate))
-    current = 0.0
-
-    for index, value in enumerate(detector):
-        coefficient = attack if value > current else release
-        current = coefficient * current + (1.0 - coefficient) * value
-        envelope[index] = current
+    detector = np.max(np.abs(samples), axis=1).astype(np.float64)
+    attack = float(np.exp(-1.0 / (0.015 * sample_rate)))
+    release = float(np.exp(-1.0 / (0.180 * sample_rate)))
+    attacked = signal.lfilter([1.0 - attack], [1.0, -attack], detector).astype(np.float64)
+    envelope = signal.lfilter([1.0 - release], [1.0, -release], attacked).astype(np.float64)
 
     envelope_db = 20.0 * np.log10(np.maximum(envelope, EPSILON))
     over_db = np.maximum(envelope_db - threshold_dbfs, 0.0)
@@ -523,7 +570,9 @@ def _transient_shape(samples: np.ndarray, sample_rate: int, punch: float) -> np.
     if np.max(transient) < EPSILON:
         return samples
 
-    transient /= np.max(transient)
+    scale = float(np.percentile(transient, 95.0))
+    transient /= max(scale, EPSILON)
+    transient = np.clip(transient, 0.0, 1.5)
     gain = 1.0 + (np.clip(punch, -0.5, 0.5) * 0.35 * transient)
     return (samples * gain[:, np.newaxis]).astype(np.float32)
 
@@ -563,12 +612,7 @@ def _match_lufs(samples: np.ndarray, sample_rate: int, target_lufs: float) -> tu
 
 def _one_pole(values: np.ndarray, sample_rate: int, seconds: float) -> np.ndarray:
     coefficient = np.exp(-1.0 / max(seconds * sample_rate, 1.0))
-    output = np.empty_like(values)
-    current = 0.0
-    for index, value in enumerate(values):
-        current = coefficient * current + (1.0 - coefficient) * value
-        output[index] = current
-    return output
+    return signal.lfilter([1.0 - coefficient], [1.0, -coefficient], values).astype(values.dtype, copy=False)
 
 
 def _apply_biquad(samples: np.ndarray, b: np.ndarray, a: np.ndarray) -> np.ndarray:
