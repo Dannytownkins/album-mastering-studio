@@ -109,6 +109,14 @@ type LiveAuditionSnapshot = {
   updatedAt: number;
 };
 
+type LivePreviewContract = {
+  modelId: string;
+  previewParity: string;
+  exportFaithfulPreviewRequired: boolean;
+  modeledControls: string[];
+  unmodeledExportStages: string[];
+};
+
 type PresetTile = {
   id: string;
   label: string;
@@ -476,6 +484,7 @@ function App() {
   const [volumeMatch, setVolumeMatch] = useState(false);
   const [liveAudition, setLiveAudition] = useState(false);
   const [liveAuditionLatencyMs, setLiveAuditionLatencyMs] = useState<number | null>(null);
+  const [livePreviewContract, setLivePreviewContract] = useState<LivePreviewContract | null>(null);
   const [nativePlaybackStatus, setNativePlaybackStatus] = useState<NativePlaybackStatus>(idleNativePlaybackStatus);
   const [loopSelection, setLoopSelection] = useState(false);
   const [region, setRegion] = useState<RegionSelection | null>(null);
@@ -568,6 +577,11 @@ function App() {
         ? `Rendered preview used the Python export engine and was cued at ${formatTime(selectedPreviewArtifact.auditionStartSeconds)}.`
         : "Update Preview renders the current settings through the export engine."
     : "Update Preview renders the current settings through the export engine.";
+  const livePreviewContractModeledText = livePreviewContract?.modeledControls?.join(", ") ?? "Contract loading";
+  const livePreviewContractRenderOnlyText = summarizePreviewStages(livePreviewContract?.unmodeledExportStages ?? []);
+  const livePreviewContractTitle = livePreviewContract
+    ? `Engine contract ${livePreviewContract.modelId}. Render-only stages: ${formatPreviewStages(livePreviewContract.unmodeledExportStages)}.`
+    : "Loading the live preview contract from the Python engine.";
   const playbackVolume = useMemo(
     () => computePlaybackVolume(playItem, selectedTrack, selectedMasterAnalysis, volumeMatch),
     [playItem, selectedTrack, selectedMasterAnalysis, volumeMatch],
@@ -579,7 +593,8 @@ function App() {
       invoke<string>("default_output_dir"),
       invoke<AutosavedSession | null>("load_recent_session"),
       invoke<UserPreset[]>("list_user_presets"),
-    ]).then(([rootResult, outputResult, autosaveResult, presetsResult]) => {
+      invoke<LivePreviewContract>("live_preview_contract"),
+    ]).then(([rootResult, outputResult, autosaveResult, presetsResult, contractResult]) => {
       const defaultOutput =
         outputResult.status === "fulfilled" ? outputResult.value : initialSettings.outputDir;
       if (rootResult.status === "fulfilled") {
@@ -596,6 +611,13 @@ function App() {
         setSelectedUserPresetId(presetsResult.value[0]?.id ?? "");
       } else {
         pushLog(`User presets unavailable: ${String(presetsResult.reason)}`);
+      }
+      if (contractResult.status === "fulfilled") {
+        setLivePreviewContract(contractResult.value);
+        (window as typeof window & { __AMS_LIVE_PREVIEW_CONTRACT__?: LivePreviewContract }).__AMS_LIVE_PREVIEW_CONTRACT__ =
+          contractResult.value;
+      } else {
+        pushLog(`Live Preview contract unavailable: ${String(contractResult.reason)}`);
       }
       setAutosaveReady(true);
     }).catch(() => setAutosaveReady(true));
@@ -2151,6 +2173,12 @@ function App() {
             >
               {previewParityLabel}
             </span>
+            <span className="live-contract-status modeled" title={livePreviewContractTitle}>
+              Live model: {livePreviewContractModeledText}
+            </span>
+            <span className="live-contract-status render-only" title={livePreviewContractTitle}>
+              Render-only: {livePreviewContractRenderOnlyText}
+            </span>
             <span className={`native-audition-status ${nativePlaybackStatus.active ? "active" : ""}`}>
               {nativePlaybackStatus.active
                 ? `${nativePlaybackKind} ${nativePlaybackStatus.paused ? "paused" : "playing"}`
@@ -2967,6 +2995,28 @@ function applyLiveAuditionChain(
     baseLatencyMs: Number.isFinite(chain.context.baseLatency) ? chain.context.baseLatency * 1000 : null,
     updatedAt: performance.now(),
   };
+}
+
+const PREVIEW_STAGE_LABELS: Record<string, string> = {
+  preset_base_tone: "tone",
+  highpass: "highpass",
+  low_mid_eq: "low-mid",
+  brightness_tilt: "brightness",
+  warmth_saturation: "warmth",
+  transient_shape: "transients",
+  lufs_match: "LUFS",
+  ceiling_limiter: "limiter",
+  codec_qc: "codec",
+};
+
+function summarizePreviewStages(stages: string[]) {
+  if (!stages.length) return "Contract loading";
+  return stages.map((stage) => PREVIEW_STAGE_LABELS[stage] ?? stage.replace(/_/g, " ")).join(", ");
+}
+
+function formatPreviewStages(stages: string[]) {
+  if (!stages.length) return "none";
+  return summarizePreviewStages(stages);
 }
 
 function computePlaybackVolume(

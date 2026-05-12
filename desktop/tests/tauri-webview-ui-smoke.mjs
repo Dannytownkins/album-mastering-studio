@@ -69,6 +69,13 @@ try {
   assert.equal(evidence.livePreviewArmed, true);
   assert.match(evidence.livePreviewStatus, /Live Preview armed/);
   assert.equal(evidence.previewParityStatus, "Render required");
+  assert.equal(evidence.livePreviewContractLoaded, true);
+  assert.equal(evidence.livePreviewContractModelId, "web-audio-first-control-model");
+  assert.deepEqual(evidence.livePreviewContractModeledControls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.match(evidence.livePreviewModeledStatus, /Live model: Low, Mid, High, Width, Intensity/);
+  assert.match(evidence.livePreviewRenderOnlyStatus, /Render-only:/);
+  assert.equal(evidence.livePreviewRenderOnlyIncludesLufs, true);
+  assert.equal(evidence.livePreviewRenderOnlyIncludesLimiter, true);
   assert.equal(evidence.nativeAbButtonEnabled, true);
   assert.equal(evidence.nativeAbStatus, "Native transport ready");
   assert.equal(evidence.listeningInitial, true);
@@ -377,6 +384,12 @@ function uiSmokeExpression() {
   const livePreviewArmed = buttonByText('Live Preview').classList.contains('active') && document.body.innerText.includes('Live Preview armed');
   const livePreviewStatus = text(document.querySelector('.live-audition-status'));
   const previewParityStatus = text(document.querySelector('.preview-parity-status'));
+  const livePreviewContractLoaded = await waitFor(() => window.__AMS_LIVE_PREVIEW_CONTRACT__?.modelId === 'web-audio-first-control-model', 5000);
+  const livePreviewContract = window.__AMS_LIVE_PREVIEW_CONTRACT__ || {};
+  const livePreviewModeledStatus = text(document.querySelector('.live-contract-status.modeled'));
+  const livePreviewRenderOnlyStatus = text(document.querySelector('.live-contract-status.render-only'));
+  const livePreviewRenderOnlyIncludesLufs = livePreviewRenderOnlyStatus.includes('LUFS');
+  const livePreviewRenderOnlyIncludesLimiter = livePreviewRenderOnlyStatus.includes('limiter');
   const nativeAbButtonEnabled = !buttonByText('Native A/B').disabled;
   const nativeAbStatus = text(document.querySelector('.native-audition-status'));
   const listeningInitial = text(document.querySelector('.listening-panel .panel-title')).includes('0/6');
@@ -454,6 +467,13 @@ function uiSmokeExpression() {
     livePreviewArmed,
     livePreviewStatus,
     previewParityStatus,
+    livePreviewContractLoaded,
+    livePreviewContractModelId: livePreviewContract.modelId,
+    livePreviewContractModeledControls: livePreviewContract.modeledControls,
+    livePreviewModeledStatus,
+    livePreviewRenderOnlyStatus,
+    livePreviewRenderOnlyIncludesLufs,
+    livePreviewRenderOnlyIncludesLimiter,
     listeningInitial,
     listeningApprovalInitial,
     listeningProgressAfterChecks,

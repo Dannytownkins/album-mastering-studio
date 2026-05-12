@@ -160,6 +160,18 @@ try {
   assert.equal(evidence.volumeMatchReturnsToUnity, true);
   assert.equal(evidence.livePreviewDefaultOff, true);
   assert.equal(evidence.livePreviewButtonEnabled, true);
+  assert.equal(evidence.livePreviewContractModelId, "web-audio-first-control-model");
+  assert.equal(evidence.livePreviewContractPreviewParity, "approximate");
+  assert.equal(evidence.livePreviewContractExportFaithfulRequired, true);
+  assert.deepEqual(evidence.livePreviewContractModeledControls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.deepEqual(evidence.livePreviewContractWindowControls, evidence.livePreviewContractModeledControls);
+  assert.equal(evidence.livePreviewContractWindowModelId, evidence.livePreviewContractModelId);
+  assert.match(evidence.livePreviewModeledStatus, /Live model: Low, Mid, High, Width, Intensity/);
+  assert.match(evidence.livePreviewRenderOnlyStatus, /Render-only:/);
+  assert.equal(evidence.livePreviewRenderOnlyIncludesTone, true);
+  assert.equal(evidence.livePreviewRenderOnlyIncludesHighpass, true);
+  assert.equal(evidence.livePreviewRenderOnlyIncludesLufs, true);
+  assert.equal(evidence.livePreviewRenderOnlyIncludesLimiter, true);
   assert.equal(evidence.livePreviewActive, true);
   assert.equal(evidence.liveControlUpdated, true);
   assert.equal(evidence.liveControlResults.length, 5);
@@ -359,6 +371,17 @@ function trackPreviewExpression() {
   };
   const logText = () => document.querySelector('.log')?.textContent || '';
   const masterStatus = () => text(document.querySelector('.status-pills .pill:nth-child(2)'));
+  const livePreviewContract = await invoke('live_preview_contract');
+  const livePreviewContractLoaded = await waitFor(
+    () => window.__AMS_LIVE_PREVIEW_CONTRACT__?.modelId === livePreviewContract.modelId,
+    5000,
+  );
+  if (!livePreviewContractLoaded) {
+    throw new Error('Live Preview contract did not load into the visible app state');
+  }
+  const livePreviewWindowContract = window.__AMS_LIVE_PREVIEW_CONTRACT__ || {};
+  const livePreviewModeledStatus = text(document.querySelector('.live-contract-status.modeled'));
+  const livePreviewRenderOnlyStatus = text(document.querySelector('.live-contract-status.render-only'));
   const masteredActionButton = () => buttons().find((item) => text(item).startsWith('Mastered') && item.closest('.audition-actions'));
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
   const trackCountLabel = text(document.querySelector('.library .panel-title span'));
@@ -766,6 +789,18 @@ function trackPreviewExpression() {
     volumeMatchReturnsToUnity,
     livePreviewDefaultOff,
     livePreviewButtonEnabled,
+    livePreviewContractModelId: livePreviewContract.modelId,
+    livePreviewContractPreviewParity: livePreviewContract.previewParity,
+    livePreviewContractExportFaithfulRequired: livePreviewContract.exportFaithfulPreviewRequired,
+    livePreviewContractModeledControls: livePreviewContract.modeledControls,
+    livePreviewContractWindowModelId: livePreviewWindowContract.modelId,
+    livePreviewContractWindowControls: livePreviewWindowContract.modeledControls,
+    livePreviewModeledStatus,
+    livePreviewRenderOnlyStatus,
+    livePreviewRenderOnlyIncludesTone: livePreviewRenderOnlyStatus.includes('tone'),
+    livePreviewRenderOnlyIncludesHighpass: livePreviewRenderOnlyStatus.includes('highpass'),
+    livePreviewRenderOnlyIncludesLufs: livePreviewRenderOnlyStatus.includes('LUFS'),
+    livePreviewRenderOnlyIncludesLimiter: livePreviewRenderOnlyStatus.includes('limiter'),
     livePreviewActive,
     livePreviewActivationMs,
     liveLatencyStatus,

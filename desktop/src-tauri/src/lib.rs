@@ -317,6 +317,21 @@ fn analyze_tracks(
 }
 
 #[tauri::command]
+fn live_preview_contract(
+    app: AppHandle,
+    state: State<'_, ProcessState>,
+) -> Result<Value, String> {
+    let result = run_engine_command(
+        &app,
+        state.inner(),
+        vec!["preview-contract".to_string(), "--json".to_string()],
+        None,
+    )?;
+    serde_json::from_str(&result.stdout)
+        .map_err(|error| format!("Could not parse live preview contract JSON: {error}"))
+}
+
+#[tauri::command]
 fn render_track_master(
     app: AppHandle,
     state: State<'_, ProcessState>,
@@ -2983,6 +2998,7 @@ pub fn run() {
             read_json,
             write_project,
             analyze_tracks,
+            live_preview_contract,
             native_audio_probe,
             native_audio_stream_probe,
             native_playback_file_probe,

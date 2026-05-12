@@ -662,6 +662,11 @@ album-master preview-contract --json
 
 The contract exposes the modeled Web Audio controls and the unmodeled export stages. A Python regression test compares `desktop/src/livePreviewConfig.json` against this engine contract so the app/test model cannot silently drift from the export intent constants.
 
+The Tauri app now loads the same contract through a typed `live_preview_contract` command and surfaces it in the Track Master audition row. The visible chips state:
+
+- `Live model: Low, Mid, High, Width, Intensity`
+- `Render-only: tone, highpass, low-mid, brightness, warmth, transients, LUFS, limiter, codec`
+
 Verification after the extraction:
 
 - `npm run build`
@@ -670,12 +675,15 @@ Verification after the extraction:
 - `npm run test:tauri-real-song-performance` with `Lay the Money on the Desk (1).mp3`
 - `python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_config_matches_engine_contract`
 - `npm run test:tauri-webview`
+- `npm run test:tauri-ui`
+- `npm run test:tauri-track-preview-ui`
 
 Interpretation:
 
 - This reduces drift between the running UI and the automated comparison model.
 - It is still a shared definition for a temporary Web Audio approximation, not shared DSP with the Python export engine.
 - The contract makes the approximation boundary executable: modeled controls are `Low`, `Mid`, `High`, `Width`, and `Intensity`; unmodeled export stages include preset base tone, highpass, low-mid EQ, brightness, warmth/saturation, transient shaping, LUFS match, ceiling limiting, and codec QC.
+- The visible UI now exposes that same boundary, so `Approx audition` has concrete supporting detail instead of being only a label.
 - The next real parity step is to define or generate common intent/DSP parameters that both offline export and the live path consume, or to move the live path toward a native engine that can share those definitions directly.
 
 ## Real-Source Album Playback Stability

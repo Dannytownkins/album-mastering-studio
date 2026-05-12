@@ -609,6 +609,7 @@ label {
 
 .live-audition-status,
 .preview-parity-status,
+.live-contract-status,
 .native-audition-status {
   display: inline-flex;
   align-items: center;
@@ -619,6 +620,20 @@ label {
   padding: 0 10px;
   font-size: 12px;
   font-weight: 720;
+}
+
+.live-contract-status {
+  flex: 1 1 260px;
+  min-width: 240px;
+  max-width: 520px;
+  padding-block: 6px;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.live-contract-status.render-only {
+  flex-basis: 340px;
+  color: #d6cba7;
 }
 
 .live-audition-status.active,

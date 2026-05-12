@@ -2,6 +2,51 @@
 
 ## 2026-05-12
 
+### Visible Live Preview Contract Slice
+
+- Added a typed Tauri `live_preview_contract` command that calls the Python sidecar command `preview-contract --json`.
+- The Track Master audition row now displays the engine-owned contract boundary beside the existing preview parity label:
+  - `Live model: Low, Mid, High, Width, Intensity`
+  - `Render-only: tone, highpass, low-mid, brightness, warmth, transients, LUFS, limiter, codec`
+- The frontend stores the loaded contract on `window.__AMS_LIVE_PREVIEW_CONTRACT__` for smoke/debug evidence.
+- Extended both the broad WebView UI smoke and the packaged Track Preview smoke to assert the visible contract chips and the Tauri command/window contract state.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-webview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+npm run test:tauri-ui
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Results:
+
+- Node syntax checks passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build passed.
+- Desktop CLI-contract integration passed.
+- Dev WebView UI smoke passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Release-backed Track Preview UI smoke passed.
+- Evidence values:
+  - Broad UI `livePreviewContractModelId: web-audio-first-control-model`
+  - Broad UI `livePreviewModeledStatus: Live model: Low, Mid, High, Width, Intensity`
+  - Broad UI `livePreviewRenderOnlyStatus: Render-only: tone, highpass, low-mid, brightness, warmth, transients, LUFS, limiter, codec`
+  - Track Preview `livePreviewContractModelId: web-audio-first-control-model`
+  - Track Preview `livePreviewContractWindowControls: [Low, Mid, High, Width, Intensity]`
+  - Track Preview `previewParityAfterLivePreview: Approx audition`
+
+Honest gap:
+
+- The app now exposes the approximation boundary in the visible UI. It still does not make Web Audio Live Preview export-engine faithful or replace human listening approval.
+
 ### Engine-Owned Live Preview Contract Slice
 
 - Added `live_preview_contract()` to the Python mastering engine so the temporary Web Audio audition model has an engine-owned contract instead of only frontend/test constants.
