@@ -2,6 +2,42 @@
 
 ## 2026-05-12
 
+### Engine-Owned Live Preview Contract Slice
+
+- Added `live_preview_contract()` to the Python mastering engine so the temporary Web Audio audition model has an engine-owned contract instead of only frontend/test constants.
+- Added `album-master preview-contract --json` so the contract can be inspected and used by scripts without importing Python internals.
+- Refactored the Python mastering EQ/compressor constants into named values and reused them from the contract.
+- Added a unit regression that compares `desktop/src/livePreviewConfig.json` against the engine contract.
+- Updated the broad Tauri WebView runtime smoke so its export-vs-live model also reads `desktop/src/livePreviewConfig.json` instead of stale hardcoded `160/1400/5600 Hz` constants.
+
+Verification:
+
+```powershell
+python -m album_mastering_studio.cli preview-contract --json
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_config_matches_engine_contract
+python -m compileall -q src tests
+python -m unittest discover -s tests
+cd desktop
+npm run build
+npm run test:integration
+npm run test:tauri-webview
+cd ..
+```
+
+Results:
+
+- Preview contract CLI printed the current `web-audio-first-control-model` contract with modeled controls `Low`, `Mid`, `High`, `Width`, and `Intensity`.
+- Contract regression passed and now fails if the Tauri JSON drifts from engine-owned filter, width, compressor, or smoothing values.
+- Full Python unit suite passed: `18 tests`.
+- Desktop TypeScript/Vite build passed.
+- Desktop CLI-contract integration passed.
+- Tauri WebView runtime smoke passed against the dev WebView.
+- Runtime export-vs-live evidence now reports `live_preview_engine: web-audio-first-control-model`, `modeled_controls: [Low, Mid, High, Width, Intensity]`, `modeled_width: 1.324`, `modeled_drive: 0.35`, `export_minus_live_lufs_proxy: 2.49416759863309`, and `rms_difference_dbfs: -26.9677132943239`.
+
+Honest gap:
+
+- This is an executable drift guard and contract surface. It does not make Live Preview export-engine faithful; unmodeled export stages are listed in the contract.
+
 ### Export-Intent-Aligned Live Preview Config Slice
 
 - Tuned `desktop/src/livePreviewConfig.json` toward the Python export engine's first-control intent while keeping it explicitly identified as `web-audio-first-control-model`.

@@ -10,7 +10,7 @@ from .audio_io import collect_audio_files, load_audio
 from .constants import DEFAULT_SAMPLE_RATE
 from .dashboard import export_dashboard
 from .iteration import iterate_project
-from .mastering import PRESETS
+from .mastering import PRESETS, live_preview_contract
 from .interludes import INTERLUDE_STYLE_CHOICES
 from .pipeline import (
     RenderOptions,
@@ -235,6 +235,12 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--sample-rate", type=int, default=DEFAULT_SAMPLE_RATE, help="Analysis sample rate.")
     analyze.add_argument("--waveform-bins", type=int, default=128, help="Number of waveform thumbnail bins to include in JSON output.")
 
+    preview_contract = subparsers.add_parser(
+        "preview-contract",
+        help="Print the engine-owned contract for the temporary live preview model.",
+    )
+    preview_contract.add_argument("--json", action="store_true", help="Print JSON. Included for explicit script usage.")
+
     app = subparsers.add_parser("app", help="Launch the local Windows desktop mastering studio.")
     app.add_argument("--output", "-o", type=Path, default=None, help="Default output folder for app renders.")
 
@@ -342,6 +348,10 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
         print(json.dumps(rows, indent=2))
+        return 0
+
+    if args.command == "preview-contract":
+        print(json.dumps(live_preview_contract(), indent=2))
         return 0
 
     if args.command == "app":

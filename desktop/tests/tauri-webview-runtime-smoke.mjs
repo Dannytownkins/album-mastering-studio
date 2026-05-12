@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
@@ -8,6 +8,9 @@ const outputRoot = process.env.AMS_TAURI_WEBVIEW_OUTPUT || path.join(repoRoot, "
 const inputsDir = path.join(outputRoot, "inputs");
 const cdpPort = process.env.TAURI_CDP_PORT || "9222";
 const cdpBase = `http://127.0.0.1:${cdpPort}`;
+const livePreviewConfig = JSON.parse(
+  readFileSync(path.join(repoRoot, "desktop", "src", "livePreviewConfig.json"), "utf8"),
+);
 
 mkdirSync(inputsDir, { recursive: true });
 writeFixtures(inputsDir);
@@ -86,6 +89,9 @@ assert.equal(evidence.trackExportChecks.track_count, 1);
 assert.equal(evidence.trackExportChecks.interlude_count, 0);
 assert.ok(evidence.trackExportCheckLabels.includes("Track outputs"));
 assert.ok(evidence.trackExportCheckLabels.includes("Meter values"));
+assert.equal(evidence.exportVsLiveComparison.live_preview_engine, livePreviewConfig.modelId);
+assert.deepEqual(evidence.exportVsLiveComparison.modeled_controls, ["Low", "Mid", "High", "Width", "Intensity"]);
+assert.deepEqual(evidence.exportVsLiveComparison.tuning, livePreviewTuning);
 assert.equal(evidence.exportVsLiveComparison.same_engine, false);
 assert.equal(evidence.exportVsLiveComparison.preview_parity, "approximate");
 assert.equal(evidence.exportVsLiveComparison.export_faithful_preview_required, true);
@@ -230,6 +236,7 @@ from scipy.io import wavfile
 
 source_path, export_path, output_path, tuning_json = sys.argv[1:5]
 tuning = json.loads(tuning_json)
+config = ${JSON.stringify(livePreviewConfig)}
 
 def read_wav(path):
     sample_rate, audio = wavfile.read(path)
@@ -298,36 +305,45 @@ def high_shelf(gain_db, freq, sample_rate):
     return np.array([b0, b1, b2]) / a0, np.array([1.0, a1 / a0, a2 / a0])
 
 def apply_width(audio, width_value):
-    width = min(1.65, max(0.35, 1.0 + width_value * 1.8))
+    width_config = config["width"]
+    width = min(float(width_config["max"]), max(float(width_config["min"]), float(width_config["base"]) + width_value * float(width_config["scale"])))
     mid = (audio[:, 0] + audio[:, 1]) * 0.5
     side = (audio[:, 0] - audio[:, 1]) * 0.5 * width
-    return np.column_stack([mid + side, mid - side]).astype(np.float32)
+    return np.column_stack([mid + side, mid - side]).astype(np.float32), width
 
 def apply_static_compression(audio, amount):
     amount = min(1.0, max(0.0, amount))
     if amount <= 0:
-        return audio
-    threshold = 10 ** ((-18.0 - amount * 16.0) / 20.0)
-    ratio = 1.0 + amount * 3.5
-    magnitude = np.abs(audio)
-    over = magnitude > threshold
-    output = audio.copy()
-    compressed = threshold * np.power(magnitude[over] / threshold, 1.0 / ratio)
-    output[over] = np.sign(audio[over]) * compressed
-    return output.astype(np.float32)
+        return audio.astype(np.float32), 0.0
+    compressor = config["compressor"]
+    threshold = float(compressor["thresholdBaseDbfs"]) - amount * float(compressor["thresholdDriveScaleDb"])
+    ratio = float(compressor["ratioBase"]) + amount * float(compressor["ratioDriveScale"])
+    knee = float(compressor["kneeDb"])
+    level = np.max(np.abs(audio), axis=1)
+    x_db = 20.0 * np.log10(np.maximum(level, 1e-12))
+    y_db = np.array(x_db, copy=True)
+    lower = threshold - knee / 2.0
+    upper = threshold + knee / 2.0
+    over = x_db > upper
+    y_db[over] = threshold + (x_db[over] - threshold) / ratio
+    if knee > 0:
+        knee_zone = (x_db >= lower) & (x_db <= upper)
+        y_db[knee_zone] = x_db[knee_zone] + (1.0 / ratio - 1.0) * ((x_db[knee_zone] - lower) ** 2) / (2.0 * knee)
+    gain = np.power(10.0, (y_db - x_db) / 20.0)
+    return (audio * gain[:, None]).astype(np.float32), amount
 
 def live_preview_model(audio, sample_rate, tuning):
     modeled = audio.copy()
     for design in (
-        low_shelf(float(tuning.get("bassDb", 0.0)), 160.0, sample_rate),
-        peaking(float(tuning.get("presenceDb", 0.0)), 1400.0, sample_rate),
-        high_shelf(float(tuning.get("airDb", 0.0)), 5600.0, sample_rate),
+        low_shelf(float(tuning.get("bassDb", 0.0)), float(config["filters"]["low"]["frequencyHz"]), sample_rate),
+        peaking(float(tuning.get("presenceDb", 0.0)), float(config["filters"]["mid"]["frequencyHz"]), sample_rate, float(config["filters"]["mid"]["q"])),
+        high_shelf(float(tuning.get("airDb", 0.0)), float(config["filters"]["high"]["frequencyHz"]), sample_rate),
     ):
         if design is not None:
             modeled = apply_biquad(modeled, design[0], design[1])
-    modeled = apply_static_compression(modeled, float(tuning.get("compression", 0.0)))
-    modeled = apply_width(modeled, float(tuning.get("width", 0.0)))
-    return np.clip(modeled, -1.0, 1.0).astype(np.float32)
+    modeled, modeled_drive = apply_static_compression(modeled, float(tuning.get("compression", 0.0)))
+    modeled, modeled_width = apply_width(modeled, float(tuning.get("width", 0.0)))
+    return np.clip(modeled, -1.0, 1.0).astype(np.float32), modeled_width, modeled_drive
 
 def rms_dbfs(audio):
     rms = float(np.sqrt(np.mean(np.square(audio))) + 1e-12)
@@ -355,7 +371,7 @@ export_rate, exported = read_wav(export_path)
 if source_rate != export_rate:
     raise SystemExit("Sample-rate mismatch between playback assets")
 
-live = live_preview_model(source, source_rate, tuning)
+live, modeled_width, modeled_drive = live_preview_model(source, source_rate, tuning)
 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 wavfile.write(output_path, source_rate, live)
 
@@ -367,10 +383,14 @@ difference = exported - live
 
 result = {
     "offline_engine": "python-render-project",
-    "live_preview_engine": "web-audio-deterministic-model",
+    "live_preview_engine": config["modelId"],
     "same_engine": False,
     "preview_parity": "approximate",
     "export_faithful_preview_required": True,
+    "modeled_controls": ["Low", "Mid", "High", "Width", "Intensity"],
+    "modeled_width": modeled_width,
+    "modeled_drive": modeled_drive,
+    "tuning": tuning,
     "sample_rate": source_rate,
     "compared_frames": int(length),
     "live_model_path": str(Path(output_path)),

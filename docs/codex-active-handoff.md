@@ -17,7 +17,65 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Export-Intent-Aligned Live Preview Config
+## Latest Codex Pass: Engine-Owned Live Preview Contract
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `src/album_mastering_studio/mastering.py`
+- `src/album_mastering_studio/cli.py`
+- `tests/test_pipeline.py`
+- `desktop/tests/tauri-webview-runtime-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+
+What changed:
+
+- Added `live_preview_contract()` as the Python engine-owned contract for the temporary Web Audio first-control audition model.
+- Added `album-master preview-contract --json` for scriptable contract inspection.
+- Moved the Python mastering EQ/compressor values used by the contract into named constants and reused them inside the mastering chain.
+- Added a unit regression that compares `desktop/src/livePreviewConfig.json` against the engine contract.
+- Updated the broad WebView runtime smoke so its deterministic export-vs-live model reads the shared JSON config instead of stale hardcoded Web Audio constants.
+
+Verification already run:
+
+```powershell
+python -m album_mastering_studio.cli preview-contract --json
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_config_matches_engine_contract
+python -m compileall -q src tests
+python -m unittest discover -s tests
+cd desktop
+npm run build
+npm run test:integration
+npm run test:tauri-webview
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-webview-runtime-smoke\tauri-webview-runtime-smoke.json`
+- Relevant fields:
+  - Runtime `exportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - Runtime `exportVsLiveComparison.modeled_controls: [Low, Mid, High, Width, Intensity]`
+  - Runtime `exportVsLiveComparison.modeled_width: 1.324`
+  - Runtime `exportVsLiveComparison.modeled_drive: 0.35`
+  - Runtime `exportVsLiveComparison.export_minus_live_lufs_proxy: 2.49416759863309`
+  - Runtime `exportVsLiveComparison.rms_difference_dbfs: -26.9677132943239`
+  - Runtime `exportVsLiveComparison.compared_frames: 64800`
+
+Remaining gap:
+
+- The contract prevents silent drift and lists unmodeled export stages. It does not make Web Audio Live Preview export-engine faithful.
+
+Next useful slice:
+
+- Use the new contract in frontend diagnostics or release smokes so the visible app can show which controls are modeled and which export stages remain render-only.
+- Continue toward shared/native live DSP parity if working unattended; if the user is present, run and record a listening pass.
+
+## Previous Codex Pass: Export-Intent-Aligned Live Preview Config
 
 Date: 2026-05-12
 

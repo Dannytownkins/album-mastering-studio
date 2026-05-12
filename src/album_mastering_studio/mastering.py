@@ -9,6 +9,23 @@ from .analysis import AudioStats, analyze_audio, db_to_amplitude
 from .loudness import integrated_lufs, true_peak_dbfs
 
 EPSILON = 1e-12
+TONE_LOW_SHELF_HZ = 105.0
+TONE_LOW_SHELF_Q = 0.70
+TONE_LOW_MID_HZ = 330.0
+TONE_LOW_MID_Q = 0.85
+TONE_PRESENCE_HZ = 3200.0
+TONE_PRESENCE_Q = 0.90
+TONE_AIR_HZ = 9800.0
+TONE_AIR_Q = 0.65
+COMPRESSOR_ATTACK_SECONDS = 0.015
+COMPRESSOR_RELEASE_SECONDS = 0.180
+INTENSITY_THRESHOLD_SCALE_DB = 3.0
+INTENSITY_RATIO_SCALE = 0.22
+PREVIEW_WIDTH_BASE = 1.0
+PREVIEW_WIDTH_SCALE = 1.8
+PREVIEW_WIDTH_MIN = 0.35
+PREVIEW_WIDTH_MAX = 1.65
+PREVIEW_SMOOTHING_SECONDS = 0.015
 
 
 @dataclass(frozen=True)
@@ -325,6 +342,64 @@ PRESETS: dict[str, MasterPreset] = {
 }
 
 
+def live_preview_contract() -> dict:
+    """Return the engine-owned contract for the temporary Web Audio audition model."""
+    streaming = PRESETS["streaming"]
+    return {
+        "modelId": "web-audio-first-control-model",
+        "previewParity": "approximate",
+        "exportFaithfulPreviewRequired": True,
+        "modeledControls": ["Low", "Mid", "High", "Width", "Intensity"],
+        "filters": {
+            "low": {
+                "type": "lowshelf",
+                "exportControl": "tweak_low_end_db",
+                "frequencyHz": TONE_LOW_SHELF_HZ,
+            },
+            "mid": {
+                "type": "peaking",
+                "exportControl": "tweak_presence_db",
+                "frequencyHz": TONE_PRESENCE_HZ,
+                "q": TONE_PRESENCE_Q,
+            },
+            "high": {
+                "type": "highshelf",
+                "exportControl": "tweak_air_db",
+                "frequencyHz": TONE_AIR_HZ,
+            },
+        },
+        "width": {
+            "exportControl": "tweak_width",
+            "base": PREVIEW_WIDTH_BASE,
+            "scale": PREVIEW_WIDTH_SCALE,
+            "min": PREVIEW_WIDTH_MIN,
+            "max": PREVIEW_WIDTH_MAX,
+        },
+        "compressor": {
+            "exportControl": "tweak_intensity",
+            "attackSeconds": COMPRESSOR_ATTACK_SECONDS,
+            "releaseSeconds": COMPRESSOR_RELEASE_SECONDS,
+            "thresholdBaseDbfs": streaming.compressor_threshold_dbfs,
+            "thresholdDriveScaleDb": INTENSITY_THRESHOLD_SCALE_DB,
+            "ratioBase": streaming.compressor_ratio,
+            "ratioDriveScale": streaming.compressor_ratio * INTENSITY_RATIO_SCALE,
+            "kneeDb": 0,
+        },
+        "smoothingSeconds": PREVIEW_SMOOTHING_SECONDS,
+        "unmodeledExportStages": [
+            "preset_base_tone",
+            "highpass",
+            "low_mid_eq",
+            "brightness_tilt",
+            "warmth_saturation",
+            "transient_shape",
+            "lufs_match",
+            "ceiling_limiter",
+            "codec_qc",
+        ],
+    }
+
+
 def master_track(
     samples: np.ndarray,
     sample_rate: int,
@@ -363,8 +438,14 @@ def master_track(
     processed = _linked_compressor(
         processed,
         sample_rate=sample_rate,
-        threshold_dbfs=preset.compressor_threshold_dbfs - (intensity * 3.0) - (max(limiter_aggressiveness, 0.0) * 0.75),
-        ratio=max(1.05, preset.compressor_ratio * (1.0 + (intensity * 0.22) + (max(limiter_aggressiveness, 0.0) * 0.05))),
+        threshold_dbfs=preset.compressor_threshold_dbfs
+        - (intensity * INTENSITY_THRESHOLD_SCALE_DB)
+        - (max(limiter_aggressiveness, 0.0) * 0.75),
+        ratio=max(
+            1.05,
+            preset.compressor_ratio
+            * (1.0 + (intensity * INTENSITY_RATIO_SCALE) + (max(limiter_aggressiveness, 0.0) * 0.05)),
+        ),
     )
     processed = _transient_shape(processed, sample_rate, preset.transient_punch + (intensity * 0.055))
     processed = _saturate(processed, max(preset.warmth + fine_tune.warmth_offset + max(intensity, 0.0) * 0.015, 0.0))
@@ -530,10 +611,10 @@ def _tone_eq(
     air_db: float,
 ) -> np.ndarray:
     processed = samples
-    processed = _apply_biquad(processed, *_low_shelf(sample_rate, 105.0, low_shelf_db, 0.70))
-    processed = _apply_biquad(processed, *_peaking_eq(sample_rate, 330.0, low_mid_db, 0.85))
-    processed = _apply_biquad(processed, *_peaking_eq(sample_rate, 3200.0, presence_db, 0.90))
-    processed = _apply_biquad(processed, *_high_shelf(sample_rate, 9800.0, air_db, 0.65))
+    processed = _apply_biquad(processed, *_low_shelf(sample_rate, TONE_LOW_SHELF_HZ, low_shelf_db, TONE_LOW_SHELF_Q))
+    processed = _apply_biquad(processed, *_peaking_eq(sample_rate, TONE_LOW_MID_HZ, low_mid_db, TONE_LOW_MID_Q))
+    processed = _apply_biquad(processed, *_peaking_eq(sample_rate, TONE_PRESENCE_HZ, presence_db, TONE_PRESENCE_Q))
+    processed = _apply_biquad(processed, *_high_shelf(sample_rate, TONE_AIR_HZ, air_db, TONE_AIR_Q))
     return processed.astype(np.float32)
 
 
@@ -547,8 +628,8 @@ def _linked_compressor(
         return samples
 
     detector = np.max(np.abs(samples), axis=1).astype(np.float64)
-    attack = float(np.exp(-1.0 / (0.015 * sample_rate)))
-    release = float(np.exp(-1.0 / (0.180 * sample_rate)))
+    attack = float(np.exp(-1.0 / (COMPRESSOR_ATTACK_SECONDS * sample_rate)))
+    release = float(np.exp(-1.0 / (COMPRESSOR_RELEASE_SECONDS * sample_rate)))
     attacked = signal.lfilter([1.0 - attack], [1.0, -attack], detector).astype(np.float64)
     envelope = signal.lfilter([1.0 - release], [1.0, -release], attacked).astype(np.float64)
 

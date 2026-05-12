@@ -14,7 +14,7 @@ from scipy.io import wavfile
 
 from album_mastering_studio.dashboard import export_dashboard
 from album_mastering_studio.iteration import iterate_project
-from album_mastering_studio.mastering import PRESETS, limit_ceiling, master_track
+from album_mastering_studio.mastering import PRESETS, limit_ceiling, live_preview_contract, master_track
 from album_mastering_studio.analysis import analyze_audio
 from album_mastering_studio.audio_io import load_audio
 from album_mastering_studio.interludes import INTERLUDE_STYLES, make_interlude
@@ -156,6 +156,52 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(len(rows[0]["waveform"]), 16)
             self.assertIn("integrated_lufs", rows[0]["analysis"])
+
+    def test_live_preview_config_matches_engine_contract(self) -> None:
+        contract = live_preview_contract()
+        repo_root = Path(__file__).resolve().parents[1]
+        config = json.loads((repo_root / "desktop" / "src" / "livePreviewConfig.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(config["modelId"], contract["modelId"])
+        self.assertEqual(config["filters"], {
+            key: {
+                field: value
+                for field, value in contract["filters"][key].items()
+                if field in {"type", "frequencyHz", "q"}
+            }
+            for key in ("low", "mid", "high")
+        })
+        self.assertEqual(config["width"], {
+            field: contract["width"][field]
+            for field in ("base", "scale", "min", "max")
+        })
+        self.assertEqual(config["compressor"], {
+            field: contract["compressor"][field]
+            for field in (
+                "attackSeconds",
+                "releaseSeconds",
+                "thresholdBaseDbfs",
+                "thresholdDriveScaleDb",
+                "ratioBase",
+                "ratioDriveScale",
+                "kneeDb",
+            )
+        })
+        self.assertEqual(config["smoothingSeconds"], contract["smoothingSeconds"])
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "album_mastering_studio.cli",
+                "preview-contract",
+                "--json",
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(json.loads(result.stdout), contract)
 
     def test_interlude_styles_render_finite_audio(self) -> None:
         sample_rate = 48_000

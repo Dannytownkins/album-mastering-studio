@@ -654,17 +654,28 @@ Added `desktop/src/livePreviewConfig.json` as the shared definition point for th
 
 The shared config has now been tuned toward Python export intent: low shelf `105 Hz`, presence `3.2 kHz`, air `9.8 kHz`, and a lighter hard-knee Intensity curve. This reduced the provided real-song export/live LUFS-proxy delta from roughly `3.92 dB` to roughly `0.715 dB` in the automated comparison, while the synthetic fixture still shows a material mismatch.
 
+The Python engine now owns the preview contract through `live_preview_contract()` and the CLI command:
+
+```powershell
+album-master preview-contract --json
+```
+
+The contract exposes the modeled Web Audio controls and the unmodeled export stages. A Python regression test compares `desktop/src/livePreviewConfig.json` against this engine contract so the app/test model cannot silently drift from the export intent constants.
+
 Verification after the extraction:
 
 - `npm run build`
 - `npm run tauri:build`
 - `npm run test:tauri-track-preview-ui`
 - `npm run test:tauri-real-song-performance` with `Lay the Money on the Desk (1).mp3`
+- `python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_config_matches_engine_contract`
+- `npm run test:tauri-webview`
 
 Interpretation:
 
 - This reduces drift between the running UI and the automated comparison model.
 - It is still a shared definition for a temporary Web Audio approximation, not shared DSP with the Python export engine.
+- The contract makes the approximation boundary executable: modeled controls are `Low`, `Mid`, `High`, `Width`, and `Intensity`; unmodeled export stages include preset base tone, highpass, low-mid EQ, brightness, warmth/saturation, transient shaping, LUFS match, ceiling limiting, and codec QC.
 - The next real parity step is to define or generate common intent/DSP parameters that both offline export and the live path consume, or to move the live path toward a native engine that can share those definitions directly.
 
 ## Real-Source Album Playback Stability
