@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import livePreviewConfig from "./livePreviewConfig.json";
-import type { Analysis, ProductRenderResult, RenderManifest, Settings, SourceValidation, Track, TransitionArtifact } from "./types";
+import type { Analysis, CodecPreview, ProductRenderResult, RenderManifest, Settings, SourceValidation, Track, TransitionArtifact } from "./types";
 
 const MAX_TRACKS = 8;
 const MAX_HISTORY = 80;
@@ -45,7 +45,7 @@ type PlayItem = {
   label: string;
   path: string;
   originalPath: string;
-  kind: "source" | "master" | "album" | "transition" | "reference";
+  kind: "source" | "master" | "album" | "transition" | "reference" | "codec";
   trackId?: string;
 };
 
@@ -566,6 +566,11 @@ function App() {
     selectedTrack && previewArtifact?.trackId === selectedTrack.id && previewArtifact.revision === sessionRevision
       ? previewArtifact.warnings ?? selectedTrack.qualityWarnings ?? []
       : selectedTrack?.qualityWarnings ?? [];
+  const codecPreviews = useMemo(() => (hasStaleRender ? [] : manifest?.codec_previews ?? []), [manifest, hasStaleRender]);
+  const selectedCodecPreviews = useMemo(
+    () => codecPreviewsForTrack(codecPreviews, selectedTrack),
+    [codecPreviews, selectedTrack],
+  );
   const albumTrackItems = useMemo(() => (hasStaleRender ? [] : manifestTrackItems(manifest)), [manifest, hasStaleRender]);
   const albumRolePreviews = useMemo(
     () => buildAlbumRolePreviews(tracks, albumTrackItems),
@@ -2434,6 +2439,33 @@ function App() {
                 </div>
               </div>
             )}
+            {selectedCodecPreviews.length > 0 && (
+              <div className="codec-preview-panel">
+                <div className="panel-title compact">
+                  <span>Codec Previews</span>
+                  <small>{selectedCodecPreviews.length}</small>
+                </div>
+                <div className="codec-preview-actions">
+                  {selectedCodecPreviews.map((preview, index) => (
+                    <button
+                      key={`${preview.codec ?? "codec"}-${preview.output ?? index}`}
+                      disabled={!preview.output}
+                      onClick={() =>
+                        selectedTrack && preview.output && setAudio({
+                          label: `${selectedTrack.title} - ${preview.codec ?? `Codec ${index + 1}`}`,
+                          path: preview.output,
+                          kind: "codec",
+                          trackId: selectedTrack.id,
+                        })
+                      }
+                      title={`${preview.codec ?? "Codec preview"} ${formatCodecShift(preview)}`.trim()}
+                    >
+                      <Volume2 size={15} /> {preview.codec ?? `Codec ${index + 1}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {selectedWarnings.length ? (
               <ul>
                 {selectedWarnings.slice(0, 5).map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}
@@ -3329,6 +3361,24 @@ function fileStem(path: string) {
 
 function samePath(a: string, b: string) {
   return a.toLowerCase().replace(/\//g, "\\") === b.toLowerCase().replace(/\//g, "\\");
+}
+
+function pathInside(path: string, root: string) {
+  const normalizedPath = path.toLowerCase().replace(/\//g, "\\");
+  const normalizedRoot = root.toLowerCase().replace(/\//g, "\\").replace(/\\+$/, "");
+  return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}\\`);
+}
+
+function codecPreviewsForTrack(previews: CodecPreview[], track: Track | null) {
+  if (!track?.lastOutputDir) return [];
+  return previews.filter((preview) => preview.output && pathInside(preview.output, track.lastOutputDir ?? ""));
+}
+
+function formatCodecShift(preview: CodecPreview) {
+  const parts: string[] = [];
+  if (Number.isFinite(preview.lufs_shift)) parts.push(`${preview.lufs_shift! >= 0 ? "+" : ""}${preview.lufs_shift!.toFixed(2)} LUFS`);
+  if (Number.isFinite(preview.true_peak_shift_db)) parts.push(`${preview.true_peak_shift_db! >= 0 ? "+" : ""}${preview.true_peak_shift_db!.toFixed(2)} dB peak`);
+  return parts.length ? `(${parts.join(", ")})` : "";
 }
 
 function livePreviewTuning(settings: Settings): Record<string, number> {

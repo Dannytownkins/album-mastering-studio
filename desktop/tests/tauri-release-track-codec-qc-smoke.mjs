@@ -96,6 +96,12 @@ try {
   assert.equal(evidence.trackBatchReceiptTextIncludesBatchSummary, true);
   assert.equal(evidence.trackBatchReceiptTextIncludesCodecQc, true);
   assert.equal(evidence.trackBatchReceiptTextIncludesFourCodecPaths, true);
+  assert.equal(evidence.codecPreviewRailVisible, true);
+  assert.equal(evidence.codecPreviewButtonCount, 2);
+  assert.equal(evidence.aacCodecPreviewReady, true);
+  assert.match(evidence.codecTransportLabel, /AAC 256k/);
+  assert.equal(evidence.nativeCodecPreviewStarted, true);
+  assert.equal(evidence.nativeCodecPreviewStopped, true);
   assert.equal(evidence.trackManifestCount, 2);
   assert.deepEqual(evidence.trackManifestCodecPreviewFlags, [true, true]);
   assert.equal(evidence.codecPreviewCount, 4);
@@ -242,6 +248,33 @@ function trackCodecQcExpression() {
   if (!exportRoot) {
     throw new Error('Could not find Track Master export root in log: ' + log.slice(-2000));
   }
+  const codecPreviewRailVisible = await waitFor(
+    () => text(document.querySelector('.codec-preview-panel')).includes('Codec Previews') &&
+      text(document.querySelector('.codec-preview-panel')).includes('AAC 256k') &&
+      text(document.querySelector('.codec-preview-panel')).includes('Opus 192k'),
+    10000,
+  );
+  const codecPreviewButtonCount = Array.from(document.querySelectorAll('.codec-preview-actions button')).length;
+  const aacButton = buttonByText('AAC 256k');
+  aacButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const transportLabel = () => text(document.querySelector('.transport-label'));
+  const aacCodecPreviewReady = await waitFor(
+    () => logText().includes('Playback ready: Codec QC Fixture 1 - AAC 256k') && transportLabel().includes('AAC 256k'),
+    30000,
+  );
+  const codecTransportLabel = transportLabel();
+  const nativePlayButton = buttonByText('Native Play');
+  nativePlayButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const nativeCodecPreviewStarted = await waitFor(
+    () => text(document.querySelector('.native-audition-status')).includes('Native playback playing'),
+    30000,
+  );
+  const nativeStopButton = buttonByText('Native Stop');
+  nativeStopButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const nativeCodecPreviewStopped = await waitFor(
+    () => text(document.querySelector('.native-audition-status')).includes('Native transport ready'),
+    10000,
+  );
   return JSON.stringify({
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     activeMode,
@@ -253,6 +286,12 @@ function trackCodecQcExpression() {
     trackBatchReceiptTextIncludesBatchSummary: trackBatchReceiptText.includes('2 track(s), 0 transition(s)'),
     trackBatchReceiptTextIncludesCodecQc: trackBatchReceiptText.includes('Codec QC'),
     trackBatchReceiptTextIncludesFourCodecPaths: trackBatchReceiptText.includes('4 codec preview path(s) exist'),
+    codecPreviewRailVisible,
+    codecPreviewButtonCount,
+    aacCodecPreviewReady,
+    codecTransportLabel,
+    nativeCodecPreviewStarted,
+    nativeCodecPreviewStopped,
     exportRoot
   });
 })()

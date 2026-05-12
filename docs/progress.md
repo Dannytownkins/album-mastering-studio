@@ -2,6 +2,52 @@
 
 ## 2026-05-12
 
+### Track Master Codec Preview Audition Rail
+
+- Added a selected-track `Codec Previews` rail to the Track Master Quality Checks panel after renders that produce codec preview artifacts.
+- The rail shows the selected track's AAC and Opus previews and routes them through the existing playback-cache path, so the WebView transport can audition the generated codec file.
+- Extended the packaged Track Master Codec QC smoke to click the visible `AAC 256k` preview, verify WebView playback handoff, then click `Native Play` and verify the prepared codec preview also starts and stops through the native Windows audio path.
+
+Verification:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-release-track-codec-qc-smoke.mjs
+cd desktop
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-track-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Node syntax check passed for the packaged Track Master Codec QC smoke.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Master Codec QC smoke passed against the fresh release EXE.
+- Desktop CLI-contract integration passed.
+- Python compile passed.
+- `git diff --check` passed.
+- Evidence: `test-output\tauri-release-track-codec-qc-smoke\tauri-release-track-codec-qc-smoke.json`.
+- Evidence values:
+  - `codecPreviewRailVisible: true`
+  - `codecPreviewButtonCount: 2`
+  - `aacCodecPreviewReady: true`
+  - `codecTransportLabel: Codec QC Fixture 1 - AAC 256k`
+  - `nativeCodecPreviewStarted: true`
+  - `nativeCodecPreviewStopped: true`
+
+Honest gap:
+
+- This proves generated codec previews can be auditioned from the app and through native playback. It does not mean a human has approved the codec preview sound.
+
+Next unattended slice:
+
+- The remaining hard blocker is still actual human listening approval. Without the user actively judging sound, continue with small release evidence gaps only where they improve the real workflow.
+
 ### Real-Song Track Master Codec QC Smoke
 
 - Added `npm run test:tauri-real-song-codec-qc`, an opt-in wrapper around the real-song Track Master packaged smoke.

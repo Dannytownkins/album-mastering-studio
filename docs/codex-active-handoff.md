@@ -17,7 +17,60 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Real-Song Track Master Codec QC Smoke
+## Latest Codex Pass: Track Master Codec Preview Audition Rail
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/tests/tauri-release-track-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added a selected-track `Codec Previews` rail to the Track Master Quality Checks panel when a render/export includes codec preview artifacts.
+- The rail shows AAC/Opus preview buttons for the selected track and routes them through the existing playback-cache path via `setAudio`.
+- Extended the packaged Track Master Codec QC smoke to click `AAC 256k`, verify the WebView transport handoff, then use visible `Native Play` / `Native Stop` to prove the prepared codec preview is playable through the native Windows audio path.
+
+Verification already run:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-release-track-codec-qc-smoke.mjs
+cd desktop
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-track-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-track-codec-qc-smoke\tauri-release-track-codec-qc-smoke.json`
+- Relevant fields:
+  - `codecPreviewRailVisible: true`
+  - `codecPreviewButtonCount: 2`
+  - `aacCodecPreviewReady: true`
+  - `codecTransportLabel: Codec QC Fixture 1 - AAC 256k`
+  - `nativeCodecPreviewStarted: true`
+  - `nativeCodecPreviewStopped: true`
+
+Remaining gap:
+
+- Codec preview artifacts are now generated, checked, and auditionable in the app. Human listening approval is still not recorded.
+
+Next useful slice:
+
+- If the user is available, run a real listening pass with `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` and record approval or concrete sound problems in the Listening Pass panel.
+
+## Previous Codex Pass: Real-Song Track Master Codec QC Smoke
 
 Date: 2026-05-12
 
