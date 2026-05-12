@@ -17,7 +17,41 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Live Preview Contract Drift Guard
+## Latest Codex Pass: Goal Coverage Audit
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `docs/GOAL_AUDIT.md`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Added a goal-level coverage audit so compactions and agent loops have one short source for what is verified, what is still blocked, and what should happen next.
+- The audit explicitly keeps the active goal marked active, not complete.
+- It maps the current evidence for Track Master, the Python engine contract, Album Master, docs/progress handoff, local/offline packaging, and release build coverage.
+- It records the hard blockers: no recorded human listening approval, Live Preview is still approximate rather than shared/export-engine faithful DSP, and OS file-picker Open/Save-As flows are not automated.
+- The read-only agent scout identified the next best unattended code slice: add an engine-owned deterministic first-control Live Preview model renderer so evidence stops depending on JS-only DSP logic.
+
+Verification already run:
+
+```powershell
+git diff --check
+rg -n "Status: active, not complete|Completion Blockers|Next Unattended Slices" docs\GOAL_AUDIT.md
+```
+
+Remaining gap:
+
+- This is a handoff and audit slice, not a product feature. Continue one verified vertical slice at a time.
+
+Next useful slice:
+
+- If the user is present, run and record a real listening pass.
+- If working unattended, implement the engine-owned deterministic Live Preview model renderer, then continue shared/native live DSP parity or add reliable coverage for a still-unautomated release workflow such as project Open/Save-As.
+
+## Previous Codex Pass: Live Preview Contract Drift Guard
 
 Date: 2026-05-12
 

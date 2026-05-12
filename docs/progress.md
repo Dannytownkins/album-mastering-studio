@@ -2,6 +2,30 @@
 
 ## 2026-05-12
 
+### Goal Coverage Audit Slice
+
+- Added `docs/GOAL_AUDIT.md` as a compaction-safe coverage map for the active rebuild goal.
+- The audit separates covered areas from open blockers instead of implying the goal is complete.
+- It records the current evidence anchors for Track Master, Python engine contract, Album Master, local/offline packaging, docs handoff, and release packaging.
+- It keeps the honest blockers explicit: no recorded human listening approval, Web Audio Live Preview is still approximate, and OS file-picker Open/Save-As flows are not automated.
+- The read-only agent scout identified the next best unattended code slice: move the deterministic first-control Live Preview model into the Python engine as a reference output before attempting native/shared DSP parity.
+
+Verification:
+
+```powershell
+git diff --check
+rg -n "Status: active, not complete|Completion Blockers|Next Unattended Slices" docs\GOAL_AUDIT.md
+```
+
+Results:
+
+- Markdown/doc diff hygiene passed.
+- Goal audit anchors and blocker sections are present.
+
+Honest gap:
+
+- This improves the handoff loop and prevents premature completion claims; it is not a product feature and does not close the listening or live-DSP parity gaps.
+
 ### Live Preview Contract Drift Guard Slice
 
 - Added a runtime guard that compares the loaded Python engine Live Preview contract against the bundled Web Audio config used by the frontend.
