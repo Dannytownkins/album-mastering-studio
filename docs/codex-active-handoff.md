@@ -17,7 +17,63 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Native Live Preview Playback Handoff
+## Latest Codex Pass: Visible Track Reorder Controls
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added visible Move Up and Move Down controls to each Track Master library row.
+- The controls preserve the selected track and invalidate stale render evidence through the same state-change path as drag/drop reordering.
+- Extended the packaged Track Preview smoke so the release WebView moves Track 2 into slot 1 before preview/export work, then continues the existing Track Master smoke.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `trackOrderBeforeReorder: [Preview Fixture 1, Preview Fixture 2]`
+  - `moveUpEnabledBefore: true`
+  - `trackOrderAfterReorder: [Preview Fixture 2, Preview Fixture 1]`
+  - `selectedHeading: Track 2`
+  - `selectedHeadingAfterReorder: Track 1`
+  - `movedTrackSelected: true`
+  - `trackBatchReceiptVisible: true`
+  - `trackBatchReceiptTextIncludesTwoRenderedPaths: true`
+
+Remaining gap:
+
+- Reordering now has visible packaged evidence. Human listening approval, continuous native DSP parity, and OS file-picker Open/Save-As automation remain open.
+
+Next useful slice:
+
+- Keep the OS file-picker blocker documented unless a reliable native-dialog automation route is found, or add another narrow packaged smoke for an uncovered non-dialog workflow.
+- If the user is present, run and record a real listening pass.
+
+## Previous Codex Pass: Native Live Preview Playback Handoff
 
 Date: 2026-05-12
 

@@ -1519,6 +1519,27 @@ function App() {
     });
   }
 
+  function moveTrack(id: string, direction: -1 | 1) {
+    const from = tracks.findIndex((track) => track.id === id);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= tracks.length) return;
+    markDirty();
+    setManifest(null);
+    setExportChecks(null);
+    setDashboardPath("");
+    setRenderRevision(null);
+    setTracks((current) => {
+      const currentFrom = current.findIndex((track) => track.id === id);
+      const currentTo = currentFrom + direction;
+      if (currentFrom < 0 || currentTo < 0 || currentTo >= current.length) return current;
+      const next = [...current];
+      const [moved] = next.splice(currentFrom, 1);
+      next.splice(currentTo, 0, moved);
+      return next;
+    });
+    setSelectedTrackId(id);
+  }
+
   async function setAudio(item: Omit<PlayItem, "originalPath">) {
     setComparePair(null);
     setProgressLabel(`Preparing ${item.kind} playback.`);
@@ -2085,15 +2106,42 @@ function App() {
                   <WaveformMini bins={track.waveform} active={selectedTrackId === track.id} />
                   <small>{analysisChip(track)}</small>
                 </span>
-                <span
-                  className="icon-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    removeTrack(track.id);
-                  }}
-                  title="Remove track"
-                >
-                  <Trash2 size={15} />
+                <span className="track-actions" aria-label={`Track actions for ${track.title}`}>
+                  <span
+                    className={`icon-button ${index === 0 ? "disabled" : ""}`}
+                    role="button"
+                    aria-disabled={index === 0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (index > 0) moveTrack(track.id, -1);
+                    }}
+                    title="Move track up"
+                  >
+                    <ChevronUp size={14} />
+                  </span>
+                  <span
+                    className={`icon-button ${index === tracks.length - 1 ? "disabled" : ""}`}
+                    role="button"
+                    aria-disabled={index === tracks.length - 1}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (index < tracks.length - 1) moveTrack(track.id, 1);
+                    }}
+                    title="Move track down"
+                  >
+                    <ChevronDown size={14} />
+                  </span>
+                  <span
+                    className="icon-button danger"
+                    role="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeTrack(track.id);
+                    }}
+                    title="Remove track"
+                  >
+                    <Trash2 size={14} />
+                  </span>
                 </span>
               </button>
             ))}

@@ -2,6 +2,52 @@
 
 ## 2026-05-12
 
+### Visible Track Reorder Controls Slice
+
+- Added visible Move Up and Move Down controls to each Track Master library row, alongside the existing remove action.
+- The controls preserve the selected track, invalidate stale render evidence, and give a keyboard/mouse-friendly alternative to drag/drop-only ordering.
+- Extended the packaged Track Preview smoke so the release WebView moves Track 2 into slot 1 before rendering, then continues the existing preview, region, Live Preview, native playback, and batch export checks.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node smoke syntax check passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Preview UI smoke passed against the fresh release EXE.
+- Diff hygiene passed.
+- Evidence values:
+  - `trackOrderBeforeReorder: [Preview Fixture 1, Preview Fixture 2]`
+  - `moveUpEnabledBefore: true`
+  - `trackOrderAfterReorder: [Preview Fixture 2, Preview Fixture 1]`
+  - `selectedHeading: Track 2`
+  - `selectedHeadingAfterReorder: Track 1`
+  - `movedTrackSelected: true`
+  - `trackBatchReceiptVisible: true`
+  - `trackBatchReceiptTextIncludesTwoRenderedPaths: true`
+
+Honest gap:
+
+- Reordering now has visible packaged evidence. This does not close human listening approval, continuous native DSP parity, or OS file-picker Open/Save-As automation.
+
+Next unattended slice:
+
+- Keep the OS file-picker blocker documented unless a reliable native-dialog automation route is found, or add another narrow packaged smoke for an uncovered non-dialog workflow.
+
 ### Native Live Preview Playback Handoff Slice
 
 - Wired the visible `Native Play` transport control to honor active source Live Preview.

@@ -132,6 +132,11 @@ try {
   assert.equal(evidence.activeMode, "Track Master");
   assert.equal(evidence.trackCountLabel, "2 / 8 tracks");
   assert.equal(evidence.selectedHeading, "Track 2");
+  assert.deepEqual(evidence.trackOrderBeforeReorder, ["Preview Fixture 1", "Preview Fixture 2"]);
+  assert.equal(evidence.moveUpEnabledBefore, true);
+  assert.deepEqual(evidence.trackOrderAfterReorder, ["Preview Fixture 2", "Preview Fixture 1"]);
+  assert.equal(evidence.selectedHeadingAfterReorder, "Track 1");
+  assert.equal(evidence.movedTrackSelected, true);
   assert.equal(evidence.previewButtonEnabledBefore, true);
   assert.equal(evidence.previewReadyVisible, true);
   assert.equal(evidence.masterStatusAfterPreview, "Master ready");
@@ -495,6 +500,25 @@ function trackPreviewExpression() {
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
   const trackCountLabel = text(document.querySelector('.library .panel-title span'));
   const selectedHeading = text(document.querySelector('.selected-heading .eyebrow'));
+  const trackTitles = () => Array.from(document.querySelectorAll('.track-row .track-summary strong')).map((item) => text(item));
+  const trackOrderBeforeReorder = trackTitles();
+  const selectedMoveUp = document.querySelector('.track-row.selected [title="Move track up"]');
+  const moveUpEnabledBefore = selectedMoveUp?.getAttribute('aria-disabled') === 'false';
+  selectedMoveUp?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const reorderApplied = await waitFor(() => {
+    const order = trackTitles();
+    return order[0] === 'Preview Fixture 2' && order[1] === 'Preview Fixture 1';
+  }, 5000);
+  if (!reorderApplied) {
+    throw new Error('Track reorder did not move selected track up: ' + JSON.stringify({
+      before: trackOrderBeforeReorder,
+      after: trackTitles(),
+      selectedHeading: text(document.querySelector('.selected-heading .eyebrow'))
+    }));
+  }
+  const trackOrderAfterReorder = trackTitles();
+  const selectedHeadingAfterReorder = text(document.querySelector('.selected-heading .eyebrow'));
+  const movedTrackSelected = selectedHeadingAfterReorder === 'Track 1';
   const previewButton = buttonByText('Update Preview');
   const previewButtonEnabledBefore = !previewButton.disabled;
   previewButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -879,6 +903,11 @@ function trackPreviewExpression() {
     activeMode,
     trackCountLabel,
     selectedHeading,
+    trackOrderBeforeReorder,
+    moveUpEnabledBefore,
+    trackOrderAfterReorder,
+    selectedHeadingAfterReorder,
+    movedTrackSelected,
     previewButtonEnabledBefore,
     previewReadyVisible,
     previewMasterPath,

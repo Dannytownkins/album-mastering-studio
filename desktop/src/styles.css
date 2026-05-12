@@ -448,9 +448,28 @@ label {
   color: var(--muted);
 }
 
+.track-actions {
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+}
+
 .icon-button:hover {
+  border-color: var(--gold);
+  color: var(--text);
+}
+
+.icon-button.danger:hover {
   border-color: var(--red);
   color: var(--red);
+}
+
+.icon-button.disabled,
+.icon-button.disabled:hover {
+  border-color: var(--line-soft);
+  color: var(--faint);
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .wave-mini {

@@ -25,7 +25,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Goal area | Current evidence | Status |
 | --- | --- | --- |
 | Start from existing repo | Work continues in `src/album_mastering_studio`, `desktop/`, and the existing `.ams.json` workflow. | Covered |
-| Track Master-first Tauri surface | Packaged Track Preview smoke covers mode, two-track rail, preview render, waveform region, loop, seek, A/B, Volume Match, Live Preview first controls, stale state, Update Preview, Render Region, and batch export receipt. | Covered with caveats |
+| Track Master-first Tauri surface | Packaged Track Preview smoke covers mode, two-track rail, visible reorder controls, preview render, waveform region, loop, seek, A/B, Volume Match, Live Preview first controls, stale state, Update Preview, Render Region, and batch export receipt. | Covered with caveats |
 | Python engine contract | `album-master preview-contract --json`, `live_preview_contract()`, and unit regression keep `desktop/src/livePreviewConfig.json` aligned with engine-owned control definitions. | Covered |
 | Album Master path | Automated release evidence covers multi-source and full-source Album Master render, transitions, album WAV, dashboard, export checks, and native album playback stability. | Covered with listening caveat |
 | Docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and `docs/ENGINE_DECISION_RECORD.md` record current evidence and known gaps. | Covered |
@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 visible track reorder controls: packaged Track Preview smoke clicks Move Up on Track 2, verifies the order changes from `[Preview Fixture 1, Preview Fixture 2]` to `[Preview Fixture 2, Preview Fixture 1]`, verifies the moved track remains selected as `Track 1`, then continues through preview and batch export checks.
 - 2026-05-12 native Live Preview playback handoff: packaged Track Preview smoke clicks visible `Native Play` with source Live Preview active and verifies `Native Live Preview playing`, `Rust model: 1.36 width, 0.40 intensity`, a 192000-frame Rust model output, and clean stop.
 - 2026-05-12 native Live Preview model oracle: packaged Track Preview smoke prepares one source through `prepare_playback_file`, renders both the Python sidecar model and Rust native offline model from that source, and compares 192000 frames at 48000 Hz with `rms_difference_dbfs: -101.14268111252326` and `max_abs_difference: 1.5288591384887695e-05`.
 - 2026-05-12 native playback probe for the Live Preview model: packaged Track Preview smoke prepares the Tauri-rendered model WAV for playback and probes it through native audio with zero stream errors.
