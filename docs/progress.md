@@ -2,6 +2,45 @@
 
 ## 2026-05-12
 
+### Shared First-Control Live Model Helper Slice
+
+- Extracted the deterministic first-control live-model comparator into `desktop/tests/live-preview-model.mjs`.
+- Updated both `desktop/tests/tauri-track-preview-ui-smoke.mjs` and `desktop/tests/tauri-real-song-performance-smoke.mjs` to use the same helper and tuning object.
+- The helper now reports both direct material mismatch and whether the Python export changes loudness more than the live model, because the synthetic fixture and real MP3 differ in mismatch direction.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Results:
+
+- Node syntax checks passed.
+- Release-backed Track Preview UI smoke passed.
+- Release-backed real-song performance smoke passed.
+- Track Preview evidence: `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Real-song evidence: `test-output\tauri-real-song-performance-smoke\tauri-real-song-performance-smoke.json`
+- Evidence values:
+  - Track Preview `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Track Preview `exportVsLiveComparison.exportDominatesLiveLoudnessDelta: true`
+  - Track Preview `exportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 2.9612264914739566`
+  - Real song `realSongExportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Real song `realSongExportVsLiveComparison.exportDominatesLiveLoudnessDelta: false`
+  - Real song `realSongExportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 3.919839091548681`
+  - Real song `realSongExportVsLiveComparison.compared_frames: 8943359`
+
+Honest gap:
+
+- This keeps the synthetic and real-song evidence paths aligned. It does not make Live Preview export-engine faithful.
+
 ### Real-Song First-Control Export Vs Live Smoke Slice
 
 - Extended `desktop/tests/tauri-real-song-performance-smoke.mjs` so the release-backed real-song performance smoke now records first-control export-vs-live evidence against the user-provided MP3.

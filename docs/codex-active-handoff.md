@@ -17,7 +17,60 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Real-Song First-Control Export Vs Live Smoke
+## Latest Codex Pass: Shared First-Control Live Model Helper
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/live-preview-model.mjs`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `desktop/tests/tauri-real-song-performance-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Extracted the deterministic `web-audio-first-control-model` comparator into a shared smoke-test helper.
+- Updated the synthetic Track Preview smoke and the real-song performance smoke to use the same first-control tuning and comparison logic.
+- The helper reports both direct material mismatch and `exportDominatesLiveLoudnessDelta`, because the synthetic fixture and real MP3 mismatch in different directions.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- `test-output\tauri-real-song-performance-smoke\tauri-real-song-performance-smoke.json`
+- Relevant fields:
+  - Track Preview `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Track Preview `exportVsLiveComparison.exportDominatesLiveLoudnessDelta: true`
+  - Track Preview `exportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 2.9612264914739566`
+  - Real song `realSongExportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Real song `realSongExportVsLiveComparison.exportDominatesLiveLoudnessDelta: false`
+  - Real song `realSongExportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 3.919839091548681`
+  - Real song `realSongExportVsLiveComparison.compared_frames: 8943359`
+
+Remaining gap:
+
+- This keeps the automated evidence paths consistent. It does not make Web Audio Live Preview export-engine faithful or record human listening approval.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
+
+## Previous Codex Pass: Real-Song First-Control Export Vs Live Smoke
 
 Date: 2026-05-12
 
@@ -67,11 +120,6 @@ Evidence:
 Remaining gap:
 
 - This adds real-user-audio evidence for the current first-control mismatch. Web Audio Live Preview remains approximate, not shared/export-engine DSP parity, and no human listening approval has been recorded.
-
-Next useful slice:
-
-- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
-- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
 
 ## Previous Codex Pass: First-Control Export Vs Live Model Smoke
 
