@@ -43,6 +43,16 @@ export type TransitionArtifact = {
   rationale?: string;
 };
 
+export type CodecPreview = {
+  codec?: string;
+  output?: string;
+  analysis?: Analysis;
+  lufs_shift?: number | null;
+  true_peak_shift_db?: number | null;
+  warning?: string;
+  warnings?: string[];
+};
+
 export type RenderManifest = {
   track_count: number;
   interlude_count: number;
@@ -54,8 +64,10 @@ export type RenderManifest = {
     masters_dir?: string;
     interludes_dir?: string;
     album_sequence?: string | null;
+    codec_previews_dir?: string | null;
   };
   sequence?: Array<Record<string, unknown>>;
+  codec_previews?: CodecPreview[];
   warnings?: string[];
   dashboard?: string;
   settings?: Record<string, unknown>;

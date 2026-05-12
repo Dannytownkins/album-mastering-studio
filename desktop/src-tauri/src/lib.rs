@@ -773,7 +773,7 @@ fn run_export_checks(manifest: Value) -> Result<Value, String> {
             "detail": "Not requested for this render."
         }));
     }
-    if codec_preview_requested && album_wav_requested {
+    if codec_preview_requested {
         push_export_check(
             &mut checks,
             &mut fail_count,

@@ -17,7 +17,66 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Track Preview Dashboard Handoff
+## Latest Codex Pass: Track Master Codec QC Receipt
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `src/album_mastering_studio/pipeline.py`
+- `tests/test_pipeline.py`
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/src/App.tsx`
+- `desktop/src/types.ts`
+- `desktop/package.json`
+- `desktop/tests/tauri-release-track-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Track-only renders now produce per-track AAC and Opus codec previews when `codec_preview` is enabled.
+- Track Master batch export now aggregates each independent track render's codec preview records into the batch receipt manifest.
+- `run_export_checks` now checks Codec QC whenever the manifest requested codec previews, not only when an album WAV exists.
+- Added `npm run test:tauri-release-track-codec-qc`, a packaged release EXE smoke that restores a two-track Track Master session with `Codec QC` enabled, clicks `Export Master`, verifies the visible receipt, and checks the per-track manifests and codec files.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-release-track-codec-qc-smoke.mjs
+python -m unittest tests.test_pipeline.PipelineTest.test_track_only_codec_preview_creates_per_track_qc_files
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-track-codec-qc
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-track-codec-qc-smoke\tauri-release-track-codec-qc-smoke.json`
+- Relevant fields:
+  - receipt text includes `Codec QC4 codec preview path(s) exist`
+  - `trackManifestCodecPreviewFlags: [true, true]`
+  - `codecPreviewCount: 4`
+  - `codecPreviewOutputsExist: true`
+  - codec list includes two `AAC 256k` previews and two `Opus 192k` previews
+
+Remaining gap:
+
+- Codec previews are now generated and checked in the packaged Track Master export path, but their musical acceptability still needs human listening.
+
+Next useful slice:
+
+- Continue closing small release-smoke evidence gaps, or use `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` for a real-song Track Master listening pass when the user is ready to judge the sound.
+
+## Previous Codex Pass: Track Preview Dashboard Handoff
 
 Date: 2026-05-12
 

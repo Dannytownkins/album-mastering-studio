@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Track Master Codec QC receipt: packaged release EXE smoke verifies a two-track Track Master export with `Codec QC` enabled shows `4 codec preview path(s) exist`, writes two per-track manifests with `codec_preview: true`, and creates two AAC plus two Opus codec preview files that exist on disk.
 - 2026-05-12 Track Preview dashboard handoff: packaged Track Preview smoke verifies `Update Preview` populates the embedded dashboard pane, exposes an `asset.localhost` dashboard iframe, and enables visible `Open HTML`.
 - 2026-05-12 Album Master state safety: packaged release EXE smoke verifies Undo/Redo for album title, generated transitions, boundary style/seconds, selected-track role, and selected-track preset, then confirms the redone Album Master state persists through autosave.
 - 2026-05-12 visible reference playback: packaged Track Preview smoke seeds a reference track, clicks the visible `Reference` button, and verifies `Reference playback`, transport label `01_track_preview_fixture - Reference`, and unprocessed comparison copy before continuing the full Track Master smoke.

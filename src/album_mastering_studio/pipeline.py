@@ -365,12 +365,18 @@ def render_sequence(
 
     sequence: list[dict] = []
     rendered_interludes: dict[int, np.ndarray] = {}
+    codec_previews: list[dict] = []
     for index, (track, audio, result, track_arc) in enumerate(mastered, start=1):
         source = track.path
         title = track.title or source.stem
         output_path = masters_dir / f"{index:02d}_{_slug(title)}_mastered.{options.output_format}"
         track_warnings = _track_warnings(title, result.before, result.after, result.ceiling_dbfs, result.target_lufs, result.applied_gain_db)
         warnings.extend(f"Track {index}: {warning}" for warning in track_warnings)
+        if options.codec_preview and not options.album_wav:
+            track_codec_previews = _codec_preview_report(audio, output_dir, options, result.after, output_stem=output_path.stem)
+            codec_previews.extend(track_codec_previews)
+            for preview in track_codec_previews:
+                warnings.extend(f"Track {index} codec {preview['codec']}: {warning}" for warning in preview.get("warnings", []))
         sequence.append(
             {
                 "type": "track",
@@ -468,7 +474,6 @@ def render_sequence(
     cue_json_path: Path | None = None
     cue_sheet_path: Path | None = None
     cue_points: list[dict] = []
-    codec_previews: list[dict] = []
     if options.album_wav:
         _progress(progress, "album", "Rendering continuous album WAV", completed_steps, total_steps)
         album_path = output_dir / "album_sequence.wav"
@@ -1257,14 +1262,21 @@ def _transition_target_lufs(left_lufs: float, right_lufs: float, style: str) -> 
     return float(np.clip(target, lower, upper))
 
 
-def _codec_preview_report(samples: np.ndarray, output_dir: Path, options: RenderOptions, album_analysis) -> list[dict]:
+def _codec_preview_report(
+    samples: np.ndarray,
+    output_dir: Path,
+    options: RenderOptions,
+    reference_analysis,
+    output_stem: str = "album_sequence",
+) -> list[dict]:
     if not options.codec_preview:
         return []
     preview_dir = output_dir / "codec_previews"
     preview_dir.mkdir(parents=True, exist_ok=True)
     previews = []
+    safe_stem = _slug(output_stem) or "codec_preview"
     for codec, suffix in (("AAC 256k", ".m4a"), ("Opus 192k", ".opus")):
-        output_path = preview_dir / f"album_sequence_{suffix.lstrip('.')}{suffix}"
+        output_path = preview_dir / f"{safe_stem}_{suffix.lstrip('.')}{suffix}"
         try:
             write_audio(output_path, samples, options.sample_rate, bit_depth=options.bit_depth)
             decoded = load_audio(output_path, options.sample_rate)
@@ -1282,8 +1294,8 @@ def _codec_preview_report(samples: np.ndarray, output_dir: Path, options: Render
                     "codec": codec,
                     "output": str(output_path),
                     "analysis": stats.to_dict(),
-                    "lufs_shift": round(stats.integrated_lufs - album_analysis.integrated_lufs, 4) if album_analysis else None,
-                    "true_peak_shift_db": round(stats.true_peak_dbfs - album_analysis.true_peak_dbfs, 4) if album_analysis else None,
+                    "lufs_shift": round(stats.integrated_lufs - reference_analysis.integrated_lufs, 4) if reference_analysis else None,
+                    "true_peak_shift_db": round(stats.true_peak_dbfs - reference_analysis.true_peak_dbfs, 4) if reference_analysis else None,
                     "warnings": preview_warnings,
                 }
             )

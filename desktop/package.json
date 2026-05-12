@@ -29,6 +29,7 @@
     "test:tauri-project-persistence": "node tests/tauri-project-persistence-smoke.mjs",
     "test:tauri-release-album-state": "node tests/tauri-release-album-state-smoke.mjs",
     "test:tauri-release-session-safety": "node tests/tauri-release-session-safety-smoke.mjs",
+    "test:tauri-release-track-codec-qc": "node tests/tauri-release-track-codec-qc-smoke.mjs",
     "test:tauri-track-preview-ui": "node tests/tauri-track-preview-ui-smoke.mjs"
   },
   "dependencies": {

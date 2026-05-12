@@ -1216,6 +1216,7 @@ function App() {
     try {
       const renderedTrackItems: ManifestTrackItem[] = [];
       const batchWarnings: string[] = [];
+      const batchCodecPreviews: NonNullable<RenderManifest["codec_previews"]> = [];
       let lastDashboard = "";
       for (let index = 0; index < tracks.length; index += 1) {
         const track = tracks[index];
@@ -1238,6 +1239,7 @@ function App() {
           });
         }
         batchWarnings.push(...warnings);
+        batchCodecPreviews.push(...(loaded.codec_previews ?? []));
         updates.set(track.id, {
           masteredPath: trackItem?.output,
           masteredAnalysis: trackItem?.after,
@@ -1247,7 +1249,7 @@ function App() {
         lastDashboard = result.dashboard_path ?? "";
         setProgress((index + 1) / tracks.length);
       }
-      const batchManifest = buildTrackMasterBatchManifest(renderedTrackItems, batchWarnings, exportRoot);
+      const batchManifest = buildTrackMasterBatchManifest(renderedTrackItems, batchWarnings, exportRoot, settings.codecPreview, batchCodecPreviews);
       setTracks((current) => current.map((track) => ({ ...track, ...(updates.get(track.id) ?? {}) })));
       setRenderRevision(revisionAtStart);
       setPreviewArtifact(null);
@@ -3048,6 +3050,8 @@ function buildTrackMasterBatchManifest(
   renderedTracks: ManifestTrackItem[],
   warnings: string[],
   exportRoot: string,
+  codecPreview: boolean,
+  codecPreviews: NonNullable<RenderManifest["codec_previews"]>,
 ): RenderManifest {
   return {
     track_count: renderedTracks.length,
@@ -3056,7 +3060,9 @@ function buildTrackMasterBatchManifest(
     outputs: {
       masters_dir: exportRoot,
       album_sequence: null,
+      codec_previews_dir: null,
     },
+    codec_previews: codecPreviews,
     sequence: renderedTracks.map((track, index) => ({
       ...track,
       type: "track",
@@ -3065,7 +3071,7 @@ function buildTrackMasterBatchManifest(
     warnings,
     settings: {
       album_wav: false,
-      codec_preview: false,
+      codec_preview: codecPreview,
     },
   };
 }

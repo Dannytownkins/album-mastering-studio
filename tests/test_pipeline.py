@@ -76,6 +76,30 @@ class PipelineTest(unittest.TestCase):
             self.assertLessEqual(float(np.max(np.abs(album))), 1.0)
             self.assertGreater(float(np.sqrt(np.mean(np.square(album)))), 0.01)
 
+    def test_track_only_codec_preview_creates_per_track_qc_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "inputs"
+            output_dir = root / "outputs"
+            input_dir.mkdir()
+            self._write_sine(input_dir / "01_codec_track.wav", 220.0, 0.45)
+            self._write_sine(input_dir / "02_codec_track.wav", 330.0, 0.40)
+
+            manifest = render_album(
+                [input_dir],
+                output_dir,
+                RenderOptions(album_wav=False, codec_preview=True),
+            )
+
+            self.assertIsNone(manifest["album_sequence"])
+            self.assertTrue(manifest["settings"]["codec_preview"])
+            self.assertEqual(len(manifest["codec_previews"]), 4)
+            self.assertTrue(Path(manifest["outputs"]["codec_previews_dir"]).exists())
+            outputs = [Path(preview["output"]) for preview in manifest["codec_previews"]]
+            self.assertTrue(all(output.exists() for output in outputs))
+            self.assertTrue(any("01-codec-track-mastered" in output.name for output in outputs))
+            self.assertTrue(any("02-codec-track-mastered" in output.name for output in outputs))
+
     def test_album_sequence_reuses_rendered_interlude_audio(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
