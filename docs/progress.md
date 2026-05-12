@@ -2,6 +2,39 @@
 
 ## 2026-05-12
 
+### Export-Intent-Aligned Live Preview Config Slice
+
+- Tuned `desktop/src/livePreviewConfig.json` toward the Python export engine's first-control intent while keeping it explicitly identified as `web-audio-first-control-model`.
+- Moved the live model tone centers to `105 Hz`, `3.2 kHz`, and `9.8 kHz`, matching the current low/presence/air export-control regions more closely than the earlier coarse Web Audio values.
+- Replaced the exaggerated live Intensity curve with a lighter hard-knee curve and hardened the deterministic comparison helper for `kneeDb: 0`.
+- Updated the real-song performance smoke so it records whether the aligned model differs materially instead of requiring that mismatch to stay true for every source.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Results:
+
+- Node syntax checks passed.
+- Release-backed Track Preview UI smoke passed against the rebuilt EXE.
+- Release-backed real-song performance smoke passed against the rebuilt EXE.
+- Track Preview evidence still proves the synthetic export/live paths differ: `exportDiffersFromLiveMaterially: true`, `export_minus_live_lufs_proxy: 9.08023618964403`, `rms_difference_dbfs: -19.5359668627911`, and `exportAndLiveLoudnessDeltaDifference: 5.46180002967552`.
+- Real song evidence narrowed after alignment: `exportDiffersFromLiveMaterially: false`, `export_minus_live_lufs_proxy: 0.714872039163112`, `rms_difference_dbfs: -29.5362869826173`, and `exportAndLiveLoudnessDeltaDifference: 0.714872039163112`.
+- Real song compared frames remained `8943359`; modeled width remained `1.36`; modeled drive remained `0.4`.
+
+Honest gap:
+
+- The live model is better calibrated to export intent, but it is still a Web Audio approximation rather than shared/export-engine DSP or human listening approval.
+
 ### Shared Live Preview Definition Slice
 
 - Added `desktop/src/livePreviewConfig.json` as the single shared definition point for the current Web Audio first-control model.

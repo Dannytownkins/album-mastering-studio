@@ -105,9 +105,10 @@ def apply_static_compressor(audio, intensity):
     lower = threshold - knee / 2.0
     upper = threshold + knee / 2.0
     over = x_db > upper
-    knee_zone = (x_db >= lower) & (x_db <= upper)
     y_db[over] = threshold + (x_db[over] - threshold) / ratio
-    y_db[knee_zone] = x_db[knee_zone] + (1.0 / ratio - 1.0) * ((x_db[knee_zone] - lower) ** 2) / (2.0 * knee)
+    if knee > 0:
+        knee_zone = (x_db >= lower) & (x_db <= upper)
+        y_db[knee_zone] = x_db[knee_zone] + (1.0 / ratio - 1.0) * ((x_db[knee_zone] - lower) ** 2) / (2.0 * knee)
     gain = np.power(10.0, (y_db - x_db) / 20.0)
     return (audio * gain[:, None]).astype(np.float32), drive
 

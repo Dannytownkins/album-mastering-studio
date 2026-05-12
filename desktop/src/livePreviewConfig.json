@@ -10,16 +10,16 @@
   "filters": {
     "low": {
       "type": "lowshelf",
-      "frequencyHz": 160
+      "frequencyHz": 105
     },
     "mid": {
       "type": "peaking",
-      "frequencyHz": 1400,
+      "frequencyHz": 3200,
       "q": 0.9
     },
     "high": {
       "type": "highshelf",
-      "frequencyHz": 5600
+      "frequencyHz": 9800
     }
   },
   "width": {
@@ -29,13 +29,13 @@
     "max": 1.65
   },
   "compressor": {
-    "attackSeconds": 0.012,
-    "releaseSeconds": 0.12,
+    "attackSeconds": 0.015,
+    "releaseSeconds": 0.18,
     "thresholdBaseDbfs": -18,
-    "thresholdDriveScaleDb": 16,
-    "ratioBase": 1,
-    "ratioDriveScale": 3.5,
-    "kneeDb": 10
+    "thresholdDriveScaleDb": 3,
+    "ratioBase": 2,
+    "ratioDriveScale": 0.44,
+    "kneeDb": 0
   },
   "smoothingSeconds": 0.015
 }

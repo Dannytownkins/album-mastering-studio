@@ -17,7 +17,65 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Shared Live Preview Definition
+## Latest Codex Pass: Export-Intent-Aligned Live Preview Config
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/livePreviewConfig.json`
+- `desktop/tests/live-preview-model.mjs`
+- `desktop/tests/tauri-real-song-performance-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+
+What changed:
+
+- Tuned the shared Web Audio first-control config toward Python export-engine intent: low shelf `105 Hz`, presence `3.2 kHz`, air `9.8 kHz`, and a lighter hard-knee intensity curve.
+- Hardened the deterministic comparison helper for the new `kneeDb: 0` config.
+- Updated the real-song performance smoke so `exportDiffersFromLiveMaterially` is recorded as evidence instead of required to remain true after calibration.
+- Reran the release-backed synthetic Track Preview and real-song performance smokes against the rebuilt EXE.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- `test-output\tauri-real-song-performance-smoke\tauri-real-song-performance-smoke.json`
+- Relevant fields:
+  - Track Preview `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Track Preview `exportVsLiveComparison.export_minus_live_lufs_proxy: 9.08023618964403`
+  - Track Preview `exportVsLiveComparison.rms_difference_dbfs: -19.5359668627911`
+  - Track Preview `exportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 5.46180002967552`
+  - Real song `realSongExportVsLiveComparison.exportDiffersFromLiveMaterially: false`
+  - Real song `realSongExportVsLiveComparison.export_minus_live_lufs_proxy: 0.714872039163112`
+  - Real song `realSongExportVsLiveComparison.rms_difference_dbfs: -29.5362869826173`
+  - Real song `realSongExportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 0.714872039163112`
+  - Real song `realSongExportVsLiveComparison.compared_frames: 8943359`
+
+Remaining gap:
+
+- This is better calibration for the temporary Web Audio model. It still is not shared/export-engine DSP and still needs human listening approval.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and record whether the aligned live preview feels directionally useful.
+- If working unattended, continue toward shared/native live DSP parity so preview and export consume the same intent model.
+
+## Previous Codex Pass: Shared Live Preview Definition
 
 Date: 2026-05-12
 

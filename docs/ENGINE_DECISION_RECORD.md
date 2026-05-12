@@ -598,10 +598,11 @@ Evidence from `npm run test:tauri-track-preview-ui`:
     "intensity": 0.4
   },
   "exportDiffersFromLiveMaterially": true,
-  "export_minus_live_lufs_proxy": 11.580809727845596,
-  "rms_difference_dbfs": -18.377686540787774,
-  "exportLoudnessDeltaVsSource": 7.271018109659776,
-  "liveLoudnessDeltaVsSource": 4.30979161818582
+  "export_minus_live_lufs_proxy": 9.08023618964403,
+  "rms_difference_dbfs": -19.5359668627911,
+  "exportLoudnessDeltaVsSource": 7.27101810965978,
+  "liveLoudnessDeltaVsSource": 1.80921807998426,
+  "exportAndLiveLoudnessDeltaDifference": 5.46180002967552
 }
 ```
 
@@ -630,25 +631,28 @@ Evidence from `npm run test:tauri-real-song-performance` with `Lay the Money on 
     "width": 0.2,
     "intensity": 0.4
   },
-  "exportDiffersFromLiveMaterially": true,
-  "export_minus_live_lufs_proxy": 3.919839091548681,
-  "rms_difference_dbfs": -25.193622894439955,
-  "exportLoudnessDeltaVsSource": 3.546476951229728,
-  "liveLoudnessDeltaVsSource": 7.466316042778409,
-  "exportAndLiveLoudnessDeltaDifference": 3.919839091548681,
+  "exportDiffersFromLiveMaterially": false,
+  "export_minus_live_lufs_proxy": 0.714872039163112,
+  "rms_difference_dbfs": -29.5362869826173,
+  "exportLoudnessDeltaVsSource": 3.54647695122973,
+  "liveLoudnessDeltaVsSource": 4.26134899039284,
+  "exportAndLiveLoudnessDeltaDifference": 0.714872039163112,
   "compared_frames": 8943359
 }
 ```
 
 Interpretation:
 
-- Real user audio confirms the same architectural risk: the current Web Audio first-control model and Python export do not produce the same result.
-- The mismatch direction is source-dependent. On this MP3 the deterministic live model reduces loudness more than the Python-rendered master, so real-song parity checks should assert material mismatch directly instead of assuming the offline render is always louder.
+- Real user audio still confirms the same architectural boundary: the current Web Audio first-control model and Python export are not the same engine.
+- After aligning the model constants closer to export intent, this MP3 no longer trips the `exportDiffersFromLiveMaterially` boolean even though the paths remain distinct and approximate.
+- Real-song parity checks should record the material-mismatch flag and numeric deltas instead of forcing the mismatch to stay true after calibration.
 - This narrows the evidence gap from synthetic-only to one real source file. It still does not replace shared DSP definitions, native live DSP parity, or human listening approval.
 
 ## Shared Web Audio Model Definition
 
 Added `desktop/src/livePreviewConfig.json` as the shared definition point for the current Web Audio first-control model. The Tauri frontend now reads the Web Audio filter frequencies, width mapping, compressor curve, and smoothing from that JSON file. The deterministic smoke-test comparator reads the same file before generating the Python model used in export-vs-live evidence.
+
+The shared config has now been tuned toward Python export intent: low shelf `105 Hz`, presence `3.2 kHz`, air `9.8 kHz`, and a lighter hard-knee Intensity curve. This reduced the provided real-song export/live LUFS-proxy delta from roughly `3.92 dB` to roughly `0.715 dB` in the automated comparison, while the synthetic fixture still shows a material mismatch.
 
 Verification after the extraction:
 
