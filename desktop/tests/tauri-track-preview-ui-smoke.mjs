@@ -3,7 +3,11 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { compareExportVsLiveModel, firstControlLivePreviewTuning } from "./live-preview-model.mjs";
+import {
+  compareExportVsLiveModel,
+  compareLiveModelOutputs,
+  firstControlLivePreviewTuning,
+} from "./live-preview-model.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const releaseExe =
@@ -66,6 +70,10 @@ try {
     sourcePath: fixturePaths[1],
     tuning: liveParityTuning,
   });
+  const nativeVsEngineLivePreviewComparison = compareLiveModelOutputs({
+    referencePath: smoke.tauriLivePreviewModelPath,
+    candidatePath: smoke.tauriNativeLivePreviewModelPath,
+  });
   const previewOutputDir = path.dirname(path.dirname(smoke.previewMasterPath));
   const regionPreviewOutputDir = path.dirname(path.dirname(smoke.regionPreviewMasterPath));
   const previewManifestPath = path.join(previewOutputDir, "manifest.json");
@@ -83,7 +91,10 @@ try {
     ...smoke,
     ...pixelSeek,
     exportVsLiveComparison,
+    nativeVsEngineLivePreviewComparison,
+    tauriLivePreviewPreparedSourcePathExists: existsSync(smoke.tauriLivePreviewPreparedSourcePath),
     tauriLivePreviewModelPathExists: existsSync(smoke.tauriLivePreviewModelPath),
+    tauriNativeLivePreviewModelPathExists: existsSync(smoke.tauriNativeLivePreviewModelPath),
     tauriLivePreviewModelPlaybackCacheExists: existsSync(smoke.tauriLivePreviewModelPlaybackCachePath),
     releaseExe,
     releaseExeExists: existsSync(releaseExe),
@@ -166,24 +177,55 @@ try {
   assert.equal(evidence.livePreviewContractPreviewParity, "approximate");
   assert.equal(evidence.livePreviewContractExportFaithfulRequired, true);
   assert.deepEqual(evidence.livePreviewContractModeledControls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.deepEqual(evidence.livePreviewContractUnmodeledStages, [
+    "preset_base_tone",
+    "highpass",
+    "low_mid_eq",
+    "brightness_tilt",
+    "warmth_saturation",
+    "transient_shape",
+    "lufs_match",
+    "ceiling_limiter",
+    "codec_qc",
+  ]);
   assert.deepEqual(evidence.livePreviewContractWindowControls, evidence.livePreviewContractModeledControls);
   assert.equal(evidence.livePreviewContractWindowModelId, evidence.livePreviewContractModelId);
   assert.deepEqual(evidence.livePreviewContractDrift, []);
   assert.equal(evidence.livePreviewContractDriftVisible, false);
+  assert.equal(evidence.tauriLivePreviewPreparedSourcePathExists, true);
   assert.equal(evidence.tauriLivePreviewModelOutputExists, true);
   assert.equal(evidence.tauriLivePreviewModelPathExists, true);
   assert.equal(evidence.tauriLivePreviewModel.live_preview_engine, "web-audio-first-control-model");
   assert.deepEqual(evidence.tauriLivePreviewModel.modeled_controls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.deepEqual(evidence.tauriLivePreviewModel.tuning, liveParityTuning);
   assert.deepEqual(evidence.tauriLivePreviewModel.normalized_tuning, liveParityTuning);
+  assert.deepEqual(evidence.tauriLivePreviewModel.unmodeled_export_stages, evidence.livePreviewContractUnmodeledStages);
   assert.ok(Math.abs(evidence.tauriLivePreviewModel.modeled_width - 1.36) <= 0.001);
   assert.ok(Math.abs(evidence.tauriLivePreviewModel.modeled_drive - 0.4) <= 0.001);
   assert.equal(evidence.tauriLivePreviewModel.preview_parity, "approximate");
   assert.equal(evidence.tauriLivePreviewModel.export_faithful_preview_required, true);
   assert.equal(evidence.tauriLivePreviewModel.same_engine, false);
-  assert.equal(evidence.tauriLivePreviewModel.source, fixturePaths[1]);
+  assert.equal(evidence.tauriLivePreviewModel.source, evidence.tauriLivePreviewPreparedSourcePath);
   assert.equal(evidence.tauriLivePreviewModel.output, evidence.tauriLivePreviewModelPath);
   assert.equal(evidence.tauriLivePreviewModel.sample_rate, 48000);
   assert.equal(evidence.tauriLivePreviewModel.frame_count, 48000 * 4);
+  assert.equal(evidence.tauriNativeLivePreviewModelPathExists, true);
+  assert.equal(evidence.tauriNativeLivePreviewModel.output_exists, true);
+  assert.equal(evidence.tauriNativeLivePreviewModel.live_preview_engine, "web-audio-first-control-model");
+  assert.equal(evidence.tauriNativeLivePreviewModel.native_engine, "rust-native-live-preview-model");
+  assert.deepEqual(evidence.tauriNativeLivePreviewModel.modeled_controls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.deepEqual(evidence.tauriNativeLivePreviewModel.tuning, liveParityTuning);
+  assert.deepEqual(evidence.tauriNativeLivePreviewModel.normalized_tuning, liveParityTuning);
+  assert.deepEqual(evidence.tauriNativeLivePreviewModel.unmodeled_export_stages, evidence.livePreviewContractUnmodeledStages);
+  assert.ok(Math.abs(evidence.tauriNativeLivePreviewModel.modeled_width - 1.36) <= 0.001);
+  assert.ok(Math.abs(evidence.tauriNativeLivePreviewModel.modeled_drive - 0.4) <= 0.001);
+  assert.equal(evidence.tauriNativeLivePreviewModel.source, evidence.tauriLivePreviewPreparedSourcePath);
+  assert.equal(evidence.tauriNativeLivePreviewModel.sample_rate, 48000);
+  assert.equal(evidence.tauriNativeLivePreviewModel.frame_count, 48000 * 4);
+  assert.equal(evidence.nativeVsEngineLivePreviewComparison.sample_rate, 48000);
+  assert.equal(evidence.nativeVsEngineLivePreviewComparison.compared_frames, 48000 * 4);
+  assert.ok(evidence.nativeVsEngineLivePreviewComparison.max_abs_difference < 0.005);
+  assert.ok(evidence.nativeVsEngineLivePreviewComparison.rms_difference_dbfs < -60);
   assert.equal(evidence.tauriLivePreviewModelPlaybackCacheExists, true);
   assert.equal(evidence.tauriLivePreviewModelNativeProbe.source_sample_rate, 48000);
   assert.equal(evidence.tauriLivePreviewModelNativeProbe.source_total_frames, 48000 * 4);
@@ -411,10 +453,20 @@ function trackPreviewExpression() {
     .some((item) => text(item).includes('Contract drift'));
   const livePreviewModeledStatus = text(document.querySelector('.live-contract-status.modeled'));
   const livePreviewRenderOnlyStatus = text(document.querySelector('.live-contract-status.render-only'));
+  const tauriLivePreviewPreparedSourcePath = await invoke('prepare_playback_file', {
+    path: ${JSON.stringify(fixturePaths[1])}
+  });
   const tauriLivePreviewModelPath = ${JSON.stringify(path.join(outputRoot, "tauri-command-live-preview-model.wav"))};
   const tauriLivePreviewModel = await invoke('render_live_preview_model', {
-    sourcePath: ${JSON.stringify(fixturePaths[1])},
+    sourcePath: tauriLivePreviewPreparedSourcePath,
     outputPath: tauriLivePreviewModelPath,
+    sampleRate: 48000,
+    tuning: ${JSON.stringify(liveParityTuning)}
+  });
+  const tauriNativeLivePreviewModelPath = ${JSON.stringify(path.join(outputRoot, "tauri-native-live-preview-model.wav"))};
+  const tauriNativeLivePreviewModel = await invoke('render_native_live_preview_model', {
+    sourcePath: tauriLivePreviewPreparedSourcePath,
+    outputPath: tauriNativeLivePreviewModelPath,
     sampleRate: 48000,
     tuning: ${JSON.stringify(liveParityTuning)}
   });
@@ -835,13 +887,17 @@ function trackPreviewExpression() {
     livePreviewContractPreviewParity: livePreviewContract.previewParity,
     livePreviewContractExportFaithfulRequired: livePreviewContract.exportFaithfulPreviewRequired,
     livePreviewContractModeledControls: livePreviewContract.modeledControls,
+    livePreviewContractUnmodeledStages: livePreviewContract.unmodeledExportStages,
     livePreviewContractWindowModelId: livePreviewWindowContract.modelId,
     livePreviewContractWindowControls: livePreviewWindowContract.modeledControls,
     livePreviewContractDrift,
     livePreviewContractDriftVisible,
+    tauriLivePreviewPreparedSourcePath,
     tauriLivePreviewModel,
     tauriLivePreviewModelPath,
     tauriLivePreviewModelOutputExists: tauriLivePreviewModel.output_exists === true,
+    tauriNativeLivePreviewModel,
+    tauriNativeLivePreviewModelPath,
     tauriLivePreviewModelPlaybackCachePath,
     tauriLivePreviewModelNativeProbe,
     livePreviewModeledStatus,

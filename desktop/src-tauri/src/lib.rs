@@ -5,7 +5,7 @@ use std::{
     collections::hash_map::DefaultHasher,
     env, fs,
     hash::{Hash, Hasher},
-    io::{BufRead, BufReader, Read, Seek, SeekFrom},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{
@@ -31,6 +31,20 @@ const NATIVE_FILE_PLAYBACK_MAX_MS: u32 = 60 * 60 * 1000;
 const AUDIO_SOURCE_EXTENSIONS: &[&str] = &[
     "aac", "aif", "aiff", "flac", "m4a", "mp3", "ogg", "opus", "wav",
 ];
+const LIVE_PREVIEW_MODEL_ID: &str = "web-audio-first-control-model";
+const LIVE_PREVIEW_LOW_HZ: f64 = 105.0;
+const LIVE_PREVIEW_MID_HZ: f64 = 3200.0;
+const LIVE_PREVIEW_MID_Q: f64 = 0.9;
+const LIVE_PREVIEW_HIGH_HZ: f64 = 9800.0;
+const LIVE_PREVIEW_WIDTH_BASE: f64 = 1.0;
+const LIVE_PREVIEW_WIDTH_SCALE: f64 = 1.8;
+const LIVE_PREVIEW_WIDTH_MIN: f64 = 0.35;
+const LIVE_PREVIEW_WIDTH_MAX: f64 = 1.65;
+const LIVE_PREVIEW_COMPRESSOR_THRESHOLD_DBFS: f64 = -18.0;
+const LIVE_PREVIEW_COMPRESSOR_THRESHOLD_DRIVE_SCALE_DB: f64 = 3.0;
+const LIVE_PREVIEW_COMPRESSOR_RATIO_BASE: f64 = 2.0;
+const LIVE_PREVIEW_COMPRESSOR_RATIO_DRIVE_SCALE: f64 = 0.44;
+const LIVE_PREVIEW_EPSILON: f64 = 1e-12;
 
 struct NativePlaybackSession {
     id: String,
@@ -248,6 +262,24 @@ struct NativePlaybackClip {
     samples: Vec<f32>,
 }
 
+#[derive(Clone, Copy)]
+struct NativeLivePreviewTuning {
+    bass_db: f64,
+    mid_db: f64,
+    high_db: f64,
+    width: f64,
+    intensity: f64,
+}
+
+#[derive(Clone, Copy)]
+struct NativeBiquad {
+    b0: f64,
+    b1: f64,
+    b2: f64,
+    a1: f64,
+    a2: f64,
+}
+
 #[tauri::command]
 fn repo_root() -> Result<String, String> {
     Ok(repo_root_path().to_string_lossy().to_string())
@@ -385,6 +417,107 @@ fn render_live_preview_model(
         map.insert("output_exists".to_string(), json!(true));
     }
     Ok(summary)
+}
+
+#[tauri::command]
+fn render_native_live_preview_model(
+    source_path: String,
+    output_path: String,
+    sample_rate: u32,
+    tuning: Value,
+) -> Result<Value, String> {
+    let source = PathBuf::from(&source_path);
+    if !source.exists() {
+        return Err(format!(
+            "Native Live Preview model source does not exist: {}",
+            source.display()
+        ));
+    }
+    let output = PathBuf::from(&output_path);
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Could not create native Live Preview model folder {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+
+    let clip = read_pcm16_wav_segment(&source, 0.0, None)?;
+    if clip.sample_rate != sample_rate {
+        return Err(format!(
+            "Native Live Preview model expects {sample_rate} Hz prepared PCM WAV; got {} Hz from {}",
+            clip.sample_rate,
+            source.display()
+        ));
+    }
+
+    let input_tuning = tuning.clone();
+    let tuning = native_live_preview_tuning(&tuning)?;
+    let mut modeled = clip.samples.clone();
+    let channels = usize::from(clip.channels);
+    apply_native_live_preview_biquad(
+        &mut modeled,
+        channels,
+        native_preview_shelf("low", tuning.bass_db, LIVE_PREVIEW_LOW_HZ, sample_rate)?,
+    );
+    apply_native_live_preview_biquad(
+        &mut modeled,
+        channels,
+        native_preview_peaking(tuning.mid_db, LIVE_PREVIEW_MID_HZ, LIVE_PREVIEW_MID_Q, sample_rate)?,
+    );
+    apply_native_live_preview_biquad(
+        &mut modeled,
+        channels,
+        native_preview_shelf("high", tuning.high_db, LIVE_PREVIEW_HIGH_HZ, sample_rate)?,
+    );
+    let modeled_width = apply_native_live_preview_width(&mut modeled, channels, tuning.width);
+    let modeled_drive = apply_native_live_preview_compressor(&mut modeled, channels, tuning.intensity);
+    for sample in &mut modeled {
+        *sample = sample.clamp(-1.0, 1.0);
+    }
+    write_pcm16_wav(&output, &modeled, clip.channels, clip.sample_rate)?;
+    if !output.exists() {
+        return Err(format!(
+            "Native Live Preview model output was not created: {}",
+            output.display()
+        ));
+    }
+
+    Ok(json!({
+        "source": source_path,
+        "output": output_path,
+        "output_exists": true,
+        "sample_rate": sample_rate,
+        "frame_count": clip.total_frames,
+        "live_preview_engine": LIVE_PREVIEW_MODEL_ID,
+        "native_engine": "rust-native-live-preview-model",
+        "same_engine": false,
+        "preview_parity": "approximate",
+        "export_faithful_preview_required": true,
+        "modeled_controls": ["Low", "Mid", "High", "Width", "Intensity"],
+        "modeled_width": modeled_width,
+        "modeled_drive": modeled_drive,
+        "tuning": input_tuning,
+        "normalized_tuning": {
+            "bassDb": tuning.bass_db,
+            "midDb": tuning.mid_db,
+            "highDb": tuning.high_db,
+            "width": tuning.width,
+            "intensity": tuning.intensity
+        },
+        "unmodeled_export_stages": [
+            "preset_base_tone",
+            "highpass",
+            "low_mid_eq",
+            "brightness_tilt",
+            "warmth_saturation",
+            "transient_shape",
+            "lufs_match",
+            "ceiling_limiter",
+            "codec_qc"
+        ]
+    }))
 }
 
 #[tauri::command]
@@ -1939,6 +2072,252 @@ fn native_playback_output_samples(
     Ok(output)
 }
 
+fn native_live_preview_tuning(value: &Value) -> Result<NativeLivePreviewTuning, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "Native Live Preview tuning must be a JSON object.".to_string())?;
+    Ok(NativeLivePreviewTuning {
+        bass_db: native_tuning_value(
+            object,
+            &["bassDb", "lowDb", "lowEndDb", "low_end_db", "tweak_low_end_db"],
+        )?,
+        mid_db: native_tuning_value(
+            object,
+            &["midDb", "presenceDb", "presence_db", "tweak_presence_db"],
+        )?,
+        high_db: native_tuning_value(object, &["highDb", "airDb", "air_db", "tweak_air_db"])?,
+        width: native_tuning_value(object, &["width", "widthOffset", "tweak_width"])?,
+        intensity: native_tuning_value(
+            object,
+            &["intensity", "compression", "compressionOffset", "tweak_intensity"],
+        )?,
+    })
+}
+
+fn native_tuning_value(
+    object: &serde_json::Map<String, Value>,
+    keys: &[&str],
+) -> Result<f64, String> {
+    for key in keys {
+        if let Some(value) = object.get(*key) {
+            return value
+                .as_f64()
+                .ok_or_else(|| format!("Native Live Preview tuning value '{key}' must be numeric."));
+        }
+    }
+    Ok(0.0)
+}
+
+fn apply_native_live_preview_biquad(
+    samples: &mut [f32],
+    channels: usize,
+    biquad: Option<NativeBiquad>,
+) {
+    let Some(biquad) = biquad else {
+        return;
+    };
+    if channels == 0 {
+        return;
+    }
+    let mut z1 = vec![0.0_f64; channels];
+    let mut z2 = vec![0.0_f64; channels];
+    for frame in samples.chunks_exact_mut(channels) {
+        for (channel, sample) in frame.iter_mut().enumerate() {
+            let x = f64::from(*sample);
+            let y = (biquad.b0 * x) + z1[channel];
+            z1[channel] = (biquad.b1 * x) - (biquad.a1 * y) + z2[channel];
+            z2[channel] = (biquad.b2 * x) - (biquad.a2 * y);
+            *sample = y as f32;
+        }
+    }
+}
+
+fn apply_native_live_preview_width(
+    samples: &mut [f32],
+    channels: usize,
+    width_setting: f64,
+) -> f64 {
+    let width = (LIVE_PREVIEW_WIDTH_BASE + (width_setting * LIVE_PREVIEW_WIDTH_SCALE))
+        .clamp(LIVE_PREVIEW_WIDTH_MIN, LIVE_PREVIEW_WIDTH_MAX);
+    if channels < 2 {
+        return width;
+    }
+    for frame in samples.chunks_exact_mut(channels) {
+        let left = f64::from(frame[0]);
+        let right = f64::from(frame[1]);
+        let mid = (left + right) * 0.5;
+        let side = (left - right) * 0.5;
+        frame[0] = (mid + (side * width)) as f32;
+        frame[1] = (mid - (side * width)) as f32;
+    }
+    width
+}
+
+fn apply_native_live_preview_compressor(
+    samples: &mut [f32],
+    channels: usize,
+    intensity: f64,
+) -> f64 {
+    let drive = intensity.clamp(0.0, 1.0);
+    if drive <= 0.0 || channels == 0 {
+        return drive;
+    }
+    let threshold = LIVE_PREVIEW_COMPRESSOR_THRESHOLD_DBFS
+        - (drive * LIVE_PREVIEW_COMPRESSOR_THRESHOLD_DRIVE_SCALE_DB);
+    let ratio = LIVE_PREVIEW_COMPRESSOR_RATIO_BASE
+        + (drive * LIVE_PREVIEW_COMPRESSOR_RATIO_DRIVE_SCALE);
+    for frame in samples.chunks_exact_mut(channels) {
+        let level = frame
+            .iter()
+            .map(|sample| f64::from(sample.abs()))
+            .fold(0.0_f64, f64::max);
+        let x_db = 20.0 * level.max(LIVE_PREVIEW_EPSILON).log10();
+        let y_db = if x_db > threshold {
+            threshold + ((x_db - threshold) / ratio)
+        } else {
+            x_db
+        };
+        let gain = 10.0_f64.powf((y_db - x_db) / 20.0) as f32;
+        for sample in frame {
+            *sample *= gain;
+        }
+    }
+    drive
+}
+
+fn native_preview_peaking(
+    gain_db: f64,
+    frequency: f64,
+    q: f64,
+    sample_rate: u32,
+) -> Result<Option<NativeBiquad>, String> {
+    if gain_db.abs() < LIVE_PREVIEW_EPSILON {
+        return Ok(None);
+    }
+    let amplitude = 10.0_f64.powf(gain_db / 40.0);
+    let omega = 2.0 * std::f64::consts::PI * frequency / f64::from(sample_rate);
+    let alpha = omega.sin() / (2.0 * q);
+    let cos_omega = omega.cos();
+    let b0 = 1.0 + (alpha * amplitude);
+    let b1 = -2.0 * cos_omega;
+    let b2 = 1.0 - (alpha * amplitude);
+    let a0 = 1.0 + (alpha / amplitude);
+    let a1 = -2.0 * cos_omega;
+    let a2 = 1.0 - (alpha / amplitude);
+    Ok(Some(normalize_native_biquad(b0, b1, b2, a0, a1, a2)?))
+}
+
+fn native_preview_shelf(
+    kind: &str,
+    gain_db: f64,
+    frequency: f64,
+    sample_rate: u32,
+) -> Result<Option<NativeBiquad>, String> {
+    if gain_db.abs() < LIVE_PREVIEW_EPSILON {
+        return Ok(None);
+    }
+    let amplitude = 10.0_f64.powf(gain_db / 40.0);
+    let omega = 2.0 * std::f64::consts::PI * frequency / f64::from(sample_rate);
+    let sin_omega = omega.sin();
+    let cos_omega = omega.cos();
+    let root = amplitude.sqrt();
+    let alpha = (sin_omega / 2.0) * 2.0_f64.sqrt();
+    let (b0, b1, b2, a0, a1, a2) = match kind {
+        "low" => (
+            amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)),
+            2.0 * amplitude * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega)),
+            amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)),
+            (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha),
+            -2.0 * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega)),
+            (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha),
+        ),
+        "high" => (
+            amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)),
+            -2.0 * amplitude * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega)),
+            amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)),
+            (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha),
+            2.0 * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega)),
+            (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha),
+        ),
+        _ => return Err(format!("Unknown native Live Preview shelf kind: {kind}")),
+    };
+    Ok(Some(normalize_native_biquad(b0, b1, b2, a0, a1, a2)?))
+}
+
+fn normalize_native_biquad(
+    b0: f64,
+    b1: f64,
+    b2: f64,
+    a0: f64,
+    a1: f64,
+    a2: f64,
+) -> Result<NativeBiquad, String> {
+    if a0.abs() < LIVE_PREVIEW_EPSILON {
+        return Err("Native Live Preview filter had an invalid zero a0 coefficient.".to_string());
+    }
+    Ok(NativeBiquad {
+        b0: b0 / a0,
+        b1: b1 / a0,
+        b2: b2 / a0,
+        a1: a1 / a0,
+        a2: a2 / a0,
+    })
+}
+
+fn write_pcm16_wav(
+    path: &Path,
+    samples: &[f32],
+    channels: u16,
+    sample_rate: u32,
+) -> Result<(), String> {
+    if channels == 0 {
+        return Err("Cannot write native Live Preview WAV with zero channels.".to_string());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create {}: {error}", parent.display()))?;
+    }
+    let data_bytes = samples
+        .len()
+        .checked_mul(2)
+        .ok_or_else(|| "Native Live Preview WAV is too large.".to_string())?;
+    let data_bytes_u32 =
+        u32::try_from(data_bytes).map_err(|_| "Native Live Preview WAV is too large.".to_string())?;
+    let byte_rate = sample_rate
+        .checked_mul(u32::from(channels))
+        .and_then(|value| value.checked_mul(2))
+        .ok_or_else(|| "Native Live Preview WAV byte rate overflowed.".to_string())?;
+    let block_align = channels
+        .checked_mul(2)
+        .ok_or_else(|| "Native Live Preview WAV block alignment overflowed.".to_string())?;
+    let mut file = fs::File::create(path).map_err(|error| {
+        format!(
+            "Could not create native Live Preview WAV {}: {error}",
+            path.display()
+        )
+    })?;
+    file.write_all(b"RIFF")
+        .and_then(|_| file.write_all(&(36_u32 + data_bytes_u32).to_le_bytes()))
+        .and_then(|_| file.write_all(b"WAVE"))
+        .and_then(|_| file.write_all(b"fmt "))
+        .and_then(|_| file.write_all(&16_u32.to_le_bytes()))
+        .and_then(|_| file.write_all(&1_u16.to_le_bytes()))
+        .and_then(|_| file.write_all(&channels.to_le_bytes()))
+        .and_then(|_| file.write_all(&sample_rate.to_le_bytes()))
+        .and_then(|_| file.write_all(&byte_rate.to_le_bytes()))
+        .and_then(|_| file.write_all(&block_align.to_le_bytes()))
+        .and_then(|_| file.write_all(&16_u16.to_le_bytes()))
+        .and_then(|_| file.write_all(b"data"))
+        .and_then(|_| file.write_all(&data_bytes_u32.to_le_bytes()))
+        .map_err(|error| format!("Could not write native Live Preview WAV header: {error}"))?;
+    for sample in samples {
+        let value = (sample.clamp(-1.0, 1.0 - (1.0 / 32767.0)) * 32767.0).round() as i16;
+        file.write_all(&value.to_le_bytes())
+            .map_err(|error| format!("Could not write native Live Preview WAV sample: {error}"))?;
+    }
+    Ok(())
+}
+
 fn native_ab_loop_output_samples(
     source_output: &[f32],
     master_output: &[f32],
@@ -3056,6 +3435,7 @@ pub fn run() {
             analyze_tracks,
             live_preview_contract,
             render_live_preview_model,
+            render_native_live_preview_model,
             native_audio_probe,
             native_audio_stream_probe,
             native_playback_file_probe,

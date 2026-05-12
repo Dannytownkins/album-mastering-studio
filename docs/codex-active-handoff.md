@@ -17,7 +17,76 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Live Preview Model Native Playback Probe
+## Latest Codex Pass: Native Live Preview Model Oracle
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/tests/live-preview-model.mjs`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Added a Tauri/Rust `render_native_live_preview_model` command for an offline native implementation of the current engine-owned first-control Live Preview model.
+- The native command reads a prepared PCM playback-cache WAV, applies Low/Mid/High/Width/Intensity with the same model constants, writes a local WAV, and returns metadata parallel to the Python oracle.
+- Extended the packaged Track Preview smoke so the release WebView prepares one source through `prepare_playback_file`, renders both the Python sidecar model and native Rust model from that prepared source, and compares the two WAV outputs.
+- This remains an oracle/parity proof only; it is not wired into the visible playback path.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop\src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"; cargo check
+cd ..\..
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_model_renders_engine_owned_reference tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_reference_wav
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - prepared source exists: `true`
+  - Python model source is prepared source: `true`
+  - native model source is prepared source: `true`
+  - native `live_preview_engine: web-audio-first-control-model`
+  - native `native_engine: rust-native-live-preview-model`
+  - native `modeled_width: 1.36`
+  - native `modeled_drive: 0.4`
+  - native `frame_count: 192000`
+  - native render-only stage count: `9`
+  - comparison `sample_rate: 48000`
+  - comparison `compared_frames: 192000`
+  - comparison `rms_difference_dbfs: -101.14268111252326`
+  - comparison `max_abs_difference: 1.5288591384887695e-05`
+  - comparison `candidate_minus_reference_lufs_proxy: -1.2013914020059246e-05`
+
+Remaining gap:
+
+- This is native offline model parity evidence for one packaged synthetic smoke. The visible Live Preview path is still Web Audio approximate, and no human listening pass has been recorded.
+
+Next useful slice:
+
+- Use this native oracle as the measured target for a guarded native/shared playback experiment, or close remaining release smoke gaps around OS file-picker Open/Save-As.
+- If the user is present, run and record a real listening pass.
+
+## Previous Codex Pass: Live Preview Model Native Playback Probe
 
 Date: 2026-05-12
 
@@ -64,7 +133,7 @@ Remaining gap:
 
 Next useful slice:
 
-- Add a native Rust offline Live Preview model oracle and compare it against the Python engine-owned model with bounded numeric tolerance.
+- Use the Tauri-accessible model as the oracle for a native/shared live DSP parity step.
 - If the user is present, run and record a real listening pass.
 
 ## Previous Codex Pass: Tauri Live Preview Model Bridge

@@ -25,6 +25,8 @@ The Python engine now owns both the Live Preview contract and the deterministic 
 - The shared JS comparison helper now asks the Python CLI to render the model and only computes comparison metrics in JS/Python test glue.
 - The packaged Track Preview smoke verifies the release WebView can invoke that Tauri command and produce a 192000-frame local model WAV from the second fixture track.
 - The same packaged smoke now prepares that model WAV for playback and runs a 500 ms native playback probe with 24000 queued/played output frames, 50 callbacks, no stream errors, and no warnings.
+- Tauri/Rust now also has an offline `render_native_live_preview_model` oracle for the same first-control model. The packaged Track Preview smoke feeds both Python and native oracles from the same prepared PCM playback-cache source, then compares their WAV outputs.
+- Current native oracle evidence: 192000 compared frames at 48000 Hz, `rms_difference_dbfs: -101.14268111252326`, `max_abs_difference: 1.5288591384887695e-05`, and matching `tuning` plus nine render-only export stages.
 
 This reduces drift in automated evidence. It does not mean the visible Web Audio Live Preview is export-engine faithful; the UI still labels it as approximate and the contract still lists render-only export stages.
 

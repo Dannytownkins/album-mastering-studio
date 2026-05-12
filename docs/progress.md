@@ -2,6 +2,67 @@
 
 ## 2026-05-12
 
+### Native Live Preview Model Oracle Slice
+
+- Added a Tauri/Rust `render_native_live_preview_model` command that renders the current engine-owned first-control Live Preview model offline from a prepared PCM playback-cache WAV.
+- Kept the command out of the visible playback path; it is an oracle/parity proof, not user-facing native live DSP yet.
+- Extended the packaged Track Preview smoke so the release WebView prepares the same source through `prepare_playback_file`, renders both the Python sidecar model and native Rust model from that prepared source, and compares the two WAV outputs.
+- Tightened the native summary metadata to mirror the Python oracle's `tuning`, `normalized_tuning`, modeled controls, and render-only export stage list.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop\src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"; cargo check
+cd ..\..
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_model_renders_engine_owned_reference tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_reference_wav
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node smoke syntax checks passed.
+- Rust `cargo check` passed.
+- Python compile and focused Live Preview model tests passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Preview UI smoke passed against the fresh release EXE.
+- Diff hygiene passed.
+- Evidence values:
+  - prepared source exists: `true`
+  - Python model source is prepared source: `true`
+  - native model source is prepared source: `true`
+  - native `live_preview_engine: web-audio-first-control-model`
+  - native `native_engine: rust-native-live-preview-model`
+  - native `same_engine: false`
+  - native `modeled_width: 1.36`
+  - native `modeled_drive: 0.4`
+  - native `frame_count: 192000`
+  - native `output_exists: true`
+  - native render-only stage count: `9`
+  - comparison `sample_rate: 48000`
+  - comparison `compared_frames: 192000`
+  - comparison `rms_difference_dbfs: -101.14268111252326`
+  - comparison `max_abs_difference: 1.5288591384887695e-05`
+  - comparison `candidate_minus_reference_lufs_proxy: -1.2013914020059246e-05`
+
+Honest gap:
+
+- This proves a native offline implementation can match the Python engine-owned first-control model on the packaged synthetic smoke. The visible Live Preview path is still Web Audio approximate, and no human listening approval is recorded.
+
+Next unattended slice:
+
+- Use the native oracle as the measured target for a guarded native/shared playback experiment, or close remaining release smoke gaps around OS file-picker Open/Save-As before calling the shell release-candidate.
+
 ### Live Preview Model Native Playback Probe Slice
 
 - Extended the packaged Track Preview smoke beyond Tauri model rendering.
