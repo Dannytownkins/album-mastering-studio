@@ -485,6 +485,55 @@ class PipelineTest(unittest.TestCase):
                         self.assertAlmostEqual(boundary_cues[0]["duration_seconds"], 0.5, places=2)
                     self.assertTrue((output_dir / "album_sequence.wav").exists())
 
+    def test_transition_preview_includes_disabled_boundary_primitives(self) -> None:
+        expected_seconds = {
+            "gap": 0.5,
+            "fade": 0.4,
+            "ring-out": 0.5,
+            "crossfade": 0.3,
+        }
+        for boundary_style, expected_duration in expected_seconds.items():
+            with self.subTest(boundary_style=boundary_style):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    input_dir = root / "inputs"
+                    project_path = root / "album.ams.json"
+                    preview_path = root / f"{boundary_style}-preview.wav"
+                    input_dir.mkdir()
+                    self._write_sine(input_dir / "01_a.wav", 220.0, 0.7)
+                    self._write_sine(input_dir / "02_b.wav", 261.63, 0.7)
+
+                    project = create_project(
+                        [input_dir],
+                        project_path,
+                        RenderOptions(interlude_duration=1.0, interlude_style="ambient", album_wav=True, codec_preview=False),
+                        album_title=f"{boundary_style} Boundary Preview Test",
+                    )
+                    project["settings"]["generated_transitions"] = False
+                    project["settings"]["default_boundary_style"] = boundary_style
+                    project["settings"]["default_boundary_duration"] = 0.1
+                    for transition in project["transitions"]:
+                        transition["enabled"] = False
+                        transition["boundary_style"] = boundary_style
+                        transition["boundary_duration_seconds"] = 0.1
+                    project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+
+                    summary = render_transition_preview(
+                        project_path,
+                        1,
+                        preview_path,
+                        tail_seconds=0.2,
+                        head_seconds=0.2,
+                    )
+
+                    self.assertTrue(preview_path.exists())
+                    self.assertEqual(summary["transition_enabled"], False)
+                    self.assertEqual(summary["boundary_style"], boundary_style)
+                    self.assertEqual(summary["boundary_duration_seconds"], 0.1)
+                    self.assertAlmostEqual(summary["duration_seconds"], expected_duration, places=2)
+                    with wave.open(str(preview_path), "rb") as wav:
+                        self.assertAlmostEqual(wav.getnframes() / wav.getframerate(), expected_duration, places=2)
+
     def test_project_preserves_tweak_lufs_and_inherit_transition_semantics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

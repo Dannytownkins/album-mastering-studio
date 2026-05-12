@@ -245,9 +245,9 @@ def render_transition_preview(
         tail_treatment=None,
     ).samples
 
-    chunks = [
-        _tail(left_master, options.sample_rate, tail_seconds),
-    ]
+    left_preview = _tail(left_master, options.sample_rate, tail_seconds)
+    right_preview = _head(right_master, options.sample_rate, head_seconds)
+    chunks = [left_preview]
     if transition.enabled:
         chunks.append(
             make_interlude(
@@ -260,7 +260,19 @@ def render_transition_preview(
                 ceiling_dbfs=_interlude_ceiling(options),
             )
         )
-    chunks.append(_head(right_master, options.sample_rate, head_seconds))
+    else:
+        boundary_frames = _boundary_frame_count(transition, options.sample_rate, left_preview, right_preview)
+        if transition.boundary_style == "crossfade" and boundary_frames > 0:
+            chunks[0] = left_preview[:-boundary_frames]
+            chunks.append(_equal_power_crossfade(left_preview, right_preview, boundary_frames))
+            right_preview = right_preview[boundary_frames:]
+        elif transition.boundary_style in {"fade", "ring-out"} and boundary_frames > 0:
+            chunks[0] = _fade_tail(left_preview, boundary_frames)
+            if transition.boundary_style == "fade":
+                right_preview = _fade_head(right_preview, boundary_frames)
+        if transition.boundary_style in {"gap", "ring-out"} and boundary_frames > 0:
+            chunks.append(_silence(boundary_frames))
+    chunks.append(right_preview)
 
     preview = np.concatenate(chunks, axis=0).astype(np.float32)
     write_audio(output_path, preview, options.sample_rate, bit_depth=options.bit_depth)
@@ -273,6 +285,8 @@ def render_transition_preview(
         "transition_enabled": transition.enabled,
         "style": transition.style if transition.enabled else None,
         "interlude_duration_seconds": transition.duration_seconds if transition.enabled else 0.0,
+        "boundary_style": transition.boundary_style if not transition.enabled else None,
+        "boundary_duration_seconds": transition.boundary_duration_seconds if not transition.enabled else 0.0,
         "tail_seconds": tail_seconds,
         "head_seconds": head_seconds,
         "duration_seconds": preview.shape[0] / options.sample_rate,

@@ -687,6 +687,80 @@ fn render_album_master(
 }
 
 #[tauri::command]
+fn render_album_boundary_preview(
+    app: AppHandle,
+    state: State<'_, ProcessState>,
+    project: Value,
+    output_dir: String,
+    after_track: u64,
+    tail_seconds: Option<f64>,
+    head_seconds: Option<f64>,
+) -> Result<Value, String> {
+    if after_track == 0 {
+        return Err("Boundary preview requires a 1-based after_track value.".to_string());
+    }
+    let output_dir = PathBuf::from(output_dir);
+    fs::create_dir_all(&output_dir).map_err(|error| {
+        format!(
+            "Could not create boundary preview folder {}: {error}",
+            output_dir.display()
+        )
+    })?;
+    let project_path = output_dir.join("album-boundary-preview.ams.json");
+    let output_path = output_dir.join(format!(
+        "boundary-{after_track:02}-to-{next:02}.wav",
+        next = after_track + 1
+    ));
+    write_json_file(&project_path, &project)?;
+
+    let tail = tail_seconds.unwrap_or(8.0).clamp(0.25, 60.0);
+    let head = head_seconds.unwrap_or(8.0).clamp(0.25, 60.0);
+    let result = run_engine_command(
+        &app,
+        state.inner(),
+        vec![
+            "preview-transition".to_string(),
+            project_path.to_string_lossy().to_string(),
+            "--after-track".to_string(),
+            after_track.to_string(),
+            "--output".to_string(),
+            output_path.to_string_lossy().to_string(),
+            "--tail-seconds".to_string(),
+            format!("{tail:.3}"),
+            "--head-seconds".to_string(),
+            format!("{head:.3}"),
+        ],
+        None,
+    )?;
+
+    let output_size = fs::metadata(&output_path)
+        .map_err(|error| format!("Boundary preview was not created: {error}"))?
+        .len();
+    if output_size == 0 {
+        return Err("Boundary preview output was empty.".to_string());
+    }
+
+    let stdout = result.stdout.trim();
+    let mut summary: Value = serde_json::from_str(stdout).map_err(|error| {
+        format!("Could not parse boundary preview summary as JSON: {error}. Output: {stdout}")
+    })?;
+    let object = summary
+        .as_object_mut()
+        .ok_or_else(|| "Boundary preview summary must be a JSON object.".to_string())?;
+    object.insert(
+        "output_dir".to_string(),
+        json!(output_dir.to_string_lossy().to_string()),
+    );
+    object.insert(
+        "project_path".to_string(),
+        json!(project_path.to_string_lossy().to_string()),
+    );
+    object.insert("output_exists".to_string(), json!(true));
+    object.insert("output_bytes".to_string(), json!(output_size));
+    Ok(summary)
+}
+
+#[tauri::command]
 fn run_export_checks(manifest: Value) -> Result<Value, String> {
     let warnings = manifest
         .get("warnings")
@@ -3472,6 +3546,7 @@ pub fn run() {
             render_track_master,
             render_track_region_preview,
             render_album_master,
+            render_album_boundary_preview,
             run_export_checks,
             autosave_session,
             load_recent_session,

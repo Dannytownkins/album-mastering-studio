@@ -17,7 +17,71 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Listening Receipt Artifact
+## Latest Codex Pass: Album Master Boundary Preview
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `src/album_mastering_studio/pipeline.py`
+- `tests/test_pipeline.py`
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-release-album-state-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- `render_transition_preview()` now mirrors full album WAV boundary primitives when generated transitions are off: `gap`, `fade`, `ring-out`, and `crossfade`.
+- Added Tauri command `render_album_boundary_preview`, using the existing Python sidecar/CLI `preview-transition` contract.
+- Album Master mode now has a visible `Preview Boundary` action for the selected track and its next neighbor.
+- Boundary previews route through the existing playback-cache path and add a `Boundary Preview` Recent Renders entry, without replacing the full render manifest or approval state.
+- Packaged Album Master state smoke now clicks the visible action and verifies the preview WAV/project files, transport label, and Recent Renders entry.
+
+Verification already run:
+
+```powershell
+python -m unittest tests.test_pipeline.PipelineTest.test_transition_preview_includes_disabled_boundary_primitives
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-state-smoke.mjs
+cd src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
+cargo check
+cd ..
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-state
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+python -m unittest discover -s tests
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`
+- Relevant fields:
+  - `activeMode: "Album Master"`
+  - `boundaryPreviewButtonEnabledBefore: true`
+  - `boundaryPreviewReadyVisible: true`
+  - `boundaryPreviewPathExists: true`
+  - `boundaryPreviewProjectExists: true`
+  - `boundaryPreviewTransportLabel: "Boundary 1 to 2 Preview"`
+  - `boundaryPreviewHistoryVisible: true`
+
+Remaining gap:
+
+- This is bounded adjacent-boundary audition evidence only. It does not prove a full album export or human listening approval.
+
+Next useful slice:
+
+- If the user is present, use the new boundary preview during an actual listening pass. If unattended, keep to narrow workflow risks and avoid claiming final release readiness.
+
+## Previous Codex Pass: Listening Receipt Artifact
 
 Date: 2026-05-12
 

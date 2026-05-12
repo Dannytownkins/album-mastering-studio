@@ -615,6 +615,15 @@ No-victory-lap check:
 - Evidence values include `sourceMode: "single-song-derived-clips"`, `renderTrackCount: 3`, `renderInterludeCount: 2`, `manifestCodecPreviewFlag: true`, `codecPreviewOutputsExist: true`, and `codecPreviewCodecs: ["AAC 256k", "Opus 192k"]`.
 - Remaining gap: this is one real lossy source split into clips, not a true multi-song album or a human listening approval.
 
+2026-05-12 packaged Album Master Boundary Preview baseline:
+
+- Added a visible `Preview Boundary` action in Album Master mode for the selected track and its next neighbor.
+- Added Tauri `render_album_boundary_preview`, which writes a temporary `.ams.json` and calls the existing Python `preview-transition` sidecar command instead of duplicating DSP in Rust.
+- Updated the Python preview path so generated-off boundary previews include the same bounded `gap`, `fade`, `ring-out`, and `crossfade` treatment as full album WAV assembly.
+- Evidence: `test-output/tauri-release-album-state-smoke/tauri-release-album-state-smoke.json`.
+- Evidence values include `boundaryPreviewButtonEnabledBefore: true`, `boundaryPreviewReadyVisible: true`, `boundaryPreviewPathExists: true`, `boundaryPreviewProjectExists: true`, `boundaryPreviewTransportLabel: "Boundary 1 to 2 Preview"`, and `boundaryPreviewHistoryVisible: true`.
+- Remaining gap: this is bounded adjacent-boundary audition, not a full album render or human listening approval.
+
 ## Phase 9: Transition Primitives
 
 Goal: provide reliable album boundary tools before generated musical transitions.

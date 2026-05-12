@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Album Master Boundary Preview: packaged Album Master state smoke verifies visible `Preview Boundary`, generates a bounded adjacent-track WAV through the Python `preview-transition` sidecar path, confirms preview/project files exist, verifies transport label `Boundary 1 to 2 Preview`, and records a Recent Renders `Boundary Preview` entry. Python unit coverage verifies disabled `gap`, `fade`, `ring-out`, and `crossfade` boundary primitives in preview output.
 - 2026-05-12 Recent Renders rail: packaged Track Preview UI smoke verifies completed Track Preview, Region Preview, and Track Export runs appear in a local Recent Renders rail, dashboard reload from history works, and at least three render-history entries persist through autosave.
 - 2026-05-12 Bounded native Track Preview: packaged Track Preview UI smoke verifies visible `Native Preview` renders the selected waveform region through `rust-native-live-preview-model`, plays it through native audio, and stops cleanly with metadata start `1s`, duration `1.195s`, and `57360` frames.
 - 2026-05-12 Listening receipt audition context: packaged Album Master Codec QC smoke verifies `listening-review.json` records the judged audition path, including `Codec preview audition`, `Album AAC 256k`, `transport_kind: codec`, Live Preview contract parity `approximate`, modeled controls including `Low`, and native playback status `ready`.
@@ -73,10 +74,9 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Best next slices when the user is not actively listening:
 
-1. Add Album Master Boundary Preview so an adjacent-track boundary can be auditioned before a full album export, with copy that it is a bounded preview rather than human full-album approval.
-2. Automate packaged Open plus explicit Save As coverage only if a reliable Windows dialog automation route is found; keep the blocker documented while native OS dialogs remain too flaky to drive unattended.
-3. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented.
-4. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Rust first-control native preview, Python render-faithful preview, codec preview, or album/transition render output.
+1. Automate packaged Open plus explicit Save As coverage only if a reliable Windows dialog automation route is found; keep the blocker documented while native OS dialogs remain too flaky to drive unattended.
+2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented.
+3. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Rust first-control native preview, Python render-faithful preview, codec preview, or album/transition render output.
 
 Best next slice when the user is present:
 

@@ -76,7 +76,7 @@ type RenderHistoryItem = {
   id: string;
   createdAt: string;
   mode: StudioMode;
-  kind: "track-preview" | "region-preview" | "track-export" | "album-export" | "album-masters";
+  kind: "track-preview" | "region-preview" | "boundary-preview" | "track-export" | "album-export" | "album-masters";
   label: string;
   summary: string;
   outputRoot: string;
@@ -86,6 +86,25 @@ type RenderHistoryItem = {
   primaryAudioKind?: PlayItem["kind"];
   trackCount: number;
   interludeCount: number;
+};
+
+type AlbumBoundaryPreviewResult = {
+  output_dir: string;
+  project_path: string;
+  output: string;
+  between: [number, number];
+  left: string;
+  right: string;
+  transition_enabled: boolean;
+  style?: string | null;
+  interlude_duration_seconds: number;
+  boundary_style?: string | null;
+  boundary_duration_seconds?: number | null;
+  tail_seconds: number;
+  head_seconds: number;
+  duration_seconds: number;
+  output_exists?: boolean;
+  output_bytes?: number;
 };
 
 type CliEvent = {
@@ -567,6 +586,8 @@ function App() {
     [tracks],
   );
   const allAnalyzed = tracks.length > 0 && tracks.every((track) => track.analysis && (!track.sourceStatus || track.sourceStatus.status === "ok"));
+  const canPreviewAlbumBoundary = mode === "album" && Boolean(settings.outputDir) && allAnalyzed && selectedIndex >= 0 && selectedIndex < tracks.length - 1;
+  const selectedBoundaryRightTrack = canPreviewAlbumBoundary ? tracks[selectedIndex + 1] : null;
   const hasCurrentRender = renderRevision !== null && renderRevision === sessionRevision;
   const hasStaleRender = renderRevision !== null && renderRevision !== sessionRevision;
   const transitions = useMemo(() => (hasStaleRender ? [] : manifestTransitions(manifest)), [manifest, hasStaleRender]);
@@ -1462,6 +1483,56 @@ function App() {
     } catch (error) {
       pushLog(`Album render failed: ${String(error)}`);
       setProgressLabel("Album render failed.");
+    } finally {
+      setBusy(false);
+      setPhase("Idle");
+    }
+  }
+
+  async function previewAlbumBoundary() {
+    if (!canPreviewAlbumBoundary || !selectedTrack || !selectedBoundaryRightTrack) return;
+    const afterTrack = selectedIndex + 1;
+    setBusy(true);
+    setPhase("Rendering boundary preview");
+    setProgress(0);
+    setProgressLabel(`Rendering boundary ${afterTrack} to ${afterTrack + 1}.`);
+    try {
+      const outputDir = `${settings.outputDir}\\boundary-preview-${timestamp()}`;
+      const result = await invoke<AlbumBoundaryPreviewResult>("render_album_boundary_preview", {
+        project: buildProject(false, tracks, { transitionsEnabled: settings.transitionsEnabled }),
+        outputDir,
+        afterTrack,
+        tailSeconds: 8,
+        headSeconds: 8,
+      });
+      const previewKind = result.transition_enabled ? result.style ?? settings.transitionStyle : result.boundary_style ?? settings.boundaryStyle;
+      const label = `Boundary ${result.between?.[0] ?? afterTrack} to ${result.between?.[1] ?? afterTrack + 1} Preview`;
+      setProgress(0.85);
+      await setAudio({
+        label,
+        path: result.output,
+        kind: "transition",
+        trackId: selectedTrack.id,
+      });
+      recordRenderHistory({
+        mode: "album",
+        kind: "boundary-preview",
+        label,
+        summary: `${previewKind} ${result.transition_enabled ? "transition" : "boundary"}, ${formatTime(result.duration_seconds)}`,
+        outputRoot: result.output_dir,
+        dashboardPath: "",
+        manifestPath: result.project_path,
+        primaryAudioPath: result.output,
+        primaryAudioKind: "transition",
+        trackCount: 2,
+        interludeCount: result.transition_enabled ? 1 : 0,
+      });
+      setProgress(1);
+      setProgressLabel("Boundary preview ready.");
+      pushLog(`Boundary preview ready: ${result.output}`);
+    } catch (error) {
+      pushLog(`Boundary preview failed: ${String(error)}`);
+      setProgressLabel("Boundary preview failed.");
     } finally {
       setBusy(false);
       setPhase("Idle");
@@ -2903,6 +2974,13 @@ function App() {
               </button>
             ) : (
               <>
+                <button
+                  disabled={busy || !canPreviewAlbumBoundary}
+                  onClick={previewAlbumBoundary}
+                  title={selectedTrack && selectedBoundaryRightTrack ? `${selectedTrack.title} to ${selectedBoundaryRightTrack.title}` : "Select an analyzed track with a next neighbor."}
+                >
+                  <GitCompare size={16} /> Preview Boundary
+                </button>
                 <button className="primary" disabled={busy || !allAnalyzed} onClick={() => renderAlbum(true)}>
                   <Disc3 size={16} /> Export Album
                 </button>
@@ -3599,7 +3677,7 @@ function normalizeRenderHistory(value?: RenderHistoryItem[] | null): RenderHisto
 }
 
 function normalizeRenderHistoryKind(value: RenderHistoryItem["kind"]): RenderHistoryItem["kind"] {
-  if (["track-preview", "region-preview", "track-export", "album-export", "album-masters"].includes(value)) {
+  if (["track-preview", "region-preview", "boundary-preview", "track-export", "album-export", "album-masters"].includes(value)) {
     return value;
   }
   return "track-export";
@@ -3608,6 +3686,7 @@ function normalizeRenderHistoryKind(value: RenderHistoryItem["kind"]): RenderHis
 function renderHistoryKindLabel(kind: RenderHistoryItem["kind"]) {
   if (kind === "track-preview") return "Track Preview";
   if (kind === "region-preview") return "Region Preview";
+  if (kind === "boundary-preview") return "Boundary Preview";
   if (kind === "track-export") return "Track Export";
   if (kind === "album-export") return "Album Export";
   return "Album Masters";

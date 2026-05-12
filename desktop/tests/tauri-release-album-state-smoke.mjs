@@ -63,6 +63,8 @@ try {
 
   const evidence = {
     ...smoke,
+    boundaryPreviewPathExists: existsSync(smoke.boundaryPreviewPath || ""),
+    boundaryPreviewProjectExists: existsSync(smoke.boundaryPreviewProjectPath || ""),
     releaseExe,
     releaseExeExists: existsSync(releaseExe),
     screenshot: screenshotPath,
@@ -99,6 +101,12 @@ try {
   assert.equal(Number(evidence.persisted?.settings?.boundaryDuration), 4.5);
   assert.equal(evidence.persistedTrack?.character, "heavy_djent");
   assert.equal(evidence.persistedTrack?.preset, "bright-air");
+  assert.equal(evidence.boundaryPreviewButtonEnabledBefore, true);
+  assert.equal(evidence.boundaryPreviewReadyVisible, true);
+  assert.equal(evidence.boundaryPreviewPathExists, true);
+  assert.equal(evidence.boundaryPreviewProjectExists, true);
+  assert.match(evidence.boundaryPreviewTransportLabel, /Boundary 1 to 2 Preview/);
+  assert.equal(evidence.boundaryPreviewHistoryVisible, true);
   assert.equal(evidence.screenshotExists, true);
 
   const resultPath = path.join(outputRoot, "tauri-release-album-state-smoke.json");
@@ -198,6 +206,7 @@ function albumStateExpression() {
     if (!button) throw new Error('Button not found: ' + label);
     return button;
   };
+  const logText = () => document.querySelector('.log')?.textContent || '';
   const topActionButton = (title) => {
     const button = Array.from(document.querySelectorAll('.top-actions button')).find((item) => item.title === title);
     if (!button) throw new Error('Top action not found: ' + title);
@@ -350,6 +359,17 @@ function albumStateExpression() {
     12000,
   );
   const persistedTrack = persisted?.tracks?.find((track) => track.id === 'album-state-1') || null;
+  const boundaryPreviewButton = buttonByText('Preview Boundary');
+  const boundaryPreviewButtonEnabledBefore = !boundaryPreviewButton.disabled;
+  click(boundaryPreviewButton);
+  const boundaryPreviewReadyVisible = await waitFor(() => logText().includes('Boundary preview ready:'), 180000);
+  const boundaryPreviewMatch = /Boundary preview ready: ([^\\n]+)/.exec(logText());
+  if (!boundaryPreviewMatch) throw new Error('Boundary preview path was not logged: ' + logText());
+  const boundaryPreviewPath = boundaryPreviewMatch[1].trim();
+  const boundaryPreviewProjectPath = boundaryPreviewPath.replace(/boundary-01-to-02\\.wav$/, 'album-boundary-preview.ams.json');
+  const boundaryPreviewTransportLabel = text(document.querySelector('.transport-label'));
+  const boundaryPreviewHistoryVisible = Array.from(document.querySelectorAll('.render-history-card'))
+    .some((item) => text(item).includes('Boundary Preview') && text(item).includes('Boundary 1 to 2 Preview'));
 
   return JSON.stringify({
     activeMode: activeModeValue,
@@ -362,6 +382,12 @@ function albumStateExpression() {
     initialAlbumTitle,
     persisted,
     persistedTrack,
+    boundaryPreviewButtonEnabledBefore,
+    boundaryPreviewHistoryVisible,
+    boundaryPreviewPath,
+    boundaryPreviewProjectPath,
+    boundaryPreviewReadyVisible,
+    boundaryPreviewTransportLabel,
     trackCountLabel,
     trackPresetRoundTrip,
     trackRoleRoundTrip

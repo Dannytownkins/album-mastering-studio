@@ -2,6 +2,59 @@
 
 ## 2026-05-12
 
+### Album Master Boundary Preview Slice
+
+- Updated the Python `preview-transition` path so generated-off Album Master boundary previews include the same bounded `gap`, `fade`, `ring-out`, and `crossfade` behavior used by full album WAV assembly.
+- Added a Tauri `render_album_boundary_preview` command that writes a temporary `.ams.json`, calls the existing Python sidecar/CLI `preview-transition` contract, verifies the preview WAV exists, and returns the JSON summary to the UI.
+- Added a visible Album Master `Preview Boundary` action for the selected adjacent-track boundary. It renders only a bounded tail/head audition, routes the output through existing playback preparation, and records a local `Boundary Preview` entry in Recent Renders without replacing the full render manifest or approval state.
+- Extended the packaged Album Master state smoke to click `Preview Boundary`, verify the WAV/project files exist, verify the transport label, and verify the Recent Renders entry.
+
+Verification:
+
+```powershell
+python -m unittest tests.test_pipeline.PipelineTest.test_transition_preview_includes_disabled_boundary_primitives
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-state-smoke.mjs
+cd src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
+cargo check
+cd ..
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-state
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+python -m unittest discover -s tests
+git diff --check
+```
+
+Results:
+
+- Focused Python boundary-preview regression passed.
+- Desktop TypeScript/Vite build passed.
+- Node syntax check passed for the updated packaged Album Master state smoke.
+- Rust `cargo check` passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Album Master state smoke passed against the fresh release EXE.
+- Desktop CLI-contract integration passed.
+- Python compile passed.
+- Full Python unittest suite passed, 23 tests.
+- `git diff --check` passed.
+- Evidence: `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`.
+- Evidence values:
+  - `activeMode: "Album Master"`
+  - `boundaryPreviewButtonEnabledBefore: true`
+  - `boundaryPreviewReadyVisible: true`
+  - `boundaryPreviewPathExists: true`
+  - `boundaryPreviewProjectExists: true`
+  - `boundaryPreviewTransportLabel: "Boundary 1 to 2 Preview"`
+  - `boundaryPreviewHistoryVisible: true`
+
+Honest gap:
+
+- This gives a bounded adjacent-track audition before full export. It is not a full album render and still does not replace human listening approval.
+
 ### Listening Receipt Artifact Slice
 
 - Added a visible `Save Receipt` action to the Listening Pass panel.
