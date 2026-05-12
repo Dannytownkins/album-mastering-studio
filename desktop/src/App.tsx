@@ -109,6 +109,25 @@ type LiveAuditionSnapshot = {
   updatedAt: number;
 };
 
+type NativeLivePreviewAudition = {
+  source: string;
+  output: string;
+  output_exists: boolean;
+  sample_rate: number;
+  frame_count: number;
+  live_preview_engine: string;
+  native_engine: string;
+  modeled_width: number;
+  modeled_drive: number;
+  tuning: Record<string, number>;
+  normalized_tuning: Record<string, number>;
+  unmodeled_export_stages: string[];
+  statusLabel?: string | null;
+  outputDevice?: string | null;
+  active?: boolean;
+  startedAt?: number;
+};
+
 type LivePreviewContract = {
   modelId: string;
   previewParity: string;
@@ -495,6 +514,7 @@ function App() {
   const [livePreviewContract, setLivePreviewContract] = useState<LivePreviewContract | null>(null);
   const [livePreviewContractDrift, setLivePreviewContractDrift] = useState<string[]>([]);
   const [nativePlaybackStatus, setNativePlaybackStatus] = useState<NativePlaybackStatus>(idleNativePlaybackStatus);
+  const [nativeLivePreviewAudition, setNativeLivePreviewAudition] = useState<NativeLivePreviewAudition | null>(null);
   const [loopSelection, setLoopSelection] = useState(false);
   const [region, setRegion] = useState<RegionSelection | null>(null);
   const [waveformZoom, setWaveformZoom] = useState(1);
@@ -564,7 +584,8 @@ function App() {
   const nativePlaybackLabel = nativePlaybackStatus.label ?? "";
   const nativeAbPlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.startsWith("Native A/B");
   const nativeFilePlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.startsWith("Native file:");
-  const nativePlaybackKind = nativeAbPlaybackActive ? "Native A/B" : "Native playback";
+  const nativeLivePreviewPlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.includes("Native Live Preview");
+  const nativePlaybackKind = nativeAbPlaybackActive ? "Native A/B" : nativeLivePreviewPlaybackActive ? "Native Live Preview" : "Native playback";
   const listeningCompletedCount = Object.entries(listeningChecklist).filter(
     ([key, value]) => key !== "notes" && value === true,
   ).length;
@@ -976,6 +997,7 @@ function App() {
     setExportChecks(null);
     setListeningApproved(false);
     setComparePair(null);
+    setNativeLivePreviewAudition(null);
     setPlayItem((current) =>
       current && ["master", "album", "transition"].includes(current.kind) ? null : current,
     );
@@ -1778,20 +1800,53 @@ function App() {
       return;
     }
     if (!playItem) return;
-    setProgressLabel("Starting native playback.");
+    const shouldRenderNativeLivePreview = liveAuditionActive && playItem.kind === "source";
+    setProgressLabel(shouldRenderNativeLivePreview ? "Rendering native Live Preview audition." : "Starting native playback.");
     try {
       const startSeconds = duration > 0 ? clamp(position, 0, duration) : 0;
+      let playbackPath = playItem.path;
+      let playbackLabel = playItem.label;
+      let livePreviewAudition: NativeLivePreviewAudition | null = null;
+      if (shouldRenderNativeLivePreview) {
+        const outputRoot = settings.outputDir || repoRoot;
+        if (!outputRoot) throw new Error("No output folder is available for native Live Preview audition.");
+        const outputPath = `${outputRoot}\\native-live-preview-${timestamp()}-${slug(playItem.label)}.wav`;
+        livePreviewAudition = await invoke<NativeLivePreviewAudition>("render_native_live_preview_model", {
+          sourcePath: playItem.path,
+          outputPath,
+          sampleRate: 48000,
+          tuning: livePreviewTuning(settings),
+        });
+        playbackPath = outputPath;
+        playbackLabel = `${playItem.label} - Native Live Preview`;
+      }
       const status = await invoke<NativePlaybackStatus>("start_native_file_playback", {
-        path: playItem.path,
-        label: playItem.label,
+        path: playbackPath,
+        label: playbackLabel,
         startSeconds,
         maxDurationMs: 60 * 60 * 1000,
       });
       setNativePlaybackStatus(status);
-      setProgressLabel("Native playback running.");
-      pushLog(`Native playback started: ${playItem.label} on ${status.output_device ?? "default output"}.`);
+      if (livePreviewAudition) {
+        const snapshot = {
+          ...livePreviewAudition,
+          active: status.active,
+          outputDevice: status.output_device,
+          startedAt: performance.now(),
+          statusLabel: status.label,
+        };
+        setNativeLivePreviewAudition(snapshot);
+        (window as typeof window & { __AMS_NATIVE_LIVE_PREVIEW_AUDITION__?: NativeLivePreviewAudition }).__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ = snapshot;
+        setProgressLabel("Native Live Preview running.");
+        pushLog(`Native Live Preview started: ${playItem.label} through ${livePreviewAudition.native_engine} on ${status.output_device ?? "default output"}.`);
+      } else {
+        setNativeLivePreviewAudition(null);
+        setProgressLabel("Native playback running.");
+        pushLog(`Native playback started: ${playItem.label} on ${status.output_device ?? "default output"}.`);
+      }
     } catch (error) {
       setNativePlaybackStatus(idleNativePlaybackStatus);
+      setNativeLivePreviewAudition(null);
       pushLog(`Native playback failed: ${String(error)}`);
       setProgressLabel("Native playback failed.");
     }
@@ -1802,6 +1857,7 @@ function App() {
     try {
       const status = await invoke<NativePlaybackStatus>("stop_native_playback");
       setNativePlaybackStatus(status);
+      setNativeLivePreviewAudition(null);
       setProgressLabel(`${label} stopped.`);
       pushLog(`${label} stopped.`);
     } catch (error) {
@@ -2111,7 +2167,7 @@ function App() {
               className={nativeFilePlaybackActive ? "active" : ""}
               onClick={toggleNativeFilePlayback}
               disabled={(!playItem && !nativeFilePlaybackActive) || busy}
-              title="Plays the current prepared transport item through the native Windows audio path."
+              title="Plays the current prepared transport item through the native Windows audio path. Source Live Preview renders the Rust model first."
             >
               {nativeFilePlaybackActive ? <Square size={17} /> : <Volume2 size={17} />} {nativeFilePlaybackActive ? "Native Stop" : "Native Play"}
             </button>
@@ -2208,6 +2264,11 @@ function App() {
                 ? `${nativePlaybackKind} ${nativePlaybackStatus.paused ? "paused" : "playing"}`
                 : "Native transport ready"}
             </span>
+            {nativeLivePreviewAudition && (
+              <span className="native-audition-status active" title={nativeLivePreviewAudition.output}>
+                Rust model: {nativeLivePreviewAudition.modeled_width.toFixed(2)} width, {nativeLivePreviewAudition.modeled_drive.toFixed(2)} intensity
+              </span>
+            )}
             {nativePlaybackStatus.active && (
               <div className="native-transport-control">
                 <input
@@ -3147,6 +3208,16 @@ function fileStem(path: string) {
 
 function samePath(a: string, b: string) {
   return a.toLowerCase().replace(/\//g, "\\") === b.toLowerCase().replace(/\//g, "\\");
+}
+
+function livePreviewTuning(settings: Settings): Record<string, number> {
+  return {
+    bassDb: settings.bass,
+    midDb: settings.presence,
+    highDb: settings.air,
+    width: settings.width,
+    intensity: settings.compression,
+  };
 }
 
 function timestamp() {

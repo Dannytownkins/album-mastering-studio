@@ -2,6 +2,61 @@
 
 ## 2026-05-12
 
+### Native Live Preview Playback Handoff Slice
+
+- Wired the visible `Native Play` transport control to honor active source Live Preview.
+- When source playback has Live Preview active, `Native Play` now renders the Rust offline first-control model from the prepared playback-cache source, then starts native file playback from that modeled WAV.
+- Kept the behavior guarded and honest: this is a native modeled audition handoff, not continuously updating native live DSP.
+- Extended the packaged Track Preview smoke to click the visible `Native Play` button after Live Preview is active, verify the Rust model output exists, verify native playback reports `Native Live Preview playing`, and stop it before continuing export checks.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node smoke syntax check passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Preview UI smoke passed against the fresh release EXE.
+- Diff hygiene passed.
+- Evidence values:
+  - `nativeLivePreviewStarted: true`
+  - `nativeLivePreviewStopped: true`
+  - `nativeLivePreviewSourceExists: true`
+  - `nativeLivePreviewOutputExists: true`
+  - `nativeLivePreviewStatusWhilePlaying: Native Live Preview playing`
+  - `nativeLivePreviewModelStatus: Rust model: 1.36 width, 0.40 intensity`
+  - `nativeLivePreviewStatusLabel: Native file: Preview Fixture 2 - Original - Native Live Preview`
+  - `nativeLivePreviewActivationMs: 617.8999999761581`
+  - native `live_preview_engine: web-audio-first-control-model`
+  - native `native_engine: rust-native-live-preview-model`
+  - native `modeled_width: 1.36`
+  - native `modeled_drive: 0.4`
+  - native `frame_count: 192000`
+  - native `sample_rate: 48000`
+  - native `output_exists: true`
+  - native `normalized_tuning: { bassDb: 0.5, highDb: 0.35, intensity: 0.4, midDb: -0.25, width: 0.2 }`
+
+Honest gap:
+
+- Native playback now has a visible modeled handoff for active source Live Preview, but it is still rendered-before-playback and not real-time continuously updating native DSP. Human listening approval and OS file-picker Open/Save-As automation are still open.
+
+Next unattended slice from the read-only scout:
+
+- Automate packaged Open plus explicit Save As coverage if reliable Windows dialog automation is available; otherwise keep the blocker documented rather than claiming it closed.
+
 ### Native Live Preview Model Oracle Slice
 
 - Added a Tauri/Rust `render_native_live_preview_model` command that renders the current engine-owned first-control Live Preview model offline from a prepared PCM playback-cache WAV.

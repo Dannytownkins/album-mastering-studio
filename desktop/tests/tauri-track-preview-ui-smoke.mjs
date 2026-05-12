@@ -96,6 +96,8 @@ try {
     tauriLivePreviewModelPathExists: existsSync(smoke.tauriLivePreviewModelPath),
     tauriNativeLivePreviewModelPathExists: existsSync(smoke.tauriNativeLivePreviewModelPath),
     tauriLivePreviewModelPlaybackCacheExists: existsSync(smoke.tauriLivePreviewModelPlaybackCachePath),
+    nativeLivePreviewSourceExists: existsSync(smoke.nativeLivePreviewAudition?.source || ""),
+    nativeLivePreviewOutputExists: existsSync(smoke.nativeLivePreviewAudition?.output || ""),
     releaseExe,
     releaseExeExists: existsSync(releaseExe),
     previewOutputDir,
@@ -276,6 +278,19 @@ try {
   assert.equal(evidence.previewParityAfterReturnToLiveSource, "Approx audition");
   assert.match(evidence.livePreviewStatusAfterReturnToSource, /Live Preview active/);
   assert.equal(evidence.liveSnapshotAfterReturnToSource.active, true);
+  assert.equal(evidence.nativeLivePreviewStarted, true);
+  assert.equal(evidence.nativeLivePreviewStopped, true);
+  assert.equal(evidence.nativeLivePreviewSourceExists, true);
+  assert.equal(evidence.nativeLivePreviewOutputExists, true);
+  assert.equal(evidence.nativeLivePreviewAudition.live_preview_engine, "web-audio-first-control-model");
+  assert.equal(evidence.nativeLivePreviewAudition.native_engine, "rust-native-live-preview-model");
+  assert.equal(evidence.nativeLivePreviewAudition.output_exists, true);
+  assert.deepEqual(evidence.nativeLivePreviewAudition.normalized_tuning, liveParityTuning);
+  assert.ok(Math.abs(evidence.nativeLivePreviewAudition.modeled_width - 1.36) <= 0.001);
+  assert.ok(Math.abs(evidence.nativeLivePreviewAudition.modeled_drive - 0.4) <= 0.001);
+  assert.match(evidence.nativeLivePreviewStatusWhilePlaying, /Native Live Preview playing/);
+  assert.match(evidence.nativeLivePreviewModelStatus, /Rust model: 1.36 width, 0.40 intensity/);
+  assert.match(evidence.nativeLivePreviewStatusLabel, /Native file: .*Native Live Preview/);
   assert.equal(evidence.exportVsLiveComparison.offline_engine, "python-render-track-master");
   assert.equal(evidence.exportVsLiveComparison.live_preview_engine, "web-audio-first-control-model");
   assert.deepEqual(evidence.exportVsLiveComparison.modeled_controls, ["Low", "Mid", "High", "Width", "Intensity"]);
@@ -806,6 +821,34 @@ function trackPreviewExpression() {
   const previewParityAfterReturnToLiveSource = text(document.querySelector('.preview-parity-status'));
   const livePreviewStatusAfterReturnToSource = text(document.querySelector('.live-audition-status'));
   const liveSnapshotAfterReturnToSource = window.__AMS_LIVE_AUDITION__ || {};
+  const nativeLivePreviewStart = performance.now();
+  buttonByText('Native Play').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const nativeLivePreviewStarted = await waitFor(() => {
+    const audition = window.__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ || {};
+    return Boolean(
+      audition.native_engine === 'rust-native-live-preview-model' &&
+      text(document.querySelector('.native-audition-status')).includes('Native Live Preview playing')
+    );
+  }, 30000);
+  if (!nativeLivePreviewStarted) {
+    throw new Error('Native Play did not route active source Live Preview through the Rust model: ' + JSON.stringify({
+      audition: window.__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ || null,
+      nativeStatus: text(document.querySelector('.native-audition-status')),
+      log: logText().slice(-2000)
+    }));
+  }
+  const nativeLivePreviewActivationMs = performance.now() - nativeLivePreviewStart;
+  const nativeLivePreviewAudition = window.__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ || {};
+  const nativeLivePreviewStatusWhilePlaying = text(document.querySelector('.native-audition-status'));
+  const nativeLivePreviewModelStatus = Array.from(document.querySelectorAll('.native-audition-status'))
+    .map((item) => text(item))
+    .find((item) => item.startsWith('Rust model:')) || '';
+  const nativeLivePreviewStatusLabel = nativeLivePreviewAudition.statusLabel || '';
+  buttonByText('Native Stop').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const nativeLivePreviewStopped = await waitFor(
+    () => text(document.querySelector('.native-audition-status')).includes('Native transport ready'),
+    10000,
+  );
   const trackBatchExportButton = buttonByText('Export Master');
   const trackBatchExportButtonEnabledBefore = !trackBatchExportButton.disabled;
   if (!trackBatchExportButtonEnabledBefore) {
@@ -940,6 +983,13 @@ function trackPreviewExpression() {
     previewParityAfterReturnToLiveSource,
     livePreviewStatusAfterReturnToSource,
     liveSnapshotAfterReturnToSource,
+    nativeLivePreviewStarted,
+    nativeLivePreviewStopped,
+    nativeLivePreviewActivationMs,
+    nativeLivePreviewAudition,
+    nativeLivePreviewStatusWhilePlaying,
+    nativeLivePreviewModelStatus,
+    nativeLivePreviewStatusLabel,
     trackBatchExportButtonEnabledBefore,
     trackBatchReceiptVisible,
     trackBatchReceiptText,

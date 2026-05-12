@@ -17,7 +17,7 @@ Status: active, not complete.
 The current repo has strong automated evidence for the Track Master-first Tauri surface, Python engine contract, Album Master path, and packaged Windows flow. The remaining blockers are quality gates that cannot be honestly closed by documentation alone:
 
 - Human listening approval has not been recorded.
-- Live Preview remains an explicit Web Audio approximation, not shared/export-engine-faithful DSP.
+- Live Preview remains an explicit Web Audio approximation for continuous control updates; the visible native path now has a rendered Rust-model handoff, but not continuous native DSP.
 - OS file-picker Open and Save-As dialog flows remain unautomated.
 
 ## Coverage Map
@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 native Live Preview playback handoff: packaged Track Preview smoke clicks visible `Native Play` with source Live Preview active and verifies `Native Live Preview playing`, `Rust model: 1.36 width, 0.40 intensity`, a 192000-frame Rust model output, and clean stop.
 - 2026-05-12 native Live Preview model oracle: packaged Track Preview smoke prepares one source through `prepare_playback_file`, renders both the Python sidecar model and Rust native offline model from that source, and compares 192000 frames at 48000 Hz with `rms_difference_dbfs: -101.14268111252326` and `max_abs_difference: 1.5288591384887695e-05`.
 - 2026-05-12 native playback probe for the Live Preview model: packaged Track Preview smoke prepares the Tauri-rendered model WAV for playback and probes it through native audio with zero stream errors.
 - 2026-05-12 Tauri-side Live Preview model bridge: added a release WebView command path that invokes the bundled sidecar `preview-model` and verifies the output WAV/metadata in the packaged Track Preview smoke.
@@ -56,7 +57,7 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Best next slices when the user is not actively listening:
 
-1. Use the native Rust offline Live Preview model oracle as the measured target for a guarded native/shared playback experiment, without removing the Web Audio honesty labels until parity is proven in the actual playback path.
+1. Automate packaged Open plus explicit Save As coverage if reliable Windows dialog automation is available; keep the blocker documented if native OS dialogs remain too flaky to drive unattended.
 2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented, especially around project Open/Save-As if a reliable OS-dialog strategy is chosen.
 3. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Python render-faithful preview, or Python render-faithful region.
 

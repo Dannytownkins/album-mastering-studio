@@ -27,6 +27,7 @@ The Python engine now owns both the Live Preview contract and the deterministic 
 - The same packaged smoke now prepares that model WAV for playback and runs a 500 ms native playback probe with 24000 queued/played output frames, 50 callbacks, no stream errors, and no warnings.
 - Tauri/Rust now also has an offline `render_native_live_preview_model` oracle for the same first-control model. The packaged Track Preview smoke feeds both Python and native oracles from the same prepared PCM playback-cache source, then compares their WAV outputs.
 - Current native oracle evidence: 192000 compared frames at 48000 Hz, `rms_difference_dbfs: -101.14268111252326`, `max_abs_difference: 1.5288591384887695e-05`, and matching `tuning` plus nine render-only export stages.
+- The visible `Native Play` transport now uses that Rust model when source Live Preview is active: it renders a modeled WAV from the prepared playback-cache source, then starts native file playback from that output. Packaged smoke evidence shows `Native Live Preview playing`, `Rust model: 1.36 width, 0.40 intensity`, and a 192000-frame output.
 
 This reduces drift in automated evidence. It does not mean the visible Web Audio Live Preview is export-engine faithful; the UI still labels it as approximate and the contract still lists render-only export stages.
 
