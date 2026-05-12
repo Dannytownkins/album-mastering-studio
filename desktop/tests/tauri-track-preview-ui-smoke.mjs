@@ -140,6 +140,9 @@ try {
   assert.equal(evidence.previewButtonEnabledBefore, true);
   assert.equal(evidence.previewReadyVisible, true);
   assert.equal(evidence.masterStatusAfterPreview, "Master ready");
+  assert.equal(evidence.dashboardPanelVisibleAfterPreview, true);
+  assert.equal(evidence.dashboardOpenHtmlEnabledAfterPreview, true);
+  assert.match(evidence.dashboardIframeSrcAfterPreview, /asset|http|tauri/i);
   assert.equal(evidence.masteredButtonEnabledAfterPreview, true);
   assert.equal(evidence.referenceButtonEnabledAfterPreview, true);
   assert.equal(evidence.referencePlaybackReadyVisible, true);
@@ -532,6 +535,24 @@ function trackPreviewExpression() {
   if (!previewMatch) throw new Error('Preview path was not logged');
   const previewMasterPath = previewMatch[1].trim();
   const masterStatusAfterPreview = masterStatus();
+  const dashboardPanelReadyAfterPreview = await waitFor(
+    () => Boolean(document.querySelector('.dashboard-pane iframe')?.getAttribute('src')),
+    30000,
+  );
+  const dashboardIframeSrcAfterPreview = document.querySelector('.dashboard-pane iframe')?.getAttribute('src') || '';
+  const openHtmlButtonAfterPreview = Array.from(document.querySelectorAll('.dashboard-pane button'))
+    .find((item) => text(item).includes('Open HTML'));
+  const dashboardOpenHtmlEnabledAfterPreview = openHtmlButtonAfterPreview?.disabled === false;
+  if (!dashboardPanelReadyAfterPreview) {
+    throw new Error('Preview dashboard panel did not load: ' + JSON.stringify({
+      dashboardPanelText: text(document.querySelector('.dashboard-pane')),
+      log: logText().slice(-2000),
+      previewOutputDirText: previewMasterPath,
+      openHtmlButtonExists: Boolean(openHtmlButtonAfterPreview),
+      openHtmlButtonDisabled: openHtmlButtonAfterPreview?.disabled ?? null,
+      dashboardIframeSrcAfterPreview,
+    }));
+  }
   const masteredButtonEnabledAfterPreview = masteredActionButton()?.disabled === false;
   masteredActionButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const playbackReadyVisible = await waitFor(() => logText().includes('Playback ready: Preview Fixture 2 - Mastered'), 30000);
@@ -927,6 +948,9 @@ function trackPreviewExpression() {
     previewReadyVisible,
     previewMasterPath,
     masterStatusAfterPreview,
+    dashboardPanelVisibleAfterPreview: dashboardPanelReadyAfterPreview,
+    dashboardIframeSrcAfterPreview,
+    dashboardOpenHtmlEnabledAfterPreview,
     masteredButtonEnabledAfterPreview,
     referenceButtonEnabledAfterPreview,
     referencePlaybackReadyVisible,

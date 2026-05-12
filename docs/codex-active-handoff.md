@@ -17,7 +17,56 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Release Album State Undo/Redo Smoke
+## Latest Codex Pass: Track Preview Dashboard Handoff
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Fixed `renderPreviewMaster()` so Track Master `Update Preview` assigns the generated `dashboard.html` path to the embedded dashboard pane.
+- Extended the packaged Track Preview smoke to verify the dashboard pane after `Update Preview`: iframe source exists and visible `Open HTML` is enabled before the smoke continues through playback, A/B, region, Live Preview, native playback, and batch export.
+- The smoke initially caught the app bug: the engine generated `dashboard.html`, but the app kept `dashboardPath` empty after single-track preview.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `dashboardPanelVisibleAfterPreview: true`
+  - `dashboardOpenHtmlEnabledAfterPreview: true`
+  - `dashboardIframeSrcAfterPreview` points to an `asset.localhost` dashboard URL.
+
+Remaining gap:
+
+- This proves the generated Track Master preview report appears in the shell. It does not change report content quality, Codec QC behavior, or human listening approval.
+
+Next useful slice:
+
+- Read-only scout recommended Track Master Codec QC/advisory receipt work next. Treat it as a larger vertical fix likely touching Python render/check logic, Tauri aggregation, app export settings, and a new packaged smoke.
+
+## Previous Codex Pass: Release Album State Undo/Redo Smoke
 
 Date: 2026-05-12
 

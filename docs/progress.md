@@ -2,6 +2,47 @@
 
 ## 2026-05-12
 
+### Track Preview Dashboard Handoff Slice
+
+- Fixed the Track Master `Update Preview` path so the generated preview dashboard is assigned to the embedded dashboard pane.
+- Extended the packaged Track Preview smoke to verify the report surface after `Update Preview`: dashboard iframe source exists and the visible `Open HTML` control is enabled before the smoke continues through playback, A/B, region, Live Preview, native playback, and batch export.
+- The first version of the smoke exposed the bug: `render_track_master` produced `dashboard.html`, but `renderPreviewMaster()` kept `dashboardPath` empty, leaving the main report pane blank.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node Track Preview smoke syntax check passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Preview UI smoke passed against the fresh release EXE after the dashboard-path fix.
+- Evidence: `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`.
+- Evidence values:
+  - `dashboardPanelVisibleAfterPreview: true`
+  - `dashboardOpenHtmlEnabledAfterPreview: true`
+  - `dashboardIframeSrcAfterPreview` points to an `asset.localhost` dashboard URL.
+
+Honest gap:
+
+- This proves the generated Track Master preview report is visible in the app shell. It does not change report content quality or close human listening approval.
+
+Next unattended slice:
+
+- The read-only scout recommended Track Master Codec QC/advisory receipt work next. That is a larger vertical fix because it likely touches Python render/check logic, Tauri aggregation, app export settings, and a new packaged smoke.
+
 ### Release Album State Undo/Redo Smoke Slice
 
 - Added `npm run test:tauri-release-album-state`, a packaged release EXE smoke for Album Master non-destructive state safety.

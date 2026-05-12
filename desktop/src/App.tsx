@@ -1643,6 +1643,7 @@ function App() {
         ),
       );
       setManifest(loaded);
+      setDashboardPath(result.dashboard_path ?? "");
       await updateExportChecks(loaded);
       if (options.audition) {
         pendingSeekRef.current = clamp(auditionStartSeconds, 0, Math.max(sourceDuration - 0.1, 0));
