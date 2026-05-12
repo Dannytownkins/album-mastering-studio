@@ -17,7 +17,67 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Real-Song Region Stale/Re-Render UI Smoke
+## Latest Codex Pass: Fast Region Audition-Only Render
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-real-song-region-ui-smoke.mjs`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added optional `auditionOnly` handling to `render_track_region_preview`.
+- The visible Track Master `Render Region` button now sends `auditionOnly: true`, keeping Python `render-project` audio rendering while skipping `score-render` and `export-dashboard` for the audition path.
+- Full Track Master renders, Album Master renders, and the direct/default region-preview backend path still use the default full render options with score/dashboard generation.
+- Extended the real-song region UI smoke and synthetic Track Preview UI smoke to assert that region audition skips `dashboard.html`, while whole-track preview still creates its dashboard.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-region-ui-smoke.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-ui-smoke'
+$env:AMS_REAL_SONG_REGION_SECONDS='12'
+npm run test:tauri-real-song-region-ui
+$env:AMS_TAURI_REAL_SONG_REGION_PREVIEW_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-preview-smoke'
+npm run test:tauri-real-song-region-preview
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- `test-output\tauri-real-song-region-preview-smoke\tauri-real-song-region-preview-smoke.json`
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - real-song UI region audition: `dashboardExists: false`, `dashboardSkippedForAudition: true`
+  - real-song UI stale state: `regionParityAfterLowChange: Render required`
+  - real-song UI final parity: `secondRegionPreviewParity: Render-faithful region`
+  - real-song UI engine: `regionEngineAuditionEngine: python-render-track-region-preview`
+  - real-song UI timing: start `65.0362191430817s`, duration `12.0111936255241s`, rendered duration `12.011s`
+  - direct backend region-preview default: `dashboardExists: true`, `manifestExists: true`, `regionSourceExists: true`, `regionMasterExists: true`, `regionEngine: python-render-track-region-preview`
+  - Track Preview UI: `regionPreviewDashboardExists: false`, `regionPreviewDashboardSkippedForAudition: true`, `previewDashboardExists: true`, `previewParityAfterUpdatePreview: Render-faithful preview`, `exportEngineAuditionEngine: python-render-track-master`
+
+Remaining gap:
+
+- Region audition is faster because report/scoring work is skipped, but it remains render-first through the Python export engine. True real-time export-engine DSP parity and human listening approval remain open.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward true export-engine live audition parity or another performance pass on the real-song region path.
+
+## Previous Codex Pass: Real-Song Region Stale/Re-Render UI Smoke
 
 Date: 2026-05-12
 

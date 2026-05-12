@@ -81,6 +81,21 @@ struct ProductRenderResult {
     manifest: Value,
 }
 
+#[derive(Clone, Copy)]
+struct RenderProjectOptions {
+    score: bool,
+    dashboard: bool,
+}
+
+impl Default for RenderProjectOptions {
+    fn default() -> Self {
+        Self {
+            score: true,
+            dashboard: true,
+        }
+    }
+}
+
 #[derive(Clone, Serialize)]
 struct NativeAudioConfig {
     channels: u16,
@@ -325,6 +340,7 @@ fn render_track_region_preview(
     output_dir: String,
     start_seconds: f64,
     duration_seconds: f64,
+    audition_only: Option<bool>,
 ) -> Result<ProductRenderResult, String> {
     let source = project
         .get("tracks")
@@ -410,12 +426,21 @@ fn render_track_region_preview(
         json!(region_source.to_string_lossy().to_string()),
     );
 
-    render_project_product(
+    let options = if audition_only.unwrap_or(false) {
+        RenderProjectOptions {
+            score: false,
+            dashboard: false,
+        }
+    } else {
+        RenderProjectOptions::default()
+    };
+    render_project_product_with_options(
         &app,
         state.inner(),
         project,
         output_dir,
         "region-preview.ams.json",
+        options,
     )
 }
 
@@ -1402,6 +1427,24 @@ fn render_project_product(
     output_dir: PathBuf,
     project_name: &str,
 ) -> Result<ProductRenderResult, String> {
+    render_project_product_with_options(
+        app,
+        state,
+        project,
+        output_dir,
+        project_name,
+        RenderProjectOptions::default(),
+    )
+}
+
+fn render_project_product_with_options(
+    app: &AppHandle,
+    state: &ProcessState,
+    project: Value,
+    output_dir: PathBuf,
+    project_name: &str,
+    options: RenderProjectOptions,
+) -> Result<ProductRenderResult, String> {
     fs::create_dir_all(&output_dir).map_err(|error| {
         format!(
             "Could not create output folder {}: {error}",
@@ -1427,45 +1470,51 @@ fn render_project_product(
     let manifest_path = output_dir.join("manifest.json");
     let manifest = read_json(manifest_path.to_string_lossy().to_string())?;
 
-    if let Err(error) = run_engine_command(
-        app,
-        state,
-        vec![
-            "score-render".to_string(),
-            manifest_path.to_string_lossy().to_string(),
-            "--scorer".to_string(),
-            "local".to_string(),
-        ],
-        None,
-    ) {
-        emit(
+    if options.score {
+        if let Err(error) = run_engine_command(
             app,
-            "stderr",
-            &format!("Score failed after audio render: {error}"),
-        );
-    }
-
-    let dashboard_path = output_dir.join("dashboard.html");
-    let dashboard = match run_engine_command(
-        app,
-        state,
-        vec![
-            "export-dashboard".to_string(),
-            manifest_path.to_string_lossy().to_string(),
-            "--output".to_string(),
-            dashboard_path.to_string_lossy().to_string(),
-        ],
-        None,
-    ) {
-        Ok(_) => Some(dashboard_path.to_string_lossy().to_string()),
-        Err(error) => {
+            state,
+            vec![
+                "score-render".to_string(),
+                manifest_path.to_string_lossy().to_string(),
+                "--scorer".to_string(),
+                "local".to_string(),
+            ],
+            None,
+        ) {
             emit(
                 app,
                 "stderr",
-                &format!("Dashboard export failed after audio render: {error}"),
+                &format!("Score failed after audio render: {error}"),
             );
-            None
         }
+    }
+
+    let dashboard_path = output_dir.join("dashboard.html");
+    let dashboard = if options.dashboard {
+        match run_engine_command(
+            app,
+            state,
+            vec![
+                "export-dashboard".to_string(),
+                manifest_path.to_string_lossy().to_string(),
+                "--output".to_string(),
+                dashboard_path.to_string_lossy().to_string(),
+            ],
+            None,
+        ) {
+            Ok(_) => Some(dashboard_path.to_string_lossy().to_string()),
+            Err(error) => {
+                emit(
+                    app,
+                    "stderr",
+                    &format!("Dashboard export failed after audio render: {error}"),
+                );
+                None
+            }
+        }
+    } else {
+        None
     };
 
     Ok(ProductRenderResult {

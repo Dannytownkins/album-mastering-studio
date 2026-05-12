@@ -84,6 +84,7 @@ try {
     regionRenderedDurationSeconds: trackItem.after?.duration_seconds ?? null,
     manifestExists: existsSync(manifestPath),
     dashboardExists: existsSync(dashboardPath),
+    dashboardSkippedForAudition: !existsSync(dashboardPath),
     regionSourceExists: existsSync(regionSourcePath),
     regionMasterExists: existsSync(smoke.regionPreviewMasterPath),
     screenshot: screenshotPath,
@@ -136,7 +137,8 @@ try {
   assert.ok(Math.abs(evidence.regionEngineAuditionStartSeconds - evidence.expectedRegionStartSeconds) <= 0.75);
   assert.ok(Math.abs(evidence.regionEngineAuditionDurationSeconds - evidence.expectedRegionDurationSeconds) <= 0.75);
   assert.equal(evidence.manifestExists, true);
-  assert.equal(evidence.dashboardExists, true);
+  assert.equal(evidence.dashboardExists, false);
+  assert.equal(evidence.dashboardSkippedForAudition, true);
   assert.equal(evidence.regionSourceExists, true);
   assert.equal(evidence.regionMasterExists, true);
   assert.equal(evidence.manifest.track_count, 1);

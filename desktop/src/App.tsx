@@ -1554,6 +1554,7 @@ function App() {
         outputDir,
         startSeconds: windowToRender.startSeconds,
         durationSeconds: windowToRender.durationSeconds,
+        auditionOnly: true,
       });
       const loaded = withDashboard(result.manifest, result.dashboard_path);
       const trackItem = manifestTrackItems(loaded)[0];

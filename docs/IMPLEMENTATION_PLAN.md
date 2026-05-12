@@ -317,6 +317,11 @@ Current packaged coverage:
 - 2026-05-12 extended the real-song region UI smoke to cover stale-state behavior after a tuning change.
 - Evidence values include first region parity `Render-faithful region`, `Low` changed to `+0.50 dB`, stale parity `Render required`, transport reset to `Player idle`, `Render Region` enabled again, a second new Python-engine region master path, final parity `Render-faithful region`, and the same 12.011s bounded region duration.
 - Remaining region stale/re-render caveat: this proves stale protection and re-render handoff for bounded region audition; it is still render-first automation, not true live export-engine DSP or human listening approval.
+- 2026-05-12 changed the visible Track Master `Render Region` path to pass `auditionOnly: true` into the Tauri region-preview command.
+- Audition-only region preview still renders audio through Python `render-project`, but skips `score-render` and `export-dashboard` so the UI loop does not spend time generating reports for throwaway region checks.
+- Full Track Master renders, Album Master renders, and the direct/default region-preview backend command still use the default scored/dashboard path.
+- Evidence values now include real-song UI region `dashboardExists: false` and `dashboardSkippedForAudition: true`, direct backend region-preview `dashboardExists: true`, and Track Preview UI `regionPreviewDashboardExists: false` while `previewDashboardExists: true`.
+- Remaining fast-region caveat: this is a faster render-first audition loop, not true real-time export-engine DSP parity.
 
 No-victory-lap check:
 

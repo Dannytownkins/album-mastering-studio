@@ -70,6 +70,7 @@ try {
   const previewManifestPath = path.join(previewOutputDir, "manifest.json");
   const previewDashboardPath = path.join(previewOutputDir, "dashboard.html");
   const regionPreviewManifestPath = path.join(regionPreviewOutputDir, "manifest.json");
+  const regionPreviewDashboardPath = path.join(regionPreviewOutputDir, "dashboard.html");
   const regionPreviewManifest = JSON.parse(readFileSync(regionPreviewManifestPath, "utf8"));
   const regionPreviewSourcePath = regionPreviewManifest.sequence?.find((item) => item.type === "track")?.source || "";
   const previewManifest = JSON.parse(readFileSync(previewManifestPath, "utf8"));
@@ -88,12 +89,15 @@ try {
     previewManifestPath,
     previewDashboardPath,
     regionPreviewManifestPath,
+    regionPreviewDashboardPath,
     regionPreviewManifest,
     regionPreviewSourcePath,
     previewManifest,
     previewManifestExists: existsSync(previewManifestPath),
     previewDashboardExists: existsSync(previewDashboardPath),
     regionPreviewManifestExists: existsSync(regionPreviewManifestPath),
+    regionPreviewDashboardExists: existsSync(regionPreviewDashboardPath),
+    regionPreviewDashboardSkippedForAudition: !existsSync(regionPreviewDashboardPath),
     regionPreviewSourceExists: existsSync(regionPreviewSourcePath),
     previewMasterExists: existsSync(smoke.previewMasterPath),
     regionPreviewMasterExists: existsSync(smoke.regionPreviewMasterPath),
@@ -134,6 +138,8 @@ try {
   assert.equal(evidence.regionPreviewReadyVisible, true);
   assert.equal(evidence.regionPreviewMasterExists, true);
   assert.equal(evidence.regionPreviewManifestExists, true);
+  assert.equal(evidence.regionPreviewDashboardExists, false);
+  assert.equal(evidence.regionPreviewDashboardSkippedForAudition, true);
   assert.equal(evidence.regionPreviewSourceExists, true);
   assert.equal(evidence.regionPreviewManifest.track_count, 1);
   assert.equal(evidence.regionPreviewManifest.interlude_count, 0);
