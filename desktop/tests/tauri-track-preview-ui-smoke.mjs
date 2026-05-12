@@ -84,6 +84,7 @@ try {
     ...pixelSeek,
     exportVsLiveComparison,
     tauriLivePreviewModelPathExists: existsSync(smoke.tauriLivePreviewModelPath),
+    tauriLivePreviewModelPlaybackCacheExists: existsSync(smoke.tauriLivePreviewModelPlaybackCachePath),
     releaseExe,
     releaseExeExists: existsSync(releaseExe),
     previewOutputDir,
@@ -183,6 +184,14 @@ try {
   assert.equal(evidence.tauriLivePreviewModel.output, evidence.tauriLivePreviewModelPath);
   assert.equal(evidence.tauriLivePreviewModel.sample_rate, 48000);
   assert.equal(evidence.tauriLivePreviewModel.frame_count, 48000 * 4);
+  assert.equal(evidence.tauriLivePreviewModelPlaybackCacheExists, true);
+  assert.equal(evidence.tauriLivePreviewModelNativeProbe.source_sample_rate, 48000);
+  assert.equal(evidence.tauriLivePreviewModelNativeProbe.source_total_frames, 48000 * 4);
+  assert.equal(evidence.tauriLivePreviewModelNativeProbe.requested_duration_ms, 500);
+  assert.equal(evidence.tauriLivePreviewModelNativeProbe.played_output_frames > 0, true);
+  assert.equal(evidence.tauriLivePreviewModelNativeProbe.callback_count > 0, true);
+  assert.deepEqual(evidence.tauriLivePreviewModelNativeProbe.stream_errors, []);
+  assert.deepEqual(evidence.tauriLivePreviewModelNativeProbe.warnings, []);
   assert.match(evidence.livePreviewModeledStatus, /Live model: Low, Mid, High, Width, Intensity/);
   assert.match(evidence.livePreviewRenderOnlyStatus, /Render-only:/);
   assert.equal(evidence.livePreviewRenderOnlyIncludesTone, true);
@@ -408,6 +417,12 @@ function trackPreviewExpression() {
     outputPath: tauriLivePreviewModelPath,
     sampleRate: 48000,
     tuning: ${JSON.stringify(liveParityTuning)}
+  });
+  const tauriLivePreviewModelPlaybackCachePath = await invoke('prepare_playback_file', { path: tauriLivePreviewModelPath });
+  const tauriLivePreviewModelNativeProbe = await invoke('native_playback_file_probe', {
+    path: tauriLivePreviewModelPlaybackCachePath,
+    durationMs: 500,
+    startSeconds: 0
   });
   const masteredActionButton = () => buttons().find((item) => text(item).startsWith('Mastered') && item.closest('.audition-actions'));
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
@@ -827,6 +842,8 @@ function trackPreviewExpression() {
     tauriLivePreviewModel,
     tauriLivePreviewModelPath,
     tauriLivePreviewModelOutputExists: tauriLivePreviewModel.output_exists === true,
+    tauriLivePreviewModelPlaybackCachePath,
+    tauriLivePreviewModelNativeProbe,
     livePreviewModeledStatus,
     livePreviewRenderOnlyStatus,
     livePreviewRenderOnlyIncludesTone: livePreviewRenderOnlyStatus.includes('tone'),

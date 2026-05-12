@@ -24,6 +24,7 @@ The Python engine now owns both the Live Preview contract and the deterministic 
 - Tauri `render_live_preview_model` exposes the same sidecar command to the desktop shell.
 - The shared JS comparison helper now asks the Python CLI to render the model and only computes comparison metrics in JS/Python test glue.
 - The packaged Track Preview smoke verifies the release WebView can invoke that Tauri command and produce a 192000-frame local model WAV from the second fixture track.
+- The same packaged smoke now prepares that model WAV for playback and runs a 500 ms native playback probe with 24000 queued/played output frames, 50 callbacks, no stream errors, and no warnings.
 
 This reduces drift in automated evidence. It does not mean the visible Web Audio Live Preview is export-engine faithful; the UI still labels it as approximate and the contract still lists render-only export stages.
 

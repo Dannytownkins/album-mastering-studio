@@ -2,6 +2,47 @@
 
 ## 2026-05-12
 
+### Live Preview Model Native Playback Probe Slice
+
+- Extended the packaged Track Preview smoke beyond Tauri model rendering.
+- After the release WebView invokes `render_live_preview_model`, the smoke now sends that model WAV through `prepare_playback_file`.
+- The same smoke then runs `native_playback_file_probe` against the prepared playback cache for a 500 ms native audio probe.
+- This proves the engine-owned deterministic model output can cross the packaged Tauri/native playback boundary before any user-facing native live DSP is wired.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node smoke syntax check passed.
+- Packaged Track Preview UI smoke passed against the current release EXE.
+- Diff hygiene passed.
+- Evidence values:
+  - `tauriLivePreviewModelPlaybackCacheExists: true`
+  - native model probe `source_sample_rate: 48000`
+  - native model probe `source_total_frames: 192000`
+  - native model probe `requested_duration_ms: 500`
+  - native model probe `queued_output_frames: 24000`
+  - native model probe `played_output_frames: 24000`
+  - native model probe `callback_count: 50`
+  - native model probe `stream_errors: []`
+  - native model probe `warnings: []`
+
+Honest gap:
+
+- This proves native playback compatibility for the deterministic model WAV. It still does not implement native/shared live DSP or replace human listening approval.
+
+Next unattended slice from the read-only scout:
+
+- Add a native Rust offline Live Preview model oracle, compare it against the Tauri-accessible Python engine model with bounded numeric tolerance, and keep it out of the visible playback path until the parity proof is good enough.
+
 ### Tauri Live Preview Model Bridge Slice
 
 - Added a typed Tauri `render_live_preview_model` command that calls the Python sidecar `preview-model` command.

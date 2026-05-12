@@ -17,7 +17,57 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Tauri Live Preview Model Bridge
+## Latest Codex Pass: Live Preview Model Native Playback Probe
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/GOAL_AUDIT.md`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Extended the packaged Track Preview smoke so the Tauri-rendered Live Preview model WAV is prepared through `prepare_playback_file`.
+- The smoke now runs `native_playback_file_probe` against that playback cache for 500 ms.
+- This keeps the feature out of the visible playback path while proving the model output can cross the release app's native playback boundary.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `tauriLivePreviewModelPlaybackCacheExists: true`
+  - native model probe `source_sample_rate: 48000`
+  - native model probe `source_total_frames: 192000`
+  - native model probe `requested_duration_ms: 500`
+  - native model probe `queued_output_frames: 24000`
+  - native model probe `played_output_frames: 24000`
+  - native model probe `callback_count: 50`
+  - native model probe `stream_errors: []`
+  - native model probe `warnings: []`
+
+Remaining gap:
+
+- This is native playback compatibility evidence for the deterministic model WAV. It is not native/shared live DSP and not a human listening pass.
+
+Next useful slice:
+
+- Add a native Rust offline Live Preview model oracle and compare it against the Python engine-owned model with bounded numeric tolerance.
+- If the user is present, run and record a real listening pass.
+
+## Previous Codex Pass: Tauri Live Preview Model Bridge
 
 Date: 2026-05-12
 
