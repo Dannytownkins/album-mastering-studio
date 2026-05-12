@@ -114,6 +114,19 @@ try {
   assert.notEqual(evidence.regionReadoutAfterDrag, "No region selected");
   assert.notEqual(evidence.regionReadoutAfterDrag, "00:00 - 00:00 (00:00)");
   assert.equal(evidence.regionPreviewButtonEnabledBefore, true);
+  assert.equal(evidence.firstRegionPreviewReadyVisible, true);
+  assert.equal(evidence.firstRegionPreviewParity, "Render-faithful region");
+  assert.equal(evidence.lowControlSet, true);
+  assert.equal(evidence.regionInvalidatedAfterLowChange, true);
+  assert.equal(evidence.regionParityAfterLowChange, "Render required");
+  assert.equal(evidence.renderRegionEnabledAfterLowChange, true);
+  assert.equal(evidence.transportLabelAfterLowChange, "Player idle");
+  assert.equal(evidence.secondRegionButtonEnabledBeforeClick, true);
+  assert.equal(evidence.secondRegionRenderStarted, true);
+  assert.equal(evidence.secondRegionPreviewReadyVisible, true);
+  assert.notEqual(evidence.secondRegionPreviewMasterPath, evidence.firstRegionPreviewMasterPath);
+  assert.equal(evidence.secondRegionPreviewParity, "Render-faithful region");
+  assert.equal(evidence.secondAudioLoadedRegion, true);
   assert.equal(evidence.regionPreviewReadyVisible, true);
   assert.equal(evidence.regionEngineAuditionReady, true);
   assert.equal(evidence.regionPreviewParity, "Render-faithful region");
@@ -252,6 +265,11 @@ function realSongRegionUiExpression(seeded) {
   const logText = () => document.querySelector('.log')?.textContent || '';
   const transportLabel = () => text(document.querySelector('.transport-label'));
   const audio = () => document.querySelector('audio');
+  const setRangeValue = (input, value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, String(value));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
   const trackCountLabel = text(document.querySelector('.library .panel-title span'));
   const trackVisible = document.body.innerText.includes(${JSON.stringify(seeded.title)});
@@ -330,33 +348,118 @@ function realSongRegionUiExpression(seeded) {
   const regionPreviewButtonEnabledBefore = !regionPreviewButton.disabled;
   if (!regionPreviewButtonEnabledBefore) throw new Error('Render Region button was disabled after selecting a region');
   regionPreviewButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-  const regionPreviewReadyVisible = await waitFor(() => /Region engine preview ready: ([^\\n]+)/.test(logText()), 180000);
-  if (!regionPreviewReadyVisible) {
+  const firstRegionPreviewReadyVisible = await waitFor(() => /Region engine preview ready: ([^\\n]+)/.test(logText()), 180000);
+  if (!firstRegionPreviewReadyVisible) {
     throw new Error('Region preview did not render through the visible UI: ' + JSON.stringify({
       log: logText().slice(-2000),
       progress: text(document.querySelector('.progress-readout'))
     }));
   }
-  const regionPreviewMatch = /Region engine preview ready: ([^\\n]+)/.exec(logText());
-  const regionPreviewMasterPath = regionPreviewMatch?.[1]?.trim() || '';
-  const regionEngineAuditionReady = await waitFor(() => {
+  const firstRegionPreviewMatch = /Region engine preview ready: ([^\\n]+)/.exec(logText());
+  const firstRegionPreviewMasterPath = firstRegionPreviewMatch?.[1]?.trim() || '';
+  const firstRegionEngineAuditionReady = await waitFor(() => {
     const audition = window.__AMS_REGION_ENGINE_AUDITION__ || {};
     return Boolean(
-      audition.path === regionPreviewMasterPath &&
+      audition.path === firstRegionPreviewMasterPath &&
       text(document.querySelector('.preview-parity-status')) === 'Render-faithful region' &&
       transportLabel().includes('Engine Region')
     );
   }, 10000);
-  if (!regionEngineAuditionReady) {
+  if (!firstRegionEngineAuditionReady) {
     throw new Error('Region preview did not hand off to engine-rendered region playback: ' + JSON.stringify({
       audition: window.__AMS_REGION_ENGINE_AUDITION__ || null,
-      expectedPath: regionPreviewMasterPath,
+      expectedPath: firstRegionPreviewMasterPath,
       previewParity: text(document.querySelector('.preview-parity-status')),
       transportLabel: transportLabel(),
       log: logText().slice(-2000)
     }));
   }
   const audioLoadedRegion = await waitFor(() => audio()?.duration > 0 && !Number.isNaN(audio()?.duration), 10000);
+  const firstRegionPreviewParity = text(document.querySelector('.preview-parity-status'));
+  const lowControl = Array.from(document.querySelectorAll('.core-controls label.slider')).find((item) => text(item).startsWith('Low'));
+  const lowInput = lowControl?.querySelector('input[type="range"]');
+  if (!lowInput) throw new Error('Low control not found');
+  setRangeValue(lowInput, 0.5);
+  const lowControlSet = await waitFor(() => (
+    Math.abs(Number(lowInput.value) - 0.5) <= 0.001 &&
+    text(lowControl?.querySelector('output')) === '+0.50 dB'
+  ), 5000);
+  if (!lowControlSet) throw new Error('Low control did not update to 0.5 dB');
+  const regionInvalidatedAfterLowChange = await waitFor(() => (
+    text(document.querySelector('.preview-parity-status')) === 'Render required' &&
+    document.querySelector('.preview-parity-status')?.classList.contains('warn') &&
+    transportLabel() === 'Player idle' &&
+    !buttonByText('Render Region').disabled
+  ), 10000);
+  if (!regionInvalidatedAfterLowChange) {
+    throw new Error('Region preview did not become render-required after Low control change: ' + JSON.stringify({
+      previewParity: text(document.querySelector('.preview-parity-status')),
+      transportLabel: transportLabel(),
+      renderRegionDisabled: buttonByText('Render Region').disabled,
+      log: logText().slice(-1000)
+    }));
+  }
+  const regionParityAfterLowChange = text(document.querySelector('.preview-parity-status'));
+  const transportLabelAfterLowChange = transportLabel();
+  const renderRegionEnabledAfterLowChange = !buttonByText('Render Region').disabled;
+  const regionReadoutAfterLowChange = text(document.querySelector('.region-readout'));
+  await new Promise((resolve) => setTimeout(resolve, 750));
+  const secondRegionButton = buttonByText('Render Region');
+  const secondRegionButtonEnabledBeforeClick = !secondRegionButton.disabled;
+  if (!secondRegionButtonEnabledBeforeClick) {
+    throw new Error('Second Render Region button was disabled after invalidation: ' + JSON.stringify({
+      previewParity: text(document.querySelector('.preview-parity-status')),
+      transportLabel: transportLabel(),
+      progress: text(document.querySelector('.progress-readout'))
+    }));
+  }
+  secondRegionButton.click();
+  const secondRegionRenderStarted = await waitFor(() => (
+    text(document.querySelector('.progress-readout')).includes('Rendering') ||
+    Array.from(logText().matchAll(/Region engine preview ready: ([^\\n]+)/g)).length >= 2
+  ), 10000);
+  if (!secondRegionRenderStarted) {
+    throw new Error('Second Render Region click did not start a render: ' + JSON.stringify({
+      buttonDisabled: buttonByText('Render Region').disabled,
+      previewParity: text(document.querySelector('.preview-parity-status')),
+      transportLabel: transportLabel(),
+      progress: text(document.querySelector('.progress-readout')),
+      log: logText().slice(-1500)
+    }));
+  }
+  const secondRegionPreviewReadyVisible = await waitFor(() => {
+    const audition = window.__AMS_REGION_ENGINE_AUDITION__ || {};
+    return Boolean(
+      audition.path &&
+      audition.path !== firstRegionPreviewMasterPath &&
+      audition.engine === 'python-render-track-region-preview'
+    );
+  }, 180000);
+  if (!secondRegionPreviewReadyVisible) {
+    throw new Error('Second Region preview did not produce a new engine-rendered path after Low control change: ' + JSON.stringify({
+      log: logText().slice(-2000),
+      progress: text(document.querySelector('.progress-readout'))
+    }));
+  }
+  const secondRegionPreviewMasterPath = window.__AMS_REGION_ENGINE_AUDITION__?.path || '';
+  const regionEngineAuditionReady = await waitFor(() => {
+    const audition = window.__AMS_REGION_ENGINE_AUDITION__ || {};
+    return Boolean(
+      audition.path === secondRegionPreviewMasterPath &&
+      text(document.querySelector('.preview-parity-status')) === 'Render-faithful region' &&
+      transportLabel().includes('Engine Region')
+    );
+  }, 10000);
+  if (!regionEngineAuditionReady) {
+    throw new Error('Second Region preview did not hand off to engine-rendered region playback: ' + JSON.stringify({
+      audition: window.__AMS_REGION_ENGINE_AUDITION__ || null,
+      expectedPath: secondRegionPreviewMasterPath,
+      previewParity: text(document.querySelector('.preview-parity-status')),
+      transportLabel: transportLabel(),
+      log: logText().slice(-2000)
+    }));
+  }
+  const secondAudioLoadedRegion = await waitFor(() => audio()?.duration > 0 && !Number.isNaN(audio()?.duration), 10000);
   const regionPreviewParity = text(document.querySelector('.preview-parity-status'));
   const transportDurationSeconds = audio()?.duration || 0;
   return JSON.stringify({
@@ -379,8 +482,25 @@ function realSongRegionUiExpression(seeded) {
     regionCreated,
     regionReadoutAfterDrag,
     regionPreviewButtonEnabledBefore,
-    regionPreviewReadyVisible,
-    regionPreviewMasterPath,
+    firstRegionPreviewReadyVisible,
+    firstRegionPreviewMasterPath,
+    firstRegionPreviewParity,
+    lowControlSet,
+    lowControlValue: Number(lowInput.value),
+    lowControlOutput: text(lowControl?.querySelector('output')),
+    regionInvalidatedAfterLowChange,
+    regionParityAfterLowChange,
+    transportLabelAfterLowChange,
+    renderRegionEnabledAfterLowChange,
+    regionReadoutAfterLowChange,
+    secondRegionButtonEnabledBeforeClick,
+    secondRegionRenderStarted,
+    secondRegionPreviewReadyVisible,
+    secondRegionPreviewMasterPath,
+    secondRegionPreviewParity: regionPreviewParity,
+    secondAudioLoadedRegion,
+    regionPreviewReadyVisible: secondRegionPreviewReadyVisible,
+    regionPreviewMasterPath: secondRegionPreviewMasterPath,
     regionPreviewParity,
     regionEngineAuditionReady,
     regionEngineAuditionPath: window.__AMS_REGION_ENGINE_AUDITION__?.path || '',

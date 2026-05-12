@@ -2,6 +2,56 @@
 
 ## 2026-05-12
 
+### Real-Song Region Stale/Re-Render UI Smoke Slice
+
+- Extended `desktop/tests/tauri-real-song-region-ui-smoke.mjs` to cover stale-state behavior for bounded region renders.
+- After the first visible `Render Region` pass, the smoke moves the visible `Low` control to `+0.50 dB`.
+- The smoke verifies the old region audition is invalidated as `Render required`, the transport returns to `Player idle`, and `Render Region` is enabled again.
+- The smoke then clicks `Render Region` a second time and verifies a new Python-engine region master path replaces the previous one.
+- The second-render wait now relies on `window.__AMS_REGION_ENGINE_AUDITION__.path` changing instead of counting log matches, because render stdout can push older log lines out of the visible log tail.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-region-ui-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-ui-smoke'
+$env:AMS_REAL_SONG_REGION_SECONDS='12'
+npm run test:tauri-real-song-region-ui
+cd ..
+```
+
+Results:
+
+- Node syntax check passed.
+- Release-backed real-song region stale/re-render UI smoke passed.
+- Evidence: `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- Evidence values:
+  - `firstRegionPreviewParity: Render-faithful region`
+  - `firstRegionPreviewMasterPath: ...\region-preview-20260512-081826-124\masters\01_lay-the-money-on-the-desk_mastered.wav`
+  - `lowControlOutput: +0.50 dB`
+  - `regionInvalidatedAfterLowChange: true`
+  - `regionParityAfterLowChange: Render required`
+  - `transportLabelAfterLowChange: Player idle`
+  - `renderRegionEnabledAfterLowChange: true`
+  - `secondRegionButtonEnabledBeforeClick: true`
+  - `secondRegionRenderStarted: true`
+  - `secondRegionPreviewReadyVisible: true`
+  - `secondRegionPreviewMasterPath: ...\region-preview-20260512-081841-579\masters\01_lay-the-money-on-the-desk_mastered.wav`
+  - `secondRegionPreviewParity: Render-faithful region`
+  - `secondAudioLoadedRegion: true`
+  - `regionEngineAuditionEngine: python-render-track-region-preview`
+  - `regionEngineAuditionStartSeconds: 65.03621914308174`
+  - `regionEngineAuditionDurationSeconds: 12.011193625524115`
+  - `regionRenderedDurationSeconds: 12.011`
+  - `manifest.track_count: 1`
+  - `manifest.interlude_count: 0`
+
+Honest gap:
+
+- This strengthens stale-state protection for bounded region audition. It is still render-first automation, not true live export-engine DSP or human listening approval.
+
 ### Real-Song Analyze-To-Render Region UI Smoke Slice
 
 - Tightened `desktop/tests/tauri-real-song-region-ui-smoke.mjs` so it now starts from an unanalyzed Track Master session.

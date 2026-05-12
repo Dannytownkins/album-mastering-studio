@@ -314,6 +314,9 @@ Current packaged coverage:
 - Evidence values now include `initialAnalysisStatus: "Needs analysis"`, `analysisStatusAfterAnalyze: "Analyzed"`, visible Source LUFS/Peak text, waveform readiness, `Export Master` enabled after analysis, `Render Region` disabled before analysis and enabled after analysis, then the same render-faithful region handoff.
 - The smoke fails fast if source validation blocks or Analyze fails.
 - Remaining Analyze -> Render Region caveat: this is still automated UI evidence against one real MP3, not human listening approval or true real-time export-engine DSP.
+- 2026-05-12 extended the real-song region UI smoke to cover stale-state behavior after a tuning change.
+- Evidence values include first region parity `Render-faithful region`, `Low` changed to `+0.50 dB`, stale parity `Render required`, transport reset to `Player idle`, `Render Region` enabled again, a second new Python-engine region master path, final parity `Render-faithful region`, and the same 12.011s bounded region duration.
+- Remaining region stale/re-render caveat: this proves stale protection and re-render handoff for bounded region audition; it is still render-first automation, not true live export-engine DSP or human listening approval.
 
 No-victory-lap check:
 

@@ -17,7 +17,70 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Real-Song Analyze-To-Render Region UI Smoke
+## Latest Codex Pass: Real-Song Region Stale/Re-Render UI Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-real-song-region-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Extended the release-backed real-song region UI smoke to cover stale-state behavior after a tuning change.
+- After the first visible `Render Region` pass, the smoke moves the visible `Low` control to `+0.50 dB`.
+- The smoke verifies the old region audition is invalidated as `Render required`, the transport returns to `Player idle`, and `Render Region` is enabled again.
+- The smoke then clicks `Render Region` a second time and verifies a new Python-engine region master path replaces the previous one.
+- The second-render wait uses `window.__AMS_REGION_ENGINE_AUDITION__.path` changing instead of counting log matches, because render stdout can push older log lines out of the visible log tail.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-region-ui-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-ui-smoke'
+$env:AMS_REAL_SONG_REGION_SECONDS='12'
+npm run test:tauri-real-song-region-ui
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- Relevant fields:
+  - `firstRegionPreviewParity: Render-faithful region`
+  - `lowControlOutput: +0.50 dB`
+  - `regionInvalidatedAfterLowChange: true`
+  - `regionParityAfterLowChange: Render required`
+  - `transportLabelAfterLowChange: Player idle`
+  - `renderRegionEnabledAfterLowChange: true`
+  - `secondRegionButtonEnabledBeforeClick: true`
+  - `secondRegionRenderStarted: true`
+  - `secondRegionPreviewReadyVisible: true`
+  - `secondRegionPreviewMasterPath` differs from `firstRegionPreviewMasterPath`
+  - `secondRegionPreviewParity: Render-faithful region`
+  - `secondAudioLoadedRegion: true`
+  - `regionEngineAuditionEngine: python-render-track-region-preview`
+  - `regionEngineAuditionStartSeconds: 65.03621914308174`
+  - `regionEngineAuditionDurationSeconds: 12.011193625524115`
+  - `regionRenderedDurationSeconds: 12.011`
+  - `manifest.track_count: 1`
+  - `manifest.interlude_count: 0`
+
+Remaining gap:
+
+- This strengthens stale-state protection for bounded region audition. It is still render-first automation, not true live export-engine DSP or human listening approval.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward reducing region-preview turnaround or deeper export-engine live audition parity.
+
+## Previous Codex Pass: Real-Song Analyze-To-Render Region UI Smoke
 
 Date: 2026-05-12
 
