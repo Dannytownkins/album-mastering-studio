@@ -2,6 +2,54 @@
 
 ## 2026-05-12
 
+### Live Source To Engine Region Replacement Smoke Slice
+
+- Extended `desktop/tests/tauri-real-song-region-ui-smoke.mjs` to prove that active Live Preview source playback is replaced by Python-rendered region playback.
+- The release-backed smoke now clicks `Original`, arms `Live Preview`, and verifies the Web Audio snapshot is active before the first `Render Region` click.
+- Because no exact master exists yet in this flow, the parity badge correctly remains `Render required` while Live Preview is active on the source.
+- After `Render Region`, the smoke verifies the transport moves to `Engine Region`, the Python region audition payload is present, Live Preview becomes armed/inactive, and the parity badge becomes non-warn `Render-faithful region`.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-region-ui-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-ui-smoke'
+$env:AMS_REAL_SONG_REGION_SECONDS='12'
+npm run test:tauri-real-song-region-ui
+cd ..
+```
+
+Results:
+
+- Node syntax check passed.
+- Release-backed real-song region UI smoke passed.
+- Evidence: `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- Evidence values:
+  - `sourcePlaybackReadyBeforeRegion: true`
+  - `livePreviewActiveBeforeRegion: true`
+  - `livePreviewParityBeforeRegion: Render required`
+  - `livePreviewParityWarnBeforeRegion: true`
+  - `livePreviewStatusBeforeRegion: Live Preview active ~10 ms`
+  - `liveSnapshotBeforeRegion.active: true`
+  - `transportLabelBeforeRegion: Lay the Money on the Desk - Original`
+  - `firstRegionPreviewParity: Render-faithful region`
+  - `livePreviewDeactivatedAfterFirstRegion: true`
+  - `livePreviewStatusAfterFirstRegion: Live Preview armed ~10 ms`
+  - `liveSnapshotAfterFirstRegion.active: false`
+  - `regionPreviewParityWarnAfterFirstRegion: false`
+  - `regionPreviewDidNotRemainApprox: true`
+  - `regionPlaybackReplacedLivePreview: true`
+  - `regionEngineAuditionEngine: python-render-track-region-preview`
+  - `regionEngineAuditionStartSeconds: 65.0362191430817`
+  - `regionEngineAuditionDurationSeconds: 12.0111936255241`
+  - `dashboardSkippedForAudition: true`
+
+Honest gap:
+
+- This proves the visible region-render path replaces an active Web Audio source audition with exact Python region playback. It does not make Web Audio Live Preview export-engine faithful.
+
 ### Cue-Preserving Exact/Approx Audition Smoke Slice
 
 - Extended `desktop/tests/tauri-track-preview-ui-smoke.mjs` to verify the exact-vs-approx audition contract after an engine-rendered preview.

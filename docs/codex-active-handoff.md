@@ -17,7 +17,68 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Cue-Preserving Exact/Approx Audition Smoke
+## Latest Codex Pass: Live Source To Engine Region Replacement Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-real-song-region-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Extended the release-backed real-song region UI smoke so it clicks `Original`, arms `Live Preview`, and verifies the Web Audio source audition is active before the first visible `Render Region` click.
+- The smoke records that, before any exact master exists, active Live Preview still correctly leaves the parity badge at `Render required`.
+- After `Render Region`, the smoke verifies Python region playback replaces the active Web Audio path: the transport shows `Engine Region`, `window.__AMS_REGION_ENGINE_AUDITION__` reports `python-render-track-region-preview`, Live Preview becomes armed/inactive, and the parity badge is non-warn `Render-faithful region`.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-region-ui-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-ui-smoke'
+$env:AMS_REAL_SONG_REGION_SECONDS='12'
+npm run test:tauri-real-song-region-ui
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- Relevant fields:
+  - `sourcePlaybackReadyBeforeRegion: true`
+  - `livePreviewActiveBeforeRegion: true`
+  - `livePreviewParityBeforeRegion: Render required`
+  - `livePreviewParityWarnBeforeRegion: true`
+  - `livePreviewStatusBeforeRegion: Live Preview active ~10 ms`
+  - `liveSnapshotBeforeRegion.active: true`
+  - `transportLabelBeforeRegion: Lay the Money on the Desk - Original`
+  - `firstRegionPreviewParity: Render-faithful region`
+  - `livePreviewDeactivatedAfterFirstRegion: true`
+  - `livePreviewStatusAfterFirstRegion: Live Preview armed ~10 ms`
+  - `liveSnapshotAfterFirstRegion.active: false`
+  - `regionPreviewParityWarnAfterFirstRegion: false`
+  - `regionPreviewDidNotRemainApprox: true`
+  - `regionPlaybackReplacedLivePreview: true`
+  - `regionEngineAuditionEngine: python-render-track-region-preview`
+  - `regionEngineAuditionStartSeconds: 65.0362191430817`
+  - `regionEngineAuditionDurationSeconds: 12.0111936255241`
+  - `dashboardSkippedForAudition: true`
+
+Remaining gap:
+
+- This proves the visible region-render path replaces active Web Audio source audition with exact Python region playback. Web Audio Live Preview remains approximate and not export-engine parity.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
+
+## Previous Codex Pass: Cue-Preserving Exact/Approx Audition Smoke
 
 Date: 2026-05-12
 

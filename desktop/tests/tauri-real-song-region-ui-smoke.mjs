@@ -115,8 +115,21 @@ try {
   assert.notEqual(evidence.regionReadoutAfterDrag, "No region selected");
   assert.notEqual(evidence.regionReadoutAfterDrag, "00:00 - 00:00 (00:00)");
   assert.equal(evidence.regionPreviewButtonEnabledBefore, true);
+  assert.equal(evidence.sourcePlaybackReadyBeforeRegion, true);
+  assert.equal(evidence.livePreviewActiveBeforeRegion, true);
+  assert.equal(evidence.livePreviewParityBeforeRegion, "Render required");
+  assert.equal(evidence.livePreviewParityWarnBeforeRegion, true);
+  assert.match(evidence.livePreviewStatusBeforeRegion, /Live Preview active/);
+  assert.equal(evidence.liveSnapshotBeforeRegion.active, true);
+  assert.equal(evidence.transportLabelBeforeRegionIncludesOriginal, true);
   assert.equal(evidence.firstRegionPreviewReadyVisible, true);
   assert.equal(evidence.firstRegionPreviewParity, "Render-faithful region");
+  assert.match(evidence.livePreviewStatusAfterFirstRegion, /Live Preview armed/);
+  assert.equal(evidence.livePreviewDeactivatedAfterFirstRegion, true);
+  assert.equal(evidence.liveSnapshotAfterFirstRegion.active, false);
+  assert.equal(evidence.regionPreviewParityWarnAfterFirstRegion, false);
+  assert.equal(evidence.regionPreviewDidNotRemainApprox, true);
+  assert.equal(evidence.regionPlaybackReplacedLivePreview, true);
   assert.equal(evidence.lowControlSet, true);
   assert.equal(evidence.regionInvalidatedAfterLowChange, true);
   assert.equal(evidence.regionParityAfterLowChange, "Render required");
@@ -256,6 +269,11 @@ function realSongRegionUiExpression(seeded) {
     if (!button) throw new Error('Button not found: ' + label);
     return button;
   };
+  const auditionButtonByText = (label) => {
+    const button = Array.from(document.querySelectorAll('.audition-actions > button')).find((item) => text(item).includes(label));
+    if (!button) throw new Error('Audition button not found: ' + label);
+    return button;
+  };
   const waitFor = async (predicate, timeoutMs) => {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -349,6 +367,44 @@ function realSongRegionUiExpression(seeded) {
   const regionPreviewButton = buttonByText('Render Region');
   const regionPreviewButtonEnabledBefore = !regionPreviewButton.disabled;
   if (!regionPreviewButtonEnabledBefore) throw new Error('Render Region button was disabled after selecting a region');
+  auditionButtonByText('Original').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const sourcePlaybackReadyBeforeRegion = await waitFor(() => (
+    transportLabel().includes('Original') &&
+    audio()?.duration > 0 &&
+    !Number.isNaN(audio()?.duration)
+  ), 10000);
+  if (!sourcePlaybackReadyBeforeRegion) {
+    throw new Error('Original source playback did not become ready before region preview: ' + JSON.stringify({
+      transportLabel: transportLabel(),
+      duration: audio()?.duration || 0,
+      log: logText().slice(-1000)
+    }));
+  }
+  const livePreviewButton = auditionButtonByText('Live Preview');
+  if (livePreviewButton.disabled) throw new Error('Live Preview button was disabled after Analyze');
+  livePreviewButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const livePreviewActiveBeforeRegion = await waitFor(() => {
+    const snapshot = window.__AMS_LIVE_AUDITION__ || {};
+    return Boolean(
+      livePreviewButton.classList.contains('active') &&
+      snapshot.active === true &&
+      transportLabel().includes('Original') &&
+      text(document.querySelector('.live-audition-status')).includes('Live Preview active')
+    );
+  }, 10000);
+  if (!livePreviewActiveBeforeRegion) {
+    throw new Error('Live Preview did not become active before region preview: ' + JSON.stringify({
+      liveAudition: window.__AMS_LIVE_AUDITION__ || null,
+      liveStatus: text(document.querySelector('.live-audition-status')),
+      previewParity: text(document.querySelector('.preview-parity-status')),
+      transportLabel: transportLabel()
+    }));
+  }
+  const livePreviewParityBeforeRegion = text(document.querySelector('.preview-parity-status'));
+  const livePreviewParityWarnBeforeRegion = Boolean(document.querySelector('.preview-parity-status')?.classList.contains('warn'));
+  const livePreviewStatusBeforeRegion = text(document.querySelector('.live-audition-status'));
+  const liveSnapshotBeforeRegion = window.__AMS_LIVE_AUDITION__ || {};
+  const transportLabelBeforeRegion = transportLabel();
   regionPreviewButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const firstRegionPreviewReadyVisible = await waitFor(() => /Region engine preview ready: ([^\\n]+)/.test(logText()), 180000);
   if (!firstRegionPreviewReadyVisible) {
@@ -377,7 +433,32 @@ function realSongRegionUiExpression(seeded) {
     }));
   }
   const audioLoadedRegion = await waitFor(() => audio()?.duration > 0 && !Number.isNaN(audio()?.duration), 10000);
+  const livePreviewDeactivatedAfterFirstRegion = await waitFor(() => {
+    const snapshot = window.__AMS_LIVE_AUDITION__ || {};
+    return Boolean(
+      snapshot.active === false &&
+      text(document.querySelector('.live-audition-status')).includes('Live Preview armed') &&
+      text(document.querySelector('.preview-parity-status')) === 'Render-faithful region'
+    );
+  }, 10000);
+  if (!livePreviewDeactivatedAfterFirstRegion) {
+    throw new Error('Region preview did not replace active Live Preview with engine-rendered playback: ' + JSON.stringify({
+      liveAudition: window.__AMS_LIVE_AUDITION__ || null,
+      liveStatus: text(document.querySelector('.live-audition-status')),
+      previewParity: text(document.querySelector('.preview-parity-status')),
+      transportLabel: transportLabel()
+    }));
+  }
   const firstRegionPreviewParity = text(document.querySelector('.preview-parity-status'));
+  const livePreviewStatusAfterFirstRegion = text(document.querySelector('.live-audition-status'));
+  const liveSnapshotAfterFirstRegion = window.__AMS_LIVE_AUDITION__ || {};
+  const regionPreviewParityWarnAfterFirstRegion = Boolean(document.querySelector('.preview-parity-status')?.classList.contains('warn'));
+  const regionPreviewDidNotRemainApprox = firstRegionPreviewParity !== 'Approx audition';
+  const regionPlaybackReplacedLivePreview = Boolean(
+    liveSnapshotAfterFirstRegion.active === false &&
+    window.__AMS_REGION_ENGINE_AUDITION__?.engine === 'python-render-track-region-preview' &&
+    firstRegionPreviewParity === 'Render-faithful region'
+  );
   const lowControl = Array.from(document.querySelectorAll('.core-controls label.slider')).find((item) => text(item).startsWith('Low'));
   const lowInput = lowControl?.querySelector('input[type="range"]');
   if (!lowInput) throw new Error('Low control not found');
@@ -484,9 +565,23 @@ function realSongRegionUiExpression(seeded) {
     regionCreated,
     regionReadoutAfterDrag,
     regionPreviewButtonEnabledBefore,
+    sourcePlaybackReadyBeforeRegion,
+    livePreviewActiveBeforeRegion,
+    livePreviewParityBeforeRegion,
+    livePreviewParityWarnBeforeRegion,
+    livePreviewStatusBeforeRegion,
+    liveSnapshotBeforeRegion,
+    transportLabelBeforeRegion,
+    transportLabelBeforeRegionIncludesOriginal: transportLabelBeforeRegion.includes('Original'),
     firstRegionPreviewReadyVisible,
     firstRegionPreviewMasterPath,
     firstRegionPreviewParity,
+    livePreviewDeactivatedAfterFirstRegion,
+    livePreviewStatusAfterFirstRegion,
+    liveSnapshotAfterFirstRegion,
+    regionPreviewParityWarnAfterFirstRegion,
+    regionPreviewDidNotRemainApprox,
+    regionPlaybackReplacedLivePreview,
     lowControlSet,
     lowControlValue: Number(lowInput.value),
     lowControlOutput: text(lowControl?.querySelector('output')),

@@ -326,6 +326,9 @@ Current packaged coverage:
 - Packaged Track Preview evidence now verifies the Python-rendered master resumes at the captured cue point (`1.664367s` expected and actual), then switching back to `Original` with Live Preview armed returns to active Web Audio audition and `Approx audition`.
 - The same smoke now asserts the export-vs-live comparison is materially different: `exportDiffersFromLiveMaterially: true`, `export_minus_live_lufs_proxy: 7.20928073777454`, and `rms_difference_dbfs: -20.8393990077294`.
 - Remaining cue-preserving audition caveat: this improves handoff honesty and preserves the audition point, but Web Audio Live Preview is still approximate and not shared export-engine DSP.
+- 2026-05-12 extended the real-song region UI smoke so active source Live Preview before `Render Region` is explicitly replaced by Python region playback.
+- Evidence values include `livePreviewActiveBeforeRegion: true`, pre-render parity `Render required` with warn state because no exact master exists yet, `liveSnapshotBeforeRegion.active: true`, post-region `Render-faithful region`, `liveSnapshotAfterFirstRegion.active: false`, `regionPreviewParityWarnAfterFirstRegion: false`, and `regionPlaybackReplacedLivePreview: true`.
+- Remaining live-to-region caveat: this proves the visible region-render path replaces active Web Audio source audition with exact Python region playback, but Web Audio Live Preview is still approximate and not shared export-engine DSP.
 
 No-victory-lap check:
 
