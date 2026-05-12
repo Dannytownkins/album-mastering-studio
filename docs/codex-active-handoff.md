@@ -17,7 +17,61 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Track Master Codec QC Receipt
+## Latest Codex Pass: Real-Song Track Master Codec QC Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/package.json`
+- `desktop/tests/tauri-real-song-performance-smoke.mjs`
+- `desktop/tests/tauri-real-song-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added `npm run test:tauri-real-song-codec-qc` as a wrapper around the existing real-song Track Master performance harness.
+- The wrapper enables `codec_preview` for the main real-song Track Master render and verifies the Codec QC export check, preview count, and preview files while leaving the first-control Live Preview comparison render codec-free.
+- Verified the supplied MP3 `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` through the packaged release EXE path.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-codec-qc-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-codec-qc
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-real-song-codec-qc-smoke\tauri-real-song-performance-smoke.json`
+- Relevant fields:
+  - `sourceValidationStatus: ok`
+  - `analysisDurationSeconds: 186.31997916666663`
+  - `renderDurationMs: 39459.9`
+  - `exportChecks.status: pass`
+  - `exportChecks.summary: 1 track(s), 0 transition(s), 0 warning(s)`
+  - `codecPreviewRequested: true`
+  - `codecPreviewCount: 2`
+  - `codecPreviewCheck: { status: pass, detail: 2 codec preview path(s) exist }`
+  - AAC LUFS shift: `-0.066`
+  - Opus LUFS shift: `0.0008`
+
+Remaining gap:
+
+- This is automated real-song Codec QC evidence. Human listening approval of the MP3 master and codec previews is still open.
+
+Next useful slice:
+
+- The read-only scout recommends adding a visible Codec QC audition rail in Track Master exports so the generated AAC/Opus previews can be played directly from the app.
+
+## Previous Codex Pass: Track Master Codec QC Receipt
 
 Date: 2026-05-12
 

@@ -2,6 +2,49 @@
 
 ## 2026-05-12
 
+### Real-Song Track Master Codec QC Smoke
+
+- Added `npm run test:tauri-real-song-codec-qc`, an opt-in wrapper around the real-song Track Master packaged smoke.
+- The smoke uses `AMS_REAL_SONG_PATH` and enables `codec_preview` on the main Track Master render while keeping the first-control Live Preview comparison render codec-free to avoid duplicate work.
+- Verified the supplied MP3, `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3`, through the packaged release EXE with real Track Master import, analysis, render, dashboard, export checks, AAC preview, and Opus preview.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-codec-qc-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-codec-qc
+cd ..
+```
+
+Results:
+
+- Node syntax checks passed for the shared real-song performance harness and the Codec QC wrapper.
+- Packaged real-song Codec QC smoke passed against the current release EXE.
+- Evidence: `test-output\tauri-real-song-codec-qc-smoke\tauri-real-song-performance-smoke.json`.
+- Evidence values:
+  - source validation status: `ok`
+  - source duration: `186.31997916666663` seconds
+  - render duration: `39459.9` ms
+  - export checks status: `pass`
+  - export summary: `1 track(s), 0 transition(s), 0 warning(s)`
+  - Codec QC check: `pass`, `2 codec preview path(s) exist`
+  - `codecPreviewRequested: true`
+  - `codecPreviewCount: 2`
+  - AAC LUFS shift: `-0.066`
+  - Opus LUFS shift: `0.0008`
+  - codec preview warnings: none
+
+Honest gap:
+
+- This proves the real-song packaged render creates and checks codec previews. It is still automated evidence, not human listening approval of the MP3 master or codec previews.
+
+Next unattended slice:
+
+- The scout recommends adding a visible Codec QC audition rail for Track Master exports so the generated AAC/Opus previews can be played from the app instead of only proven as paths.
+
 ### Track Master Codec QC Receipt Slice
 
 - Made Track Master `Codec QC` real for track-only renders: when `codec_preview` is enabled and no album WAV is requested, the Python engine now writes per-track AAC and Opus preview round trips under each render's `codec_previews` folder.

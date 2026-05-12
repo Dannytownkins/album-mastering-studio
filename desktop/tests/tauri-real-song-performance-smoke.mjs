@@ -9,9 +9,10 @@ const releaseExe =
   process.env.AMS_TAURI_RELEASE_EXE ||
   path.join(repoRoot, "desktop", "src-tauri", "target", "release", "album-mastering-studio.exe");
 const sourcePath = process.env.AMS_REAL_SONG_PATH;
+const codecQcMode = process.env.AMS_REAL_SONG_CODEC_QC === "1" || process.env.AMS_REAL_SONG_CODEC_QC === "true";
 const outputRoot =
   process.env.AMS_TAURI_REAL_SONG_PERFORMANCE_OUTPUT ||
-  path.join(repoRoot, "test-output", "tauri-real-song-performance-smoke");
+  path.join(repoRoot, "test-output", codecQcMode ? "tauri-real-song-codec-qc-smoke" : "tauri-real-song-performance-smoke");
 const renderOutput = path.join(outputRoot, "track-master-real-song");
 const firstControlRenderOutput = path.join(outputRoot, "track-master-real-song-first-control");
 const firstControlLiveTuning = firstControlLivePreviewTuning;
@@ -54,6 +55,7 @@ try {
   const launchToInvokeReadyMs = nowMs() - launchStarted;
 
   const smoke = await evaluateInWebView(cdp, realSongPerformanceExpression());
+  const codecPreviewOutputs = (smoke.codecPreviews || []).map((preview) => preview.output || "");
   const realSongExportVsLiveComparison = compareExportVsLiveModel({
     exportPath: smoke.firstControlTrackOutputPath,
     outputPath: path.join(outputRoot, "real-song-live-preview-first-control-model.wav"),
@@ -66,6 +68,7 @@ try {
 
   const evidence = {
     ...smoke,
+    codecQcMode,
     launchToTargetMs: roundMs(launchToTargetMs),
     launchToInvokeReadyMs: roundMs(launchToInvokeReadyMs),
     realSongExportVsLiveComparison,
@@ -82,6 +85,9 @@ try {
     manifestExists: existsSync(smoke.manifestPath),
     playbackCacheExists: existsSync(smoke.playbackCachePath),
     trackOutputExists: existsSync(smoke.trackOutputPath),
+    codecPreviewCount: (smoke.codecPreviews || []).length,
+    codecPreviewOutputs,
+    codecPreviewOutputsExist: codecPreviewOutputs.every((output) => existsSync(output)),
     firstControlDashboardExists: existsSync(smoke.firstControlDashboardPath),
     firstControlManifestExists: existsSync(smoke.firstControlManifestPath),
     firstControlTrackOutputExists: existsSync(smoke.firstControlTrackOutputPath),
@@ -107,6 +113,13 @@ try {
   assert.equal(evidence.firstControlTrackOutputExists, true);
   assert.ok(["pass", "warn"].includes(evidence.exportChecks.status));
   assert.equal(evidence.exportChecks.track_count, 1);
+  if (codecQcMode) {
+    assert.equal(evidence.codecPreviewRequested, true);
+    assert.equal(evidence.codecPreviewCount, 2);
+    assert.equal(evidence.codecPreviewOutputsExist, true);
+    assert.equal(evidence.codecPreviewCheck?.status, "pass");
+    assert.match(evidence.codecPreviewCheck?.detail || "", /2 codec preview path\(s\) exist/);
+  }
   assert.equal(evidence.realSongExportVsLiveComparison.offline_engine, "python-render-track-master");
   assert.equal(evidence.realSongExportVsLiveComparison.live_preview_engine, "web-audio-first-control-model");
   assert.deepEqual(evidence.realSongExportVsLiveComparison.modeled_controls, ["Low", "Mid", "High", "Width", "Intensity"]);
@@ -140,6 +153,7 @@ function realSongPerformanceExpression() {
   const sourcePath = ${JSON.stringify(sourcePath)};
   const renderOutput = ${JSON.stringify(renderOutput)};
   const firstControlRenderOutput = ${JSON.stringify(firstControlRenderOutput)};
+  const codecPreviewRequested = ${JSON.stringify(codecQcMode)};
   const timed = async (label, action) => {
     const started = performance.now();
     const result = await action();
@@ -160,7 +174,7 @@ function realSongPerformanceExpression() {
       delivery_profile: 'streaming-universal',
       ceiling_dbfs: -1.0,
       album_wav: false,
-      codec_preview: false,
+      codec_preview: codecPreviewRequested,
       generated_transitions: false,
       default_boundary_style: 'direct',
       default_boundary_duration: 2
@@ -175,6 +189,7 @@ function realSongPerformanceExpression() {
   firstControlProject.album_title = ${JSON.stringify(`${title} First-Control Live Comparison`)};
   firstControlProject.settings = {
     ...firstControlProject.settings,
+    codec_preview: false,
     tweak_low_end_db: 0.5,
     tweak_presence_db: -0.25,
     tweak_air_db: 0.35,
@@ -185,6 +200,8 @@ function realSongPerformanceExpression() {
   const firstControlTrackItem = (firstControlRender.result.manifest.sequence || []).find((item) => item.type === 'track');
   if (!firstControlTrackItem?.output) throw new Error('Real-song first-control render did not produce a track output');
   const exportChecks = await timed('run_export_checks_real_song', () => invoke('run_export_checks', { manifest: render.result.manifest }));
+  const codecPreviews = render.result.manifest.codec_previews || [];
+  const codecPreviewCheck = (exportChecks.result.checks || []).find((check) => check.label === 'Codec QC') || null;
   return JSON.stringify({
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     sourceValidationDurationMs: sourceValidation.durationMs,
@@ -210,6 +227,9 @@ function realSongPerformanceExpression() {
     firstControlManifestPath: firstControlRender.result.manifest_path,
     firstControlTrackOutputPath: firstControlTrackItem.output,
     firstControlManifestSettings: firstControlRender.result.manifest.settings,
+    codecPreviewRequested,
+    codecPreviews,
+    codecPreviewCheck,
     exportChecksDurationMs: exportChecks.durationMs,
     exportChecks: exportChecks.result
   });
