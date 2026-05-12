@@ -58,6 +58,7 @@ try {
 
   const smoke = await evaluateInWebView(cdp, albumCodecQcExpression());
   const manifest = JSON.parse(readFileSync(path.join(smoke.outputDir, "manifest.json"), "utf8"));
+  const listeningReceipt = JSON.parse(readFileSync(smoke.listeningReceiptPath, "utf8"));
   const codecPreviews = manifest.codec_previews || [];
   const codecPreviewOutputs = codecPreviews.map((preview) => preview.output || "");
   const screenshot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -72,6 +73,8 @@ try {
     screenshotExists: existsSync(screenshotPath),
     manifestCodecPreviewFlag: manifest.settings?.codec_preview,
     manifestAlbumSequence: manifest.album_sequence,
+    listeningReceipt,
+    listeningReceiptExists: existsSync(smoke.listeningReceiptPath),
     codecPreviewCount: codecPreviews.length,
     codecPreviewOutputs,
     codecPreviewOutputsExist: codecPreviewOutputs.every((output) => existsSync(output)),
@@ -96,6 +99,15 @@ try {
   assert.equal(evidence.nativeAlbumCodecStarted, true);
   assert.equal(evidence.nativeAlbumCodecStopped, true);
   assert.equal(evidence.persistedCodecPreviewAudition, true);
+  assert.equal(evidence.listeningReceiptExists, true);
+  assert.equal(evidence.listeningReceipt.status, "not-approved");
+  assert.equal(evidence.listeningReceipt.approved, false);
+  assert.equal(evidence.listeningReceipt.stale, false);
+  assert.equal(evidence.listeningReceipt.checklist.codecPreviewAudition, true);
+  assert.equal(evidence.listeningReceipt.render.track_count, 2);
+  assert.equal(evidence.listeningReceipt.render.interlude_count, 0);
+  assert.equal(evidence.listeningReceipt.export_checks.status, "pass");
+  assert.equal(evidence.listeningReceipt.codec_previews.length, 2);
   assert.equal(evidence.manifestCodecPreviewFlag, true);
   assert.equal(evidence.codecPreviewCount, 2);
   assert.equal(evidence.codecPreviewOutputsExist, true);
@@ -275,6 +287,10 @@ function albumCodecQcExpression() {
   const renderLine = logText.split(/\\r?\\n/).reverse().find((line) => line.includes('Album render complete:')) || '';
   const outputDir = renderLine.split(' transitions. ').pop().trim();
   if (!outputDir || outputDir === renderLine) throw new Error('Could not parse album output dir from UI log: ' + renderLine);
+  click(buttonByText('Save Receipt'));
+  const listeningReceiptSaved = await waitFor(() => (document.querySelector('.log')?.textContent || '').includes('Listening receipt saved:'), 10000);
+  if (!listeningReceiptSaved) throw new Error('Listening receipt was not saved');
+  const listeningReceiptPath = outputDir + '\\\\listening-review.json';
   return JSON.stringify({
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     activeMode,
@@ -289,6 +305,8 @@ function albumCodecQcExpression() {
     nativeAlbumCodecStarted,
     nativeAlbumCodecStopped,
     persistedCodecPreviewAudition: persisted?.listeningChecklist?.codecPreviewAudition,
+    listeningReceiptSaved,
+    listeningReceiptPath,
     outputDir
   });
 })()

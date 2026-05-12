@@ -523,6 +523,7 @@ function App() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [listeningChecklist, setListeningChecklist] = useState<ListeningChecklist>(emptyListeningChecklist);
   const [listeningApproved, setListeningApproved] = useState(false);
+  const [listeningReceiptPath, setListeningReceiptPath] = useState("");
   const [userPresets, setUserPresets] = useState<UserPreset[]>([]);
   const [selectedUserPresetId, setSelectedUserPresetId] = useState("");
   const [userPresetName, setUserPresetName] = useState("Custom chain");
@@ -601,6 +602,8 @@ function App() {
   const listeningApprovalStatus = listeningApproved
     ? hasStaleRender ? "Approval stale" : "Approved"
     : "Not approved";
+  const listeningReceiptTarget = listeningReceiptPathForManifest(manifest);
+  const canSaveListeningReceipt = Boolean(manifest && listeningReceiptTarget && !hasStaleRender && !busy);
   const previewParityLabel = regionPreviewPlaying
     ? "Render-faithful region"
     : referencePlaying
@@ -956,6 +959,7 @@ function App() {
     setManifest(null);
     setExportChecks(null);
     setDashboardPath("");
+    setListeningReceiptPath("");
     setRenderRevision(null);
     setPreviewArtifact(null);
     setComparePair(null);
@@ -1008,6 +1012,7 @@ function App() {
     setRegionPreviewArtifact(null);
     setExportChecks(null);
     setListeningApproved(false);
+    setListeningReceiptPath("");
     setComparePair(null);
     setNativeLivePreviewAudition(null);
     setPlayItem((current) =>
@@ -1029,6 +1034,63 @@ function App() {
     rememberUndo();
     setListeningChecklist(emptyListeningChecklist);
     setListeningApproved(false);
+    setListeningReceiptPath("");
+  }
+
+  async function saveListeningReceipt() {
+    if (!manifest || !listeningReceiptTarget || hasStaleRender) return;
+    const receipt = {
+      version: 1,
+      created_at: new Date().toISOString(),
+      mode,
+      status: listeningApproved && !hasStaleRender ? "approved" : hasStaleRender ? "stale" : "not-approved",
+      approved: listeningApproved && !hasStaleRender,
+      stale: hasStaleRender,
+      checklist: listeningChecklist,
+      completed_count: listeningCompletedCount,
+      total_count: listeningTotalCount,
+      render: {
+        output_root: listeningReceiptRootForManifest(manifest),
+        manifest_path: manifest.outputs?.manifest ?? "",
+        dashboard_path: dashboardPath || manifest.dashboard || "",
+        album_sequence: manifest.album_sequence ?? manifest.outputs?.album_sequence ?? null,
+        track_count: manifest.track_count,
+        interlude_count: manifest.interlude_count,
+      },
+      export_checks: exportChecks
+        ? {
+            status: exportChecks.status,
+            summary: exportChecks.summary,
+            checks: exportChecks.checks,
+          }
+        : null,
+      codec_previews: (manifest.codec_previews ?? []).map((preview) => ({
+        codec: preview.codec ?? "codec",
+        output: preview.output ?? "",
+        lufs_shift: preview.lufs_shift ?? null,
+        true_peak_shift_db: preview.true_peak_shift_db ?? null,
+        warnings: preview.warnings ?? (preview.warning ? [preview.warning] : []),
+      })),
+      caveats: [
+        "This receipt records the local listening decision state only.",
+        "Automated checks and saved receipts do not replace human sound approval.",
+        livePreviewContract?.previewParity === "approximate"
+          ? "Live Preview is an approximate audition path; rendered previews are the release-faithful reference."
+          : "",
+      ].filter(Boolean),
+    };
+    try {
+      const saved = await invoke<string>("write_listening_receipt", {
+        path: listeningReceiptTarget,
+        receipt,
+      });
+      setListeningReceiptPath(saved);
+      pushLog(`Listening receipt saved: ${saved}`);
+      setProgressLabel("Listening receipt saved.");
+    } catch (error) {
+      pushLog(`Listening receipt save failed: ${String(error)}`);
+      setProgressLabel("Listening receipt save failed.");
+    }
   }
 
   function updateSettings(patch: Partial<Settings>, options: { dirty?: boolean } = { dirty: true }) {
@@ -1220,6 +1282,7 @@ function App() {
     setManifest(null);
     setExportChecks(null);
     setDashboardPath("");
+    setListeningReceiptPath("");
     try {
       const renderedTrackItems: ManifestTrackItem[] = [];
       const batchWarnings: string[] = [];
@@ -1284,6 +1347,7 @@ function App() {
     setManifest(null);
     setExportChecks(null);
     setDashboardPath("");
+    setListeningReceiptPath("");
     try {
       const outputDir = `${settings.outputDir}\\album-master-${timestamp()}`;
       const project = buildProject(albumWav, tracks);
@@ -1295,6 +1359,7 @@ function App() {
       setTracks((current) => attachMasterPaths(current, loaded, outputDir));
       setRenderRevision(revisionAtStart);
       setPreviewArtifact(null);
+      setListeningReceiptPath("");
       pushLog(`Album render complete: ${loaded.track_count} masters, ${loaded.interlude_count} transitions. ${outputDir}`);
       setDashboardPath(result.dashboard_path ?? "");
       setProgress(1);
@@ -1632,6 +1697,7 @@ function App() {
     setPhase("Rendering preview");
     setProgress(0);
     setProgressLabel(`Rendering preview for ${track.title}.`);
+    setListeningReceiptPath("");
     try {
       const outputDir = `${settings.outputDir}\\preview-${timestamp()}`;
       const project = buildProject(false, [track], { transitionsEnabled: false });
@@ -1659,6 +1725,7 @@ function App() {
       );
       setManifest(loaded);
       setDashboardPath(result.dashboard_path ?? "");
+      setListeningReceiptPath("");
       await updateExportChecks(loaded);
       if (options.audition) {
         pendingSeekRef.current = clamp(auditionStartSeconds, 0, Math.max(sourceDuration - 0.1, 0));
@@ -1713,6 +1780,7 @@ function App() {
     setPhase("Rendering region preview");
     setProgress(0);
     setProgressLabel(`Rendering ${windowToRender.label} through the export engine.`);
+    setListeningReceiptPath("");
     try {
       const outputDir = `${settings.outputDir}\\region-preview-${timestamp()}`;
       const project = buildProject(false, [track], { transitionsEnabled: false });
@@ -2683,7 +2751,17 @@ function App() {
             onChange={(event) => updateListeningChecklist({ notes: event.target.value })}
             placeholder="Listening notes"
           />
-          <button className="reset" onClick={resetListeningChecklist}>Clear Listening Pass</button>
+          <div className="listening-actions">
+            <button
+              disabled={!canSaveListeningReceipt}
+              onClick={saveListeningReceipt}
+              title={canSaveListeningReceipt ? "Writes listening-review.json beside the current render." : "Render or refresh audio before saving a listening receipt."}
+            >
+              <Save size={16} /> Save Receipt
+            </button>
+            <button className="reset" onClick={resetListeningChecklist}>Clear Listening Pass</button>
+          </div>
+          {listeningReceiptPath && <small className="receipt-path">Receipt: {listeningReceiptPath}</small>}
         </div>
 
         <pre className="log">{logs.slice(-18).join("\n")}</pre>
@@ -3129,6 +3207,33 @@ function buildTrackMasterBatchManifest(
 
 function withDashboard(manifest: RenderManifest, dashboardPath?: string | null): RenderManifest {
   return dashboardPath ? { ...manifest, dashboard: dashboardPath } : manifest;
+}
+
+function listeningReceiptPathForManifest(manifest: RenderManifest | null) {
+  const root = listeningReceiptRootForManifest(manifest);
+  return root ? joinLocalPath(root, "listening-review.json") : "";
+}
+
+function listeningReceiptRootForManifest(manifest: RenderManifest | null) {
+  const outputs = manifest?.outputs;
+  if (outputs?.manifest) return localDirName(outputs.manifest);
+  if (outputs?.masters_dir) return outputs.masters_dir;
+  if (manifest?.dashboard) return localDirName(manifest.dashboard);
+  if (manifest?.album_sequence) return localDirName(manifest.album_sequence);
+  if (outputs?.album_sequence) return localDirName(outputs.album_sequence);
+  return "";
+}
+
+function localDirName(filePath: string) {
+  const normalized = String(filePath || "");
+  const index = Math.max(normalized.lastIndexOf("\\"), normalized.lastIndexOf("/"));
+  return index >= 0 ? normalized.slice(0, index) : "";
+}
+
+function joinLocalPath(root: string, fileName: string) {
+  if (!root) return fileName;
+  const separator = root.includes("\\") ? "\\" : "/";
+  return `${root.replace(/[\\/]+$/, "")}${separator}${fileName}`;
 }
 
 function manifestTransitions(manifest: RenderManifest | null): TransitionArtifact[] {

@@ -277,6 +277,7 @@ Current packaged coverage:
 - 2026-05-12 added `Codec preview checked` to the Listening Pass panel and verified the autosaved `codecPreviewAudition` state in packaged session-safety and Codec QC smokes.
 - 2026-05-12 added Album Master codec-preview artifact buttons and `npm run test:tauri-release-album-codec-qc`; packaged evidence verifies `Album AAC 256k` WebView handoff, native playback start/stop, persisted `codecPreviewAudition`, and two existing album codec-preview outputs.
 - 2026-05-12 added `npm run test:tauri-real-song-album-codec-qc` and verified `Lay the Money on the Desk (1).mp3` through the packaged Album Master path as three derived clips with `Codec QC` passing as `2 codec preview path(s) exist`.
+- 2026-05-12 added a `Save Receipt` action to the Listening Pass panel; packaged evidence verifies `listening-review.json` is written beside the current render with not-approved status, checklist state, export checks, codec previews, and human-approval caveats.
 - The release EXE smoke restores a two-track Track Master session, selects Track 2, verifies visible reorder controls move Track 2 into slot 1, clicks visible `Update Preview`, and verifies a one-track preview manifest, dashboard, mastered WAV, playback-cache preparation, WebView local audio load, transport range seek, pixel-level transport seek drag, `Master ready` state, same-position A/B Original/Mastered switching, waveform region creation, region Loop behavior, Volume Match gain behavior, Live Preview control latency for Low/Mid/High/Width/Intensity, `Approx audition` after live audition is armed, stale `No master` plus `Render required` after live control changes, second preview render, export-vs-live comparison fields (`same_engine: false`, `preview_parity: "approximate"`, `export_faithful_preview_required: true`), and a two-track Track Master batch export receipt (`2 rendered track path(s) exist`).
 - Evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
 - Remaining Phase 3/4 gaps: actual export-engine parity implementation for live audition and human listening approval.
@@ -540,6 +541,14 @@ No-victory-lap check:
 - Evidence: `test-output/tauri-release-session-safety-smoke/tauri-release-session-safety-smoke.json`.
 - Evidence values include `afterUndoPreset: "Universal"`, `afterRedoPreset: "Clarity"`, `persistedPresetName: "Session Safety Chain"`, `persistedListeningApprovedAfterChecks: true`, `persistedListeningApprovedAfterDirtyChange: false`, and `persistedBassAfterDirtyChange: 0.5`.
 - Remaining gap: this is release-package state safety evidence, not human listening approval or render-history/library work.
+
+2026-05-12 packaged listening receipt baseline:
+
+- Added visible `Save Receipt` in the Listening Pass panel and Tauri command `write_listening_receipt`.
+- The receipt is written as `listening-review.json` beside the current render only when the render is current.
+- Evidence: `test-output/tauri-release-album-codec-qc-smoke/tauri-release-album-codec-qc-smoke.json`.
+- Evidence values include `listeningReceiptExists: true`, `listeningReceipt.status: "not-approved"`, `listeningReceipt.checklist.codecPreviewAudition: true`, `listeningReceipt.export_checks.status: "pass"`, and two codec-preview entries.
+- Remaining gap: this creates a durable artifact for a listening decision; it does not create the human decision itself.
 
 2026-05-12 packaged Album Master state baseline:
 

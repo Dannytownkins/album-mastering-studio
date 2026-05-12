@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Listening receipt artifact: packaged Album Master Codec QC smoke verifies the visible `Save Receipt` action writes `listening-review.json` beside the render with `status: "not-approved"`, codec-preview checklist state, export checks, codec preview entries, render paths, and caveats that automation is not human approval.
 - 2026-05-12 real-song Album Master Codec QC: packaged release EXE smoke verifies `Lay the Money on the Desk (1).mp3` can be split into three album clips, rendered as Album Master with two generated transitions, and checked with album-level AAC/Opus codec previews passing `Codec QC` as `2 codec preview path(s) exist`.
 - 2026-05-12 Album Master Codec Preview audition: packaged release EXE smoke verifies Album Master exposes album-level AAC/Opus codec preview buttons, selects `Album AAC 256k`, starts/stops native playback, persists `listeningChecklist.codecPreviewAudition`, and writes manifest codec previews that exist on disk.
 - 2026-05-12 Codec Preview Listening Pass item: packaged session-safety and Track Master Codec QC smokes verify `listeningChecklist.codecPreviewAudition` persists, including a Codec QC smoke note that codec previews were audited while human sound approval remains required.

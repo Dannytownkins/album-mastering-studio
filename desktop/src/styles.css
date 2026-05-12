@@ -1145,6 +1145,18 @@ label {
   font: 12px/1.45 inherit;
 }
 
+.listening-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receipt-path {
+  color: var(--muted);
+  font: 11px/1.35 "Cascadia Mono", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
 .empty {
   display: grid;
   place-items: center;

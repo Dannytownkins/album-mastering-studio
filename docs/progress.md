@@ -2,6 +2,52 @@
 
 ## 2026-05-12
 
+### Listening Receipt Artifact Slice
+
+- Added a visible `Save Receipt` action to the Listening Pass panel.
+- The app now writes `listening-review.json` beside the current render when the render is current, recording checklist state, approval/stale status, notes, render paths, export-check summary, codec previews, and explicit caveats that automation does not replace human sound approval.
+- Added a narrow Tauri `write_listening_receipt` command that writes the receipt JSON through the existing local file path flow.
+- Extended the packaged Album Master Codec QC smoke to click `Save Receipt` after codec-preview audition and verify the saved receipt remains `not-approved` rather than faking a listening approval.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-codec-qc-smoke.mjs
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Node syntax check passed for the updated packaged Album Master Codec QC smoke.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Album Master Codec QC smoke passed and wrote `listening-review.json`.
+- Desktop CLI-contract integration passed.
+- Python compile passed.
+- `git diff --check` passed.
+- Evidence: `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`.
+- Receipt evidence values:
+  - `listeningReceiptExists: true`
+  - `listeningReceipt.status: "not-approved"`
+  - `listeningReceipt.approved: false`
+  - `listeningReceipt.stale: false`
+  - `listeningReceipt.completed_count: 1`
+  - `listeningReceipt.total_count: 7`
+  - `listeningReceipt.checklist.codecPreviewAudition: true`
+  - `listeningReceipt.export_checks.status: "pass"`
+  - `listeningReceipt.codec_previews.length: 2`
+
+Honest gap:
+
+- This gives a durable output-folder artifact for the future manual listening pass. The automated smoke intentionally saves a not-approved receipt and does not close human listening approval.
+
 ### Real-Song Album Master Codec QC Smoke
 
 - Added `npm run test:tauri-real-song-album-codec-qc`, an opt-in wrapper around the existing packaged real-song Album Master performance smoke.

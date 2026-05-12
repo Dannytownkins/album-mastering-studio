@@ -325,6 +325,13 @@ fn write_project(path: String, project: Value) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn write_listening_receipt(path: String, receipt: Value) -> Result<String, String> {
+    let target = PathBuf::from(&path);
+    write_json_file(&target, &receipt)?;
+    Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn analyze_tracks(
     app: AppHandle,
     state: State<'_, ProcessState>,
@@ -3432,6 +3439,7 @@ pub fn run() {
             validate_audio_sources,
             read_json,
             write_project,
+            write_listening_receipt,
             analyze_tracks,
             live_preview_contract,
             render_live_preview_model,

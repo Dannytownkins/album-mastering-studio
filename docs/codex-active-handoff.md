@@ -17,7 +17,65 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Real-Song Album Master Codec QC
+## Latest Codex Pass: Listening Receipt Artifact
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added `Save Receipt` to the Listening Pass panel.
+- Added Tauri command `write_listening_receipt`.
+- The saved `listening-review.json` records approval/stale status, checklist values, notes, render paths, export-check summary, codec previews, and caveats that automation is not human approval.
+- The packaged Album Master Codec QC smoke now saves a receipt after codec-preview audition and verifies it stays `not-approved`.
+
+Verification already run:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-codec-qc-smoke.mjs
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`
+- Relevant receipt fields:
+  - `listeningReceiptExists: true`
+  - `listeningReceipt.status: "not-approved"`
+  - `listeningReceipt.approved: false`
+  - `listeningReceipt.stale: false`
+  - `listeningReceipt.completed_count: 1`
+  - `listeningReceipt.total_count: 7`
+  - `listeningReceipt.checklist.codecPreviewAudition: true`
+  - `listeningReceipt.export_checks.status: "pass"`
+  - `listeningReceipt.codec_previews.length: 2`
+
+Remaining gap:
+
+- The output folder can now carry a durable listening receipt, but no real human approval has been recorded. The smoke deliberately saves a not-approved receipt.
+
+Next useful slice:
+
+- If the user is present, use this receipt path for an actual listening pass. If unattended, avoid more proof-only smoke work unless it closes a real workflow risk.
+
+## Previous Codex Pass: Real-Song Album Master Codec QC
 
 Date: 2026-05-12
 
