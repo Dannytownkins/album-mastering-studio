@@ -2,6 +2,47 @@
 
 ## 2026-05-12
 
+### Codec Preview Listening Checklist Slice
+
+- Added a `Codec preview checked` item to the Listening Pass panel so codec-preview audition is a first-class review step instead of only a playback artifact.
+- The checklist field is backfilled through the existing listening-checklist normalization path, so older autosaves load with the new item unchecked.
+- Render-affecting edits now also clear active `codec` playback, preventing stale codec previews from remaining selected after settings change.
+- Extended the packaged session-safety smoke and Track Master Codec QC smoke to persist and verify the new checklist field.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-session-safety-smoke.mjs
+node --check .\tests\tauri-release-track-codec-qc-smoke.mjs
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-session-safety
+npm run test:tauri-release-track-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Node syntax checks passed for both updated release smokes.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged release session-safety smoke passed and persisted `codecPreviewAudition: true` with listening approval before a render-affecting edit cleared approval.
+- Packaged Track Master Codec QC smoke passed and persisted `codecPreviewAudition: true` plus the note `Codec previews audited in release smoke; human sound approval still required.` after AAC preview WebView/native playback.
+- Desktop CLI-contract integration passed.
+- Python compile passed.
+- `git diff --check` passed.
+- Evidence:
+  - `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`
+  - `test-output\tauri-release-track-codec-qc-smoke\tauri-release-track-codec-qc-smoke.json`
+
+Honest gap:
+
+- This records codec preview review state, but the smoke note intentionally does not claim human approval of sound quality.
+
 ### Track Master Codec Preview Audition Rail
 
 - Added a selected-track `Codec Previews` rail to the Track Master Quality Checks panel after renders that produce codec preview artifacts.

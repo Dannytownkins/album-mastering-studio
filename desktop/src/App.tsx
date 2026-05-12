@@ -236,6 +236,7 @@ type ListeningChecklist = {
   trackOriginal: boolean;
   trackMaster: boolean;
   trackNativeAb: boolean;
+  codecPreviewAudition: boolean;
   albumSequence: boolean;
   albumTransitions: boolean;
   dashboardReviewed: boolean;
@@ -294,6 +295,7 @@ const emptyListeningChecklist: ListeningChecklist = {
   trackOriginal: false,
   trackMaster: false,
   trackNativeAb: false,
+  codecPreviewAudition: false,
   albumSequence: false,
   albumTransitions: false,
   dashboardReviewed: false,
@@ -1009,7 +1011,7 @@ function App() {
     setComparePair(null);
     setNativeLivePreviewAudition(null);
     setPlayItem((current) =>
-      current && ["master", "album", "transition"].includes(current.kind) ? null : current,
+      current && ["master", "album", "transition", "codec"].includes(current.kind) ? null : current,
     );
   }
 
@@ -2653,6 +2655,7 @@ function App() {
             <ChecklistToggle label="Original checked" checked={listeningChecklist.trackOriginal} onChange={(trackOriginal) => updateListeningChecklist({ trackOriginal })} />
             <ChecklistToggle label="Master checked" checked={listeningChecklist.trackMaster} onChange={(trackMaster) => updateListeningChecklist({ trackMaster })} />
             <ChecklistToggle label="Native A/B checked" checked={listeningChecklist.trackNativeAb} onChange={(trackNativeAb) => updateListeningChecklist({ trackNativeAb })} />
+            <ChecklistToggle label="Codec preview checked" checked={listeningChecklist.codecPreviewAudition} onChange={(codecPreviewAudition) => updateListeningChecklist({ codecPreviewAudition })} />
             <ChecklistToggle label="Album WAV checked" checked={listeningChecklist.albumSequence} onChange={(albumSequence) => updateListeningChecklist({ albumSequence })} />
             <ChecklistToggle label="Transitions checked" checked={listeningChecklist.albumTransitions} onChange={(albumTransitions) => updateListeningChecklist({ albumTransitions })} />
             <ChecklistToggle label="Dashboard checked" checked={listeningChecklist.dashboardReviewed} onChange={(dashboardReviewed) => updateListeningChecklist({ dashboardReviewed })} />

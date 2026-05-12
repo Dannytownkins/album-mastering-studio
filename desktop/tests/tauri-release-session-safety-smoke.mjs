@@ -99,6 +99,7 @@ try {
   assert.equal(evidence.persistedListeningAfterChecks?.trackOriginal, true);
   assert.equal(evidence.persistedListeningAfterChecks?.trackMaster, true);
   assert.equal(evidence.persistedListeningAfterChecks?.trackNativeAb, true);
+  assert.equal(evidence.persistedListeningAfterChecks?.codecPreviewAudition, true);
   assert.equal(evidence.persistedListeningAfterChecks?.notes, "Release smoke approval before a render-affecting edit.");
   assert.equal(evidence.lowControlReadoutAfterChange, "+0.50 dB");
   assert.equal(evidence.listeningApprovalAfterDirtyChange, "Not approved");
@@ -186,6 +187,7 @@ function seedSessionSafetyExpression() {
       trackOriginal: false,
       trackMaster: false,
       trackNativeAb: false,
+      codecPreviewAudition: false,
       albumSequence: false,
       albumTransitions: false,
       dashboardReviewed: false,
@@ -311,6 +313,7 @@ function sessionSafetyExpression() {
   click(listeningLabel('Original checked'));
   click(listeningLabel('Master checked'));
   click(listeningLabel('Native A/B checked'));
+  click(listeningLabel('Codec preview checked'));
   click(listeningLabel('Approved after listening'));
   await setTextareaValue(
     document.querySelector('textarea[aria-label="Listening notes"]'),
@@ -328,6 +331,7 @@ function sessionSafetyExpression() {
       session?.listeningChecklist?.trackOriginal === true &&
       session?.listeningChecklist?.trackMaster === true &&
       session?.listeningChecklist?.trackNativeAb === true &&
+      session?.listeningChecklist?.codecPreviewAudition === true &&
       session?.listeningChecklist?.notes === 'Release smoke approval before a render-affecting edit.',
     12000,
   );

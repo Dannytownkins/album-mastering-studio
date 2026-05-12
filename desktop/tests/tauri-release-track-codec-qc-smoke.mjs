@@ -102,6 +102,9 @@ try {
   assert.match(evidence.codecTransportLabel, /AAC 256k/);
   assert.equal(evidence.nativeCodecPreviewStarted, true);
   assert.equal(evidence.nativeCodecPreviewStopped, true);
+  assert.equal(evidence.codecListeningChecklistVisible, true);
+  assert.equal(evidence.persistedCodecPreviewAudition, true);
+  assert.match(evidence.persistedListeningNotes, /Codec previews audited/);
   assert.equal(evidence.trackManifestCount, 2);
   assert.deepEqual(evidence.trackManifestCodecPreviewFlags, [true, true]);
   assert.equal(evidence.codecPreviewCount, 4);
@@ -213,7 +216,29 @@ function trackCodecQcExpression() {
     }
     return false;
   };
+  const click = (element) => element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const logText = () => document.querySelector('.log')?.textContent || '';
+  const listeningLabel = (label) => {
+    const item = Array.from(document.querySelectorAll('.check-toggle')).find((candidate) => text(candidate).includes(label));
+    if (!item) throw new Error('Listening checkbox not found: ' + label);
+    return item;
+  };
+  const waitForPersisted = async (predicate, timeoutMs) => {
+    let latest = null;
+    const ok = await waitFor(async () => {
+      latest = await window.__TAURI_INTERNALS__.invoke('load_recent_session');
+      return Boolean(predicate(latest));
+    }, timeoutMs);
+    if (!ok) throw new Error('Timed out waiting for persisted session: ' + JSON.stringify(latest));
+    return latest;
+  };
+  const setTextareaValue = async (textarea, value) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(textarea, value);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  };
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
   const trackCountLabel = text(document.querySelector('.library .panel-title span'));
   const codecLabel = Array.from(document.querySelectorAll('label.check-row')).find((item) => text(item).includes('Codec QC'));
@@ -226,7 +251,7 @@ function trackCodecQcExpression() {
       log: logText().slice(-1000)
     }));
   }
-  exportButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  click(exportButton);
   const trackBatchReceiptVisible = await waitFor(
     () => {
       const receipt = text(document.querySelector('.export-receipt'));
@@ -256,7 +281,7 @@ function trackCodecQcExpression() {
   );
   const codecPreviewButtonCount = Array.from(document.querySelectorAll('.codec-preview-actions button')).length;
   const aacButton = buttonByText('AAC 256k');
-  aacButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  click(aacButton);
   const transportLabel = () => text(document.querySelector('.transport-label'));
   const aacCodecPreviewReady = await waitFor(
     () => logText().includes('Playback ready: Codec QC Fixture 1 - AAC 256k') && transportLabel().includes('AAC 256k'),
@@ -264,16 +289,28 @@ function trackCodecQcExpression() {
   );
   const codecTransportLabel = transportLabel();
   const nativePlayButton = buttonByText('Native Play');
-  nativePlayButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  click(nativePlayButton);
   const nativeCodecPreviewStarted = await waitFor(
     () => text(document.querySelector('.native-audition-status')).includes('Native playback playing'),
     30000,
   );
   const nativeStopButton = buttonByText('Native Stop');
-  nativeStopButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  click(nativeStopButton);
   const nativeCodecPreviewStopped = await waitFor(
     () => text(document.querySelector('.native-audition-status')).includes('Native transport ready'),
     10000,
+  );
+  const codecListeningChecklistVisible = text(document.querySelector('.listening-panel')).includes('Codec preview checked');
+  click(listeningLabel('Codec preview checked'));
+  await setTextareaValue(
+    document.querySelector('textarea[aria-label="Listening notes"]'),
+    'Codec previews audited in release smoke; human sound approval still required.',
+  );
+  const persistedListening = await waitForPersisted(
+    (session) =>
+      session?.listeningChecklist?.codecPreviewAudition === true &&
+      session?.listeningChecklist?.notes === 'Codec previews audited in release smoke; human sound approval still required.',
+    12000,
   );
   return JSON.stringify({
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
@@ -292,6 +329,9 @@ function trackCodecQcExpression() {
     codecTransportLabel,
     nativeCodecPreviewStarted,
     nativeCodecPreviewStopped,
+    codecListeningChecklistVisible,
+    persistedCodecPreviewAudition: persistedListening?.listeningChecklist?.codecPreviewAudition,
+    persistedListeningNotes: persistedListening?.listeningChecklist?.notes || '',
     exportRoot
   });
 })()

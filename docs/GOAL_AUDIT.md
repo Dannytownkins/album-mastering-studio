@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Codec Preview Listening Pass item: packaged session-safety and Track Master Codec QC smokes verify `listeningChecklist.codecPreviewAudition` persists, including a Codec QC smoke note that codec previews were audited while human sound approval remains required.
 - 2026-05-12 Track Master Codec Preview audition rail: packaged release EXE smoke verifies the visible selected-track `Codec Previews` rail, two AAC/Opus buttons, WebView playback handoff for `Codec QC Fixture 1 - AAC 256k`, and native playback start/stop for the prepared codec preview.
 - 2026-05-12 real-song Track Master Codec QC: packaged release EXE smoke verifies the supplied MP3 `Lay the Money on the Desk (1).mp3` imports, analyzes at 186.32 seconds, renders a Track Master, passes export checks, and creates two codec previews with `Codec QC` passing as `2 codec preview path(s) exist`.
 - 2026-05-12 Track Master Codec QC receipt: packaged release EXE smoke verifies a two-track Track Master export with `Codec QC` enabled shows `4 codec preview path(s) exist`, writes two per-track manifests with `codec_preview: true`, and creates two AAC plus two Opus codec preview files that exist on disk.

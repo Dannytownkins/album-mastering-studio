@@ -17,7 +17,61 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Track Master Codec Preview Audition Rail
+## Latest Codex Pass: Codec Preview Listening Checklist
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-release-session-safety-smoke.mjs`
+- `desktop/tests/tauri-release-track-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added `Codec preview checked` to the Listening Pass panel and autosaved session state.
+- The existing checklist normalizer backfills the new `codecPreviewAudition` field for older sessions.
+- Render-affecting edits now clear active codec playback along with master/album/transition playback.
+- Session-safety and Codec QC release smokes now verify the new field persists.
+
+Verification already run:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-session-safety-smoke.mjs
+node --check .\tests\tauri-release-track-codec-qc-smoke.mjs
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-session-safety
+npm run test:tauri-release-track-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`
+- `test-output\tauri-release-track-codec-qc-smoke\tauri-release-track-codec-qc-smoke.json`
+- Relevant fields:
+  - session safety persisted `listeningChecklist.codecPreviewAudition: true`
+  - Codec QC smoke persisted `persistedCodecPreviewAudition: true`
+  - Codec QC smoke persisted note: `Codec previews audited in release smoke; human sound approval still required.`
+
+Remaining gap:
+
+- The app can now record codec-preview audition as a review step. This is still not a real human approval of the master or codec preview sound.
+
+Next useful slice:
+
+- If the user is available, run an interactive listening pass with `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` and use the Listening Pass panel to record the actual approval or problems.
+
+## Previous Codex Pass: Track Master Codec Preview Audition Rail
 
 Date: 2026-05-12
 
