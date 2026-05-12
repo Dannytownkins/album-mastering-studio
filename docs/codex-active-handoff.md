@@ -17,7 +17,64 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Live Source To Engine Region Replacement Smoke
+## Latest Codex Pass: Multi-Control Live Preview Response Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Extended the release-backed Track Preview UI smoke so Live Preview verifies the Phase 5 first-control set instead of only the Low slider.
+- The smoke now opens Advanced controls when needed and proves `Low`, `Mid`, `High`, and `Width` update the running Web Audio snapshot inside the 150 ms lightweight-control budget.
+- The same run verifies `Intensity` updates the live drive snapshot inside the 500 ms macro-control budget.
+- Existing honesty checks still run after the live changes: the exact render goes stale, the parity badge becomes `Render required`, and `Update Preview` hands back to `python-render-track-master`.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `liveControlResults`: `Low`, `Mid`, `High`, `Width`, `Intensity`
+  - `Low latencyMs: 1.5`
+  - `Mid latencyMs: 1.399999976158142`
+  - `High latencyMs: 0.9000000357627869`
+  - `Width latencyMs: 0.699999988079071`
+  - `Intensity latencyMs: 0.5`
+  - `liveControlUnder150ms: true`
+  - `liveIntensityUnder500ms: true`
+  - `liveSnapshotAfterControls.bass: 0.5`
+  - `liveSnapshotAfterControls.mid: -0.25`
+  - `liveSnapshotAfterControls.high: 0.35`
+  - `liveSnapshotAfterControls.width: 1.36`
+  - `liveSnapshotAfterControls.drive: 0.4`
+  - `previewParityAfterControlChange: Render required`
+  - `previewParityAfterUpdatePreview: Render-faithful preview`
+  - `exportEngineAuditionEngine: python-render-track-master`
+
+Remaining gap:
+
+- This proves the current Web Audio audition responds quickly across the first-control set and keeps stale exact renders honest. Web Audio Live Preview remains approximate and not export-engine parity.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
+
+## Previous Codex Pass: Live Source To Engine Region Replacement Smoke
 
 Date: 2026-05-12
 
@@ -72,11 +129,6 @@ Evidence:
 Remaining gap:
 
 - This proves the visible region-render path replaces active Web Audio source audition with exact Python region playback. Web Audio Live Preview remains approximate and not export-engine parity.
-
-Next useful slice:
-
-- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
-- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
 
 ## Previous Codex Pass: Cue-Preserving Exact/Approx Audition Smoke
 

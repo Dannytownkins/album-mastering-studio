@@ -161,7 +161,19 @@ try {
   assert.equal(evidence.livePreviewButtonEnabled, true);
   assert.equal(evidence.livePreviewActive, true);
   assert.equal(evidence.liveControlUpdated, true);
+  assert.equal(evidence.liveControlResults.length, 5);
+  assert.deepEqual(
+    evidence.liveControlResults.map((item) => item.label),
+    ["Low", "Mid", "High", "Width", "Intensity"],
+  );
   assert.equal(evidence.liveControlUnder150ms, true);
+  assert.equal(evidence.liveIntensityUnder500ms, true);
+  assert.equal(evidence.liveSnapshotAfterControls.active, true);
+  assert.ok(Math.abs(evidence.liveSnapshotAfterControls.bass - 0.5) <= 0.001);
+  assert.ok(Math.abs(evidence.liveSnapshotAfterControls.mid - -0.25) <= 0.001);
+  assert.ok(Math.abs(evidence.liveSnapshotAfterControls.high - 0.35) <= 0.001);
+  assert.ok(Math.abs(evidence.liveSnapshotAfterControls.width - 1.36) <= 0.001);
+  assert.ok(Math.abs(evidence.liveSnapshotAfterControls.drive - 0.4) <= 0.001);
   assert.equal(evidence.previewParityAfterLivePreview, "Approx audition");
   assert.equal(evidence.previewParityAfterControlChange, "Render required");
   assert.equal(evidence.parityPreviewReadyVisible, true);
@@ -524,9 +536,6 @@ function trackPreviewExpression() {
       transportLabel: transportLabel()
     }));
   }
-  const lowControl = Array.from(document.querySelectorAll('label.slider')).find((item) => text(item).startsWith('Low'));
-  const lowInput = lowControl?.querySelector('input');
-  if (!lowInput) throw new Error('Low control not found');
   const livePreviewButton = buttonByText('Live Preview');
   const livePreviewDefaultOff = text(document.querySelector('.live-audition-status')) === 'Offline preview' && !livePreviewButton.classList.contains('active');
   const livePreviewButtonEnabled = !livePreviewButton.disabled;
@@ -548,17 +557,54 @@ function trackPreviewExpression() {
   const liveSnapshotAfterActivation = window.__AMS_LIVE_AUDITION__ || {};
   const liveLatencyStatus = text(document.querySelector('.live-audition-status'));
   const previewParityAfterLivePreview = text(document.querySelector('.preview-parity-status'));
-  const liveControlStart = performance.now();
-  setRangeValue(lowInput, 0.5);
-  const liveControlUpdated = await waitFor(() => {
-    const snapshot = window.__AMS_LIVE_AUDITION__;
-    return Boolean(snapshot?.active === true && Math.abs((snapshot.bass || 0) - 0.5) <= 0.001);
-  }, 5000);
-  const liveControlLatencyMs = performance.now() - liveControlStart;
-  if (!liveControlUpdated) {
-    throw new Error('Live Preview Low control did not update the Web Audio chain: ' + JSON.stringify(window.__AMS_LIVE_AUDITION__ || null));
+  const sliderByLabel = (label) => {
+    const control = Array.from(document.querySelectorAll('label.slider')).find((item) => text(item).startsWith(label));
+    const input = control?.querySelector('input');
+    if (!input) throw new Error(label + ' control not found');
+    return { control, input };
+  };
+  const updateLiveControl = async ({ label, value, snapshotKey, expected, budgetMs }) => {
+    const { input } = sliderByLabel(label);
+    const started = performance.now();
+    setRangeValue(input, value);
+    const updated = await waitFor(() => {
+      const snapshot = window.__AMS_LIVE_AUDITION__;
+      return Boolean(snapshot?.active === true && Math.abs((snapshot[snapshotKey] || 0) - expected) <= 0.001);
+    }, 5000);
+    const latencyMs = performance.now() - started;
+    if (!updated) {
+      throw new Error('Live Preview ' + label + ' control did not update the Web Audio chain: ' + JSON.stringify(window.__AMS_LIVE_AUDITION__ || null));
+    }
+    return {
+      label,
+      value,
+      snapshotKey,
+      expected,
+      latencyMs,
+      underBudget: latencyMs <= budgetMs,
+      snapshot: window.__AMS_LIVE_AUDITION__ || {}
+    };
+  };
+  if (!Array.from(document.querySelectorAll('label.slider')).some((item) => text(item).startsWith('Width'))) {
+    buttonByText('Advanced').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    const widthVisible = await waitFor(
+      () => Array.from(document.querySelectorAll('label.slider')).some((item) => text(item).startsWith('Width')),
+      5000,
+    );
+    if (!widthVisible) throw new Error('Width control did not become visible after opening Advanced');
   }
-  const liveSnapshotAfterLow = window.__AMS_LIVE_AUDITION__ || {};
+  const liveControlResults = [];
+  liveControlResults.push(await updateLiveControl({ label: 'Low', value: 0.5, snapshotKey: 'bass', expected: 0.5, budgetMs: 150 }));
+  liveControlResults.push(await updateLiveControl({ label: 'Mid', value: -0.25, snapshotKey: 'mid', expected: -0.25, budgetMs: 150 }));
+  liveControlResults.push(await updateLiveControl({ label: 'High', value: 0.35, snapshotKey: 'high', expected: 0.35, budgetMs: 150 }));
+  liveControlResults.push(await updateLiveControl({ label: 'Width', value: 0.2, snapshotKey: 'width', expected: 1.36, budgetMs: 150 }));
+  liveControlResults.push(await updateLiveControl({ label: 'Intensity', value: 0.4, snapshotKey: 'drive', expected: 0.4, budgetMs: 500 }));
+  const liveControlUpdated = liveControlResults.every((item) => item.snapshot.active === true);
+  const liveControlLatencyMs = Math.max(...liveControlResults.map((item) => item.latencyMs));
+  const liveControlUnder150ms = liveControlResults.filter((item) => item.label !== 'Intensity').every((item) => item.underBudget);
+  const liveIntensityUnder500ms = liveControlResults.find((item) => item.label === 'Intensity')?.underBudget === true;
+  const liveSnapshotAfterLow = liveControlResults.find((item) => item.label === 'Low')?.snapshot || {};
+  const liveSnapshotAfterControls = window.__AMS_LIVE_AUDITION__ || {};
   await waitFor(() => masterStatus() !== 'Master ready', 5000);
   const masterStatusAfterControlChange = masterStatus();
   const masteredButtonEnabledAfterControlChange = masteredActionButton()?.disabled === false;
@@ -721,9 +767,12 @@ function trackPreviewExpression() {
     liveSnapshotAfterActivation,
     previewParityAfterLivePreview,
     liveControlUpdated,
+    liveControlResults,
     liveControlLatencyMs,
-    liveControlUnder150ms: liveControlLatencyMs <= 150,
+    liveControlUnder150ms,
+    liveIntensityUnder500ms,
     liveSnapshotAfterLow,
+    liveSnapshotAfterControls,
     masterStatusAfterControlChange,
     masteredButtonEnabledAfterControlChange,
     previewParityAfterControlChange,

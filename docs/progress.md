@@ -2,6 +2,49 @@
 
 ## 2026-05-12
 
+### Multi-Control Live Preview Response Smoke Slice
+
+- Extended `desktop/tests/tauri-track-preview-ui-smoke.mjs` so the packaged Track Preview smoke verifies the Phase 5 first-control set, not only the Low slider.
+- The release-backed smoke now opens Advanced controls when needed and proves `Low`, `Mid`, `High`, and `Width` update the running Web Audio snapshot inside the 150 ms lightweight-control budget.
+- The same run verifies `Intensity` updates the live drive snapshot inside the 500 ms macro-control budget.
+- The stale-state guardrail stays intact: after live control changes, the exact rendered master is invalidated, the parity badge returns to `Render required`, and `Update Preview` hands back to the Python-rendered master.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Results:
+
+- Node syntax check passed.
+- Release-backed Track Preview UI smoke passed.
+- Evidence: `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Evidence values:
+  - `liveControlResults`: `Low`, `Mid`, `High`, `Width`, `Intensity`
+  - `Low latencyMs: 1.5`
+  - `Mid latencyMs: 1.399999976158142`
+  - `High latencyMs: 0.9000000357627869`
+  - `Width latencyMs: 0.699999988079071`
+  - `Intensity latencyMs: 0.5`
+  - `liveControlUnder150ms: true`
+  - `liveIntensityUnder500ms: true`
+  - `liveSnapshotAfterControls.bass: 0.5`
+  - `liveSnapshotAfterControls.mid: -0.25`
+  - `liveSnapshotAfterControls.high: 0.35`
+  - `liveSnapshotAfterControls.width: 1.36`
+  - `liveSnapshotAfterControls.drive: 0.4`
+  - `previewParityAfterControlChange: Render required`
+  - `previewParityAfterUpdatePreview: Render-faithful preview`
+  - `exportEngineAuditionEngine: python-render-track-master`
+
+Honest gap:
+
+- This proves the listed UI controls update the current Web Audio audition quickly and keep stale exact renders honest. It does not make Web Audio Live Preview export-engine faithful or shared-DSP.
+
 ### Live Source To Engine Region Replacement Smoke Slice
 
 - Extended `desktop/tests/tauri-real-song-region-ui-smoke.mjs` to prove that active Live Preview source playback is replaced by Python-rendered region playback.
