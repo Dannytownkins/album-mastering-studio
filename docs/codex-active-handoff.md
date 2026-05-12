@@ -5887,6 +5887,15 @@ Prioritize these before handing back "ready to run":
 - Verification passed: `npm run build`, `node --check .\desktop\tests\tauri-release-album-codec-qc-smoke.mjs`, `python -m compileall -q src tests`, full VsDevCmd `npm run tauri:build`, `npm run test:tauri-release-album-codec-qc`, and `npm run test:integration`.
 - Scout recommendation for next loop: add a bounded native Track Master preview action for region/playhead-window audition instead of another proof-only smoke.
 
+## Latest Bounded Native Preview Loop
+
+- Added bounded-window args to `album-master preview-model`, Tauri `render_live_preview_model`, and Tauri `render_native_live_preview_model`.
+- Added visible Track Master `Native Preview`, which renders the selected region or playhead window through the Rust first-control model and plays the bounded WAV through native Windows audio.
+- Native model metadata now includes source total frames, source start seconds, duration seconds, and rendered frame count; visible native preview is capped at 60 seconds.
+- Packaged Track Preview UI smoke verifies the visible `Native Preview` button after waveform region selection. Evidence values: start `1s`, duration `1.195s`, `57360` frames, `rust-native-live-preview-model`, `Native Live Preview playing`, clean stop.
+- Verification passed: Python compile, focused preview-model tests, `npm run build`, Rust `cargo check`, full VsDevCmd `npm run tauri:build`, `npm run test:tauri-track-preview-ui`, `npm run test:integration`, and full `python -m unittest discover -s tests` with 22 tests.
+- Caveat: this is still first-control model audition. Full export-chain parity remains intentionally assigned to `Update Preview`, `Render Region`, and `Export Master`.
+
 ## Important Product Judgment
 
 Do not over-focus on making the first local DSP chain academically perfect. But do fix claims that make the tool untrustworthy: limiter behavior, tempo gating, visible metering/analysis, playback loop, project save/load, and warning/report honesty.

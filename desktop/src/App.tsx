@@ -115,6 +115,9 @@ type NativeLivePreviewAudition = {
   output_exists: boolean;
   sample_rate: number;
   frame_count: number;
+  source_total_frames?: number;
+  source_start_seconds?: number;
+  duration_seconds?: number;
   live_preview_engine: string;
   native_engine: string;
   modeled_width: number;
@@ -1895,7 +1898,7 @@ function App() {
     if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) return null;
     if (region && region.end > region.start) {
       const startSeconds = clamp(region.start * sourceDuration, 0, Math.max(sourceDuration - 0.25, 0));
-      const durationSeconds = clamp((region.end - region.start) * sourceDuration, 0.25, Math.max(sourceDuration - startSeconds, 0.25));
+      const durationSeconds = clamp((region.end - region.start) * sourceDuration, 0.25, Math.min(60, Math.max(sourceDuration - startSeconds, 0.25)));
       return { durationSeconds, label: "selected region", startSeconds };
     }
     const startSeconds = clamp(audioRef.current?.currentTime ?? position, 0, Math.max(sourceDuration - 0.25, 0));
@@ -2052,8 +2055,81 @@ function App() {
     }
   }
 
+  async function startNativePreviewWindow(track: Track | null = selectedTrack) {
+    if (nativeLivePreviewPlaybackActive) {
+      await stopNativeAudition();
+      return;
+    }
+    if (!track?.analysis) return;
+    const windowToRender = regionPreviewWindow(track);
+    if (!windowToRender) {
+      pushLog("Native Preview unavailable: source duration is unknown.");
+      setProgressLabel("Native Preview unavailable.");
+      return;
+    }
+    const outputRoot = settings.outputDir || repoRoot;
+    if (!outputRoot) {
+      pushLog("Native Preview unavailable: no output folder is set.");
+      setProgressLabel("Native Preview unavailable.");
+      return;
+    }
+    setBusy(true);
+    setPhase("Rendering native preview");
+    setProgress(0);
+    setProgressLabel(`Rendering ${windowToRender.label} through the native preview model.`);
+    setListeningReceiptPath("");
+    try {
+      const sourcePath = await invoke<string>("prepare_playback_file", { path: track.path });
+      const outputPath = `${outputRoot}\\native-preview-${timestamp()}-${slug(track.title)}.wav`;
+      const livePreviewAudition = await invoke<NativeLivePreviewAudition>("render_native_live_preview_model", {
+        sourcePath,
+        outputPath,
+        sampleRate: 48000,
+        tuning: livePreviewTuning(settings),
+        startSeconds: windowToRender.startSeconds,
+        durationSeconds: windowToRender.durationSeconds,
+      });
+      const playbackMs = Math.round(
+        clamp((livePreviewAudition.duration_seconds ?? windowToRender.durationSeconds) * 1000, 250, 60 * 1000),
+      );
+      const status = await invoke<NativePlaybackStatus>("start_native_file_playback", {
+        path: outputPath,
+        label: `${track.title} - Native Live Preview`,
+        startSeconds: 0,
+        maxDurationMs: playbackMs,
+      });
+      const snapshot = {
+        ...livePreviewAudition,
+        active: status.active,
+        outputDevice: status.output_device,
+        startedAt: performance.now(),
+        statusLabel: status.label,
+      };
+      setNativePlaybackStatus(status);
+      setNativeLivePreviewAudition(snapshot);
+      (window as typeof window & { __AMS_NATIVE_LIVE_PREVIEW_AUDITION__?: NativeLivePreviewAudition }).__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ = snapshot;
+      setProgress(1);
+      setProgressLabel("Native Preview running.");
+      pushLog(
+        `Bounded Native Live Preview started: ${track.title} ${windowToRender.label} ${formatTime(windowToRender.startSeconds)} for ${formatTime(windowToRender.durationSeconds)} through ${livePreviewAudition.native_engine}.`,
+      );
+    } catch (error) {
+      setNativePlaybackStatus(idleNativePlaybackStatus);
+      setNativeLivePreviewAudition(null);
+      pushLog(`Native Preview failed: ${String(error)}`);
+      setProgressLabel("Native Preview failed.");
+    } finally {
+      setBusy(false);
+      setPhase("Idle");
+    }
+  }
+
   async function stopNativeAudition() {
-    const label = nativeAbPlaybackActive ? "Native A/B audition" : "Native playback";
+    const label = nativeAbPlaybackActive
+      ? "Native A/B audition"
+      : nativeLivePreviewPlaybackActive
+      ? "Native Live Preview"
+      : "Native playback";
     try {
       const status = await invoke<NativePlaybackStatus>("stop_native_playback");
       setNativePlaybackStatus(status);
@@ -2434,6 +2510,14 @@ function App() {
               title="Renders the selected region or current playhead window through the Python export engine."
             >
               <Scissors size={16} /> Render Region
+            </button>
+            <button
+              className={nativeLivePreviewPlaybackActive ? "active" : ""}
+              disabled={(!selectedTrack?.analysis && !nativeLivePreviewPlaybackActive) || busy}
+              onClick={() => startNativePreviewWindow(selectedTrack)}
+              title="Renders the selected region or current playhead window through the Rust first-control preview model, then plays it through native Windows audio."
+            >
+              {nativeLivePreviewPlaybackActive ? <Square size={16} /> : <Volume2 size={16} />} {nativeLivePreviewPlaybackActive ? "Native Stop" : "Native Preview"}
             </button>
             <button disabled={!selectedMaster} onClick={() => selectedTrack && selectedMaster && setAudio({ label: `${selectedTrack.title} - Mastered`, path: selectedMaster, kind: "master", trackId: selectedTrack.id })}>
               <Activity size={16} /> Mastered

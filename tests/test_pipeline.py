@@ -291,6 +291,42 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(summary["frame_count"], modeled.shape[0])
             self.assertTrue(output.exists())
 
+    def test_cli_preview_model_writes_bounded_reference_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.wav"
+            output = root / "bounded-live-model.wav"
+            self._write_sine(source, 220.0, 1.0)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "album_mastering_studio.cli",
+                    "preview-model",
+                    str(source),
+                    "--output",
+                    str(output),
+                    "--start-seconds",
+                    "0.25",
+                    "--duration-seconds",
+                    "0.20",
+                ],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+            summary = json.loads(result.stdout)
+            rate, modeled = wavfile.read(output)
+            self.assertEqual(rate, 48_000)
+            self.assertEqual(summary["source_total_frames"], 48_000 * 3)
+            self.assertAlmostEqual(summary["source_start_seconds"], 0.25, places=3)
+            self.assertAlmostEqual(summary["duration_seconds"], 0.20, places=3)
+            self.assertEqual(summary["frame_count"], modeled.shape[0])
+            self.assertLessEqual(abs(modeled.shape[0] - 9_600), 1)
+            self.assertTrue(output.exists())
+
     def test_interlude_styles_render_finite_audio(self) -> None:
         sample_rate = 48_000
         track_a = self._sine_array(220.0, 0.45, seconds=2.0)

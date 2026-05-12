@@ -5017,3 +5017,43 @@ Results:
 - Tauri release build passed and rebuilt the sidecar, release EXE, MSI, and NSIS installer.
 - Packaged Album Master Codec QC smoke passed and wrote evidence to `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`.
 - Desktop CLI contract integration test passed.
+
+### Bounded Native Track Preview
+
+- Added optional bounded-window support to the engine-owned `preview-model` CLI path with `--start-seconds` and `--duration-seconds`.
+- Added matching optional `startSeconds` / `durationSeconds` arguments to the Tauri `render_live_preview_model` and `render_native_live_preview_model` commands.
+- The Rust native Live Preview model now renders only the requested window, reports `source_total_frames`, `source_start_seconds`, and `duration_seconds`, and caps visible native preview windows at 60 seconds.
+- Added a visible Track Master `Native Preview` action that renders the selected region or current playhead window through the Rust first-control Live Preview model, then plays the bounded model WAV through native Windows audio with the existing pause/seek/stop transport.
+- Added a Python regression proving bounded CLI model output metadata and frame count.
+- Extended the packaged Track Preview UI smoke to click `Native Preview` after selecting a waveform region and verify the bounded model render plus native playback.
+
+Verification:
+
+```powershell
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_reference_wav tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_bounded_reference_window tests.test_pipeline.PipelineTest.test_live_preview_config_matches_engine_contract
+npm run build
+cd desktop\src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"; cargo check
+cd ..
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+npm run test:integration
+python -m unittest discover -s tests
+```
+
+Results:
+
+- Python compile passed.
+- Focused Live Preview/preview-model tests passed.
+- Desktop TypeScript/Vite build passed.
+- Rust `cargo check` passed when Cargo was added to PATH.
+- Tauri release build passed and rebuilt the sidecar, release EXE, MSI, and NSIS installer.
+- Packaged Track Preview UI smoke passed and wrote evidence to `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`.
+- Desktop CLI contract integration test passed.
+- Full Python unittest suite passed: 22 tests.
+- Evidence values include `boundedNativePreviewButtonEnabledBefore: true`, `boundedNativePreviewStarted: true`, `boundedNativePreviewStopped: true`, `native_engine: "rust-native-live-preview-model"`, `source_start_seconds: 1`, `duration_seconds: 1.195`, `frame_count: 57360`, and `Native Live Preview playing`.
+
+Remaining caveat:
+
+- Native Preview is still the first-control Live Preview model, not full export-chain parity. `Update Preview`, `Render Region`, and `Export Master` remain the release-faithful Python export-engine paths.

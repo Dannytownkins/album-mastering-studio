@@ -28,6 +28,7 @@ struct NativePlaybackState {
 }
 
 const NATIVE_FILE_PLAYBACK_MAX_MS: u32 = 60 * 60 * 1000;
+const NATIVE_LIVE_PREVIEW_MAX_MS: u32 = 60 * 1000;
 const AUDIO_SOURCE_EXTENSIONS: &[&str] = &[
     "aac", "aif", "aiff", "flac", "m4a", "mp3", "ogg", "opus", "wav",
 ];
@@ -378,6 +379,8 @@ fn render_live_preview_model(
     output_path: String,
     sample_rate: u32,
     tuning: Value,
+    start_seconds: Option<f64>,
+    duration_seconds: Option<f64>,
 ) -> Result<Value, String> {
     let source = PathBuf::from(&source_path);
     if !source.exists() {
@@ -397,21 +400,23 @@ fn render_live_preview_model(
     }
     let tuning_json = serde_json::to_string(&tuning)
         .map_err(|error| format!("Could not serialize Live Preview model tuning: {error}"))?;
-    let result = run_engine_command(
-        &app,
-        state.inner(),
-        vec![
-            "preview-model".to_string(),
-            source_path,
-            "--output".to_string(),
-            output_path.clone(),
-            "--sample-rate".to_string(),
-            sample_rate.to_string(),
-            "--tuning-json".to_string(),
-            tuning_json,
-        ],
-        None,
-    )?;
+    let mut args = vec![
+        "preview-model".to_string(),
+        source_path,
+        "--output".to_string(),
+        output_path.clone(),
+        "--sample-rate".to_string(),
+        sample_rate.to_string(),
+        "--tuning-json".to_string(),
+        tuning_json,
+    ];
+    if let Some(value) = start_seconds.filter(|value| value.is_finite() && *value >= 0.0) {
+        args.extend(["--start-seconds".to_string(), value.to_string()]);
+    }
+    if let Some(value) = duration_seconds.filter(|value| value.is_finite() && *value > 0.0) {
+        args.extend(["--duration-seconds".to_string(), value.to_string()]);
+    }
+    let result = run_engine_command(&app, state.inner(), args, None)?;
     let mut summary: Value = serde_json::from_str(&result.stdout)
         .map_err(|error| format!("Could not parse live preview model JSON: {error}"))?;
     if !output.exists() {
@@ -432,6 +437,8 @@ fn render_native_live_preview_model(
     output_path: String,
     sample_rate: u32,
     tuning: Value,
+    start_seconds: Option<f64>,
+    duration_seconds: Option<f64>,
 ) -> Result<Value, String> {
     let source = PathBuf::from(&source_path);
     if !source.exists() {
@@ -450,7 +457,11 @@ fn render_native_live_preview_model(
         })?;
     }
 
-    let clip = read_pcm16_wav_segment(&source, 0.0, None)?;
+    let requested_start_seconds = start_seconds.unwrap_or(0.0).max(0.0);
+    let requested_duration_ms = duration_seconds
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .map(|value| ((value * 1000.0).ceil() as u32).clamp(250, NATIVE_LIVE_PREVIEW_MAX_MS));
+    let clip = read_pcm16_wav_segment(&source, requested_start_seconds, requested_duration_ms)?;
     if clip.sample_rate != sample_rate {
         return Err(format!(
             "Native Live Preview model expects {sample_rate} Hz prepared PCM WAV; got {} Hz from {}",
@@ -463,6 +474,7 @@ fn render_native_live_preview_model(
     let tuning = native_live_preview_tuning(&tuning)?;
     let mut modeled = clip.samples.clone();
     let channels = usize::from(clip.channels);
+    let modeled_frames = modeled.len() / channels.max(1);
     apply_native_live_preview_biquad(
         &mut modeled,
         channels,
@@ -496,7 +508,10 @@ fn render_native_live_preview_model(
         "output": output_path,
         "output_exists": true,
         "sample_rate": sample_rate,
-        "frame_count": clip.total_frames,
+        "frame_count": modeled_frames,
+        "source_total_frames": clip.total_frames,
+        "source_start_seconds": clip.start_frame as f64 / f64::from(clip.sample_rate.max(1)),
+        "duration_seconds": modeled_frames as f64 / f64::from(clip.sample_rate.max(1)),
         "live_preview_engine": LIVE_PREVIEW_MODEL_ID,
         "native_engine": "rust-native-live-preview-model",
         "same_engine": false,

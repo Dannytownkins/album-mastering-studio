@@ -254,6 +254,8 @@ def build_parser() -> argparse.ArgumentParser:
     preview_model.add_argument("--high-db", type=float, default=None, help="Modeled High/Air control in dB.")
     preview_model.add_argument("--width", type=float, default=None, help="Modeled Width control offset.")
     preview_model.add_argument("--intensity", type=float, default=None, help="Modeled Intensity control amount.")
+    preview_model.add_argument("--start-seconds", type=float, default=0.0, help="Start time for a bounded model render.")
+    preview_model.add_argument("--duration-seconds", type=float, default=None, help="Duration for a bounded model render.")
 
     app = subparsers.add_parser("app", help="Launch the local Windows desktop mastering studio.")
     app.add_argument("--output", "-o", type=Path, default=None, help="Default output folder for app renders.")
@@ -370,6 +372,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "preview-model":
         source = load_audio(args.source, args.sample_rate)
+        source_total_frames = int(source.shape[0])
+        source, source_start_seconds = _preview_model_window(
+            source,
+            args.sample_rate,
+            args.start_seconds,
+            args.duration_seconds,
+        )
         tuning = _preview_tuning_from_args(args)
         result = render_live_preview_model(source, args.sample_rate, tuning)
         write_audio(args.output, result.samples, args.sample_rate, bit_depth=32, dither=False)
@@ -381,6 +390,9 @@ def main(argv: list[str] | None = None) -> int:
                     "output": str(args.output),
                     "sample_rate": args.sample_rate,
                     "frame_count": int(result.samples.shape[0]),
+                    "source_total_frames": source_total_frames,
+                    "source_start_seconds": source_start_seconds,
+                    "duration_seconds": int(result.samples.shape[0]) / float(args.sample_rate),
                     "live_preview_engine": result.model_id,
                     "same_engine": False,
                     "preview_parity": result.preview_parity,
@@ -480,6 +492,22 @@ def _preview_tuning_from_args(args) -> dict[str, float]:
         if value is not None:
             tuning[key] = float(value)
     return tuning
+
+
+def _preview_model_window(samples, sample_rate: int, start_seconds: float | None, duration_seconds: float | None):
+    frame_count = int(samples.shape[0])
+    if frame_count <= 0:
+        return samples, 0.0
+    start = int(max(0.0, float(start_seconds or 0.0)) * sample_rate)
+    start = min(start, max(frame_count - 1, 0))
+    if duration_seconds is None or duration_seconds <= 0:
+        end = frame_count
+    else:
+        requested = max(1, int(round(float(duration_seconds) * sample_rate)))
+        end = min(frame_count, start + requested)
+    if end <= start:
+        end = min(frame_count, start + 1)
+    return samples[start:end], start / float(sample_rate)
 
 
 def _waveform(samples, bins: int = 128) -> list[float]:

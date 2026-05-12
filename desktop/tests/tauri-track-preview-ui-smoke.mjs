@@ -180,6 +180,16 @@ try {
   assert.equal(evidence.regionEngineAuditionTransportIncludesRegion, true);
   assert.equal(Math.abs(evidence.regionEngineAuditionStartSeconds - evidence.expectedLoopStart) <= 0.08, true);
   assert.equal(Math.abs(evidence.regionEngineAuditionDurationSeconds - (evidence.expectedLoopEnd - evidence.expectedLoopStart)) <= 0.1, true);
+  assert.equal(evidence.boundedNativePreviewButtonEnabledBefore, true);
+  assert.equal(evidence.boundedNativePreviewStarted, true);
+  assert.equal(evidence.boundedNativePreviewStopped, true);
+  assert.equal(evidence.boundedNativePreviewAudition.native_engine, "rust-native-live-preview-model");
+  assert.equal(evidence.boundedNativePreviewAudition.output_exists, true);
+  assert.equal(Math.abs(evidence.boundedNativePreviewAudition.source_start_seconds - evidence.regionEngineAuditionStartSeconds) <= 0.05, true);
+  assert.equal(Math.abs(evidence.boundedNativePreviewAudition.duration_seconds - evidence.regionEngineAuditionDurationSeconds) <= 0.05, true);
+  assert.equal(evidence.boundedNativePreviewAudition.frame_count <= Math.ceil(evidence.regionEngineAuditionDurationSeconds * 48000) + 4, true);
+  assert.match(evidence.boundedNativePreviewStatusWhilePlaying, /Native Live Preview playing/);
+  assert.match(evidence.boundedNativePreviewLogLine, /selected region/);
   assert.equal(evidence.regionCleared, true);
   assert.equal(evidence.loopDisabledAfterClear, true);
   assert.equal(evidence.volumeMatchDefaultOff, true);
@@ -706,6 +716,36 @@ function trackPreviewExpression() {
   const regionEngineAuditionStartSeconds = window.__AMS_REGION_ENGINE_AUDITION__?.startSeconds ?? null;
   const regionEngineAuditionDurationSeconds = window.__AMS_REGION_ENGINE_AUDITION__?.durationSeconds ?? null;
   const regionEngineAuditionTransportIncludesRegion = transportLabel().includes('Engine Region');
+  const boundedNativePreviewButton = buttonByText('Native Preview');
+  const boundedNativePreviewButtonEnabledBefore = !boundedNativePreviewButton.disabled;
+  if (!boundedNativePreviewButtonEnabledBefore) throw new Error('Native Preview button was disabled after selecting a region');
+  boundedNativePreviewButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const boundedNativePreviewStarted = await waitFor(() => {
+    const audition = window.__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ || {};
+    return Boolean(
+      audition.native_engine === 'rust-native-live-preview-model' &&
+      audition.output_exists === true &&
+      Math.abs((audition.source_start_seconds ?? -1) - regionEngineAuditionStartSeconds) <= 0.05 &&
+      text(document.querySelector('.native-audition-status')).includes('Native Live Preview playing')
+    );
+  }, 30000);
+  if (!boundedNativePreviewStarted) {
+    throw new Error('Native Preview did not render and play the selected region through the Rust model: ' + JSON.stringify({
+      audition: window.__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ || null,
+      expectedStart: regionEngineAuditionStartSeconds,
+      expectedDuration: regionEngineAuditionDurationSeconds,
+      nativeStatus: text(document.querySelector('.native-audition-status')),
+      log: logText().slice(-2000)
+    }));
+  }
+  const boundedNativePreviewAudition = window.__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ || {};
+  const boundedNativePreviewStatusWhilePlaying = text(document.querySelector('.native-audition-status'));
+  const boundedNativePreviewLogLine = logText().split(/\\r?\\n/).reverse().find((line) => line.includes('Bounded Native Live Preview started:')) || '';
+  buttonByText('Native Stop').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const boundedNativePreviewStopped = await waitFor(
+    () => text(document.querySelector('.native-audition-status')).includes('Native transport ready'),
+    10000,
+  );
   buttonByText('Clear Region').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const regionCleared = await waitFor(() => text(document.querySelector('.region-readout')) === 'No region selected', 5000);
   const loopDisabledAfterClear = buttonByText('Loop').disabled;
@@ -988,6 +1028,12 @@ function trackPreviewExpression() {
     regionEngineAuditionStartSeconds,
     regionEngineAuditionDurationSeconds,
     regionEngineAuditionTransportIncludesRegion,
+    boundedNativePreviewButtonEnabledBefore,
+    boundedNativePreviewStarted,
+    boundedNativePreviewStopped,
+    boundedNativePreviewAudition,
+    boundedNativePreviewStatusWhilePlaying,
+    boundedNativePreviewLogLine,
     regionCleared,
     loopDisabledAfterClear,
     volumeMatchDefaultOff,

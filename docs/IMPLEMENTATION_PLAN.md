@@ -363,6 +363,10 @@ Current packaged coverage:
 - 2026-05-12 extended the real-song region UI smoke so active source Live Preview before `Render Region` is explicitly replaced by Python region playback.
 - Evidence values include `livePreviewActiveBeforeRegion: true`, pre-render parity `Render required` with warn state because no exact master exists yet, `liveSnapshotBeforeRegion.active: true`, post-region `Render-faithful region`, `liveSnapshotAfterFirstRegion.active: false`, `regionPreviewParityWarnAfterFirstRegion: false`, and `regionPlaybackReplacedLivePreview: true`.
 - Remaining live-to-region caveat: this proves the visible region-render path replaces active Web Audio source audition with exact Python region playback, but Web Audio Live Preview is still approximate and not shared export-engine DSP.
+- 2026-05-12 added bounded native Track Preview audition. `album-master preview-model`, Tauri `render_live_preview_model`, and Tauri `render_native_live_preview_model` now accept start/duration windows; Track Master exposes a visible `Native Preview` action that renders the selected region or playhead window through the Rust first-control model and plays it through native Windows audio.
+- Evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
+- Evidence values include `boundedNativePreviewButtonEnabledBefore: true`, `boundedNativePreviewStarted: true`, `boundedNativePreviewStopped: true`, `native_engine: "rust-native-live-preview-model"`, `source_start_seconds: 1`, `duration_seconds: 1.195`, `frame_count: 57360`, and `Native Live Preview playing`.
+- Remaining native-preview caveat: this is bounded first-control model audition, not continuous native DSP or full export-chain parity. `Update Preview`, `Render Region`, and `Export Master` remain the release-faithful Python paths.
 
 No-victory-lap check:
 
