@@ -2,6 +2,55 @@
 
 ## 2026-05-12
 
+### Album Master Codec Preview Audition Slice
+
+- Added Album Master codec-preview buttons beside the Album WAV artifact so album-level AAC and Opus previews can be selected directly from the render surface.
+- Reset normal prepared-playback selections to the start of the newly selected artifact while preserving explicit queued seeks for preview, region, and A/B paths.
+- Generalized the native playback active predicate so any non-A/B, non-Live Preview native file playback shows the visible `Native Stop` state.
+- Added `npm run test:tauri-release-album-codec-qc`, a packaged release EXE smoke that renders a two-track Album Master with Codec QC enabled, verifies the album receipt, clicks the Album AAC artifact, verifies WebView playback handoff, verifies native playback start/stop, persists `codecPreviewAudition`, and checks the manifest codec-preview outputs.
+
+Verification:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-release-album-codec-qc-smoke.mjs
+cd desktop
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+npm run test:tauri-release-track-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_render_album_creates_masters_interludes_and_album_sequence
+git diff --check
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Node syntax check passed for the packaged Album Master Codec QC smoke.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Album Master Codec QC smoke passed against the fresh release EXE.
+- Existing packaged Track Master Codec QC smoke still passed after the shared playback reset/native-active change.
+- Desktop CLI-contract integration passed.
+- Python compile and the album pipeline regression passed.
+- `git diff --check` passed.
+- Evidence: `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`.
+- Evidence values:
+  - `activeMode: "Album Master"`
+  - `albumReceiptIncludesCodecQc: true`
+  - `albumCodecButtonCount: 2`
+  - `codecTransportLabel: "Album AAC 256k"`
+  - `nativeAlbumCodecStarted: true`
+  - `nativeAlbumCodecStopped: true`
+  - `persistedCodecPreviewAudition: true`
+  - `codecPreviewOutputsExist: true`
+  - `codecPreviewCodecs: ["AAC 256k", "Opus 192k"]`
+
+Honest gap:
+
+- This proves album-level codec previews are selectable and auditionable from the packaged app. It still does not prove a human has approved the album master or codec preview sound.
+
 ### Codec Preview Listening Checklist Slice
 
 - Added a `Codec preview checked` item to the Listening Pass panel so codec-preview audition is a first-class review step instead of only a playback artifact.

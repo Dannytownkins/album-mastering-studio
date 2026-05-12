@@ -591,8 +591,8 @@ function App() {
   const referencePlaying = playItem?.kind === "reference";
   const nativePlaybackLabel = nativePlaybackStatus.label ?? "";
   const nativeAbPlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.startsWith("Native A/B");
-  const nativeFilePlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.startsWith("Native file:");
   const nativeLivePreviewPlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.includes("Native Live Preview");
+  const nativeFilePlaybackActive = nativePlaybackStatus.active && !nativeAbPlaybackActive && !nativeLivePreviewPlaybackActive;
   const nativePlaybackKind = nativeAbPlaybackActive ? "Native A/B" : nativeLivePreviewPlaybackActive ? "Native Live Preview" : "Native playback";
   const listeningCompletedCount = Object.entries(listeningChecklist).filter(
     ([key, value]) => key !== "notes" && value === true,
@@ -1602,6 +1602,12 @@ function App() {
   async function setAudio(item: Omit<PlayItem, "originalPath">) {
     setComparePair(null);
     setProgressLabel(`Preparing ${item.kind} playback.`);
+    const explicitSeek = pendingSeekRef.current != null;
+    if (!explicitSeek) {
+      pendingSeekRef.current = 0;
+      setPosition(0);
+    }
+    setDuration(0);
     try {
       const playbackPath = await invoke<string>("prepare_playback_file", { path: item.path });
       setPlayItem({ ...item, originalPath: item.path, path: playbackPath });
@@ -2626,6 +2632,16 @@ function App() {
               <button disabled={!manifest?.album_sequence || hasStaleRender} onClick={() => manifest?.album_sequence && setAudio({ label: "album_sequence.wav", path: manifest.album_sequence, kind: "album" })}>
                 <Disc3 size={16} /> Album WAV
               </button>
+              {codecPreviews.map((preview, index) => (
+                <button
+                  key={`${preview.codec ?? "album-codec"}-${preview.output ?? index}`}
+                  disabled={!preview.output || hasStaleRender}
+                  onClick={() => preview.output && setAudio({ label: `Album ${preview.codec ?? `Codec ${index + 1}`}`, path: preview.output, kind: "codec" })}
+                  title={`${preview.codec ?? "Album codec preview"} ${formatCodecShift(preview)}`.trim()}
+                >
+                  <Volume2 size={16} /> Codec <span>{preview.codec ?? index + 1}</span>
+                </button>
+              ))}
               {transitions.map((transition) => (
                 <button key={transition.output} onClick={() => setAudio({ label: `Transition ${transition.between[0]} to ${transition.between[1]}`, path: transition.output, kind: "transition" })}>
                   Transition {transition.between[0]}-{transition.between[1]} <span>{transition.style}</span>

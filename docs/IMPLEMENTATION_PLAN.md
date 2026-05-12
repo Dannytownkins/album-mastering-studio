@@ -275,6 +275,7 @@ Current packaged coverage:
 - 2026-05-12 added `npm run test:tauri-real-song-codec-qc` and verified the provided MP3 through the packaged Track Master path with `Codec QC` passing as `2 codec preview path(s) exist`.
 - 2026-05-12 added a selected-track `Codec Previews` audition rail and extended `npm run test:tauri-release-track-codec-qc` to verify AAC preview WebView handoff plus native playback start/stop.
 - 2026-05-12 added `Codec preview checked` to the Listening Pass panel and verified the autosaved `codecPreviewAudition` state in packaged session-safety and Codec QC smokes.
+- 2026-05-12 added Album Master codec-preview artifact buttons and `npm run test:tauri-release-album-codec-qc`; packaged evidence verifies `Album AAC 256k` WebView handoff, native playback start/stop, persisted `codecPreviewAudition`, and two existing album codec-preview outputs.
 - The release EXE smoke restores a two-track Track Master session, selects Track 2, verifies visible reorder controls move Track 2 into slot 1, clicks visible `Update Preview`, and verifies a one-track preview manifest, dashboard, mastered WAV, playback-cache preparation, WebView local audio load, transport range seek, pixel-level transport seek drag, `Master ready` state, same-position A/B Original/Mastered switching, waveform region creation, region Loop behavior, Volume Match gain behavior, Live Preview control latency for Low/Mid/High/Width/Intensity, `Approx audition` after live audition is armed, stale `No master` plus `Render required` after live control changes, second preview render, export-vs-live comparison fields (`same_engine: false`, `preview_parity: "approximate"`, `export_faithful_preview_required: true`), and a two-track Track Master batch export receipt (`2 rendered track path(s) exist`).
 - Evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
 - Remaining Phase 3/4 gaps: actual export-engine parity implementation for live audition and human listening approval.
@@ -578,6 +579,14 @@ No-victory-lap check:
 - Album Master is not batch Track Master with a different button.
 - It must show sequence/story awareness.
 - It must preserve distinct track identities.
+
+2026-05-12 packaged Album Master Codec QC baseline:
+
+- Added `npm run test:tauri-release-album-codec-qc`.
+- The smoke launches the release EXE, restores a two-track Album Master autosave with `Codec QC` enabled, renders the album, verifies the receipt, clicks the album-level `AAC 256k` artifact button, verifies the transport label `Album AAC 256k`, starts and stops native playback, persists the `Codec preview checked` listening item, and checks the manifest codec-preview files.
+- Evidence: `test-output/tauri-release-album-codec-qc-smoke/tauri-release-album-codec-qc-smoke.json`.
+- Evidence values include `albumCodecButtonCount: 2`, `codecPreviewOutputsExist: true`, and `codecPreviewCodecs: ["AAC 256k", "Opus 192k"]`.
+- Remaining gap: this is automated auditionability evidence only; album and codec-preview sound still need human listening approval.
 
 ## Phase 9: Transition Primitives
 

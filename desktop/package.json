@@ -21,6 +21,7 @@
     "test:tauri-nsis": "node tests/tauri-nsis-install-smoke.mjs",
     "test:tauri-msi": "node tests/tauri-msi-package-smoke.mjs",
     "test:tauri-sidecar-startup": "node tests/tauri-sidecar-startup-smoke.mjs",
+    "test:tauri-release-album-codec-qc": "node tests/tauri-release-album-codec-qc-smoke.mjs",
     "test:tauri-performance": "node tests/tauri-release-performance-smoke.mjs",
     "test:tauri-real-song-performance": "node tests/tauri-real-song-performance-smoke.mjs",
     "test:tauri-real-song-codec-qc": "node tests/tauri-real-song-codec-qc-smoke.mjs",

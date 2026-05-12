@@ -17,7 +17,66 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Codec Preview Listening Checklist
+## Latest Codex Pass: Album Master Codec Preview Audition
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/package.json`
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Album Master render artifacts now expose album-level codec-preview buttons beside `Album WAV`.
+- Normal prepared-playback selections now reset to the start of the newly selected artifact unless a caller explicitly queued a seek.
+- The native playback button now treats any non-A/B, non-Live Preview active native file session as stoppable, so codec previews show `Native Stop` correctly.
+- Added `npm run test:tauri-release-album-codec-qc`, a packaged release smoke that renders Album Master with Codec QC enabled, clicks the Album AAC artifact, verifies WebView and native playback, persists the codec-preview listening checklist item, and checks the manifest preview outputs.
+
+Verification already run:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-release-album-codec-qc-smoke.mjs
+cd desktop
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+npm run test:tauri-release-track-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_render_album_creates_masters_interludes_and_album_sequence
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`
+- Relevant fields:
+  - `activeMode: "Album Master"`
+  - `albumReceiptIncludesCodecQc: true`
+  - `albumCodecButtonCount: 2`
+  - `codecTransportLabel: "Album AAC 256k"`
+  - `nativeAlbumCodecStarted: true`
+  - `nativeAlbumCodecStopped: true`
+  - `persistedCodecPreviewAudition: true`
+  - `codecPreviewOutputsExist: true`
+  - `codecPreviewCodecs: ["AAC 256k", "Opus 192k"]`
+
+Remaining gap:
+
+- Album-level codec previews are now surfaced and auditionable in the packaged app. Human listening approval of the album master and codec previews is still open.
+
+Next useful slice:
+
+- If unattended, keep closing small release evidence gaps only where they improve the real workflow. If the user is present, run an actual listening pass with real material and record the result in the Listening Pass panel.
+
+## Previous Codex Pass: Codec Preview Listening Checklist
 
 Date: 2026-05-12
 
