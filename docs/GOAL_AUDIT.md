@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Album Master state safety: packaged release EXE smoke verifies Undo/Redo for album title, generated transitions, boundary style/seconds, selected-track role, and selected-track preset, then confirms the redone Album Master state persists through autosave.
 - 2026-05-12 visible reference playback: packaged Track Preview smoke seeds a reference track, clicks the visible `Reference` button, and verifies `Reference playback`, transport label `01_track_preview_fixture - Reference`, and unprocessed comparison copy before continuing the full Track Master smoke.
 - 2026-05-12 release session safety: packaged release EXE smoke restores a two-track Track Master autosave, verifies Undo/Redo through Universal -> Clarity, saves a user preset, persists listening approval, then changes Low to `+0.50 dB` and verifies listening approval is cleared and persisted as not approved.
 - 2026-05-12 direct Project path persistence: packaged project persistence smoke saves a `.ams.json` copy through the visible Project path field, mutates the album title, loads the original project path back, verifies the title is restored, then renders and export-checks the loaded project.

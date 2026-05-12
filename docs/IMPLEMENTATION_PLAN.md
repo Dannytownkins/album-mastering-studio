@@ -534,6 +534,14 @@ No-victory-lap check:
 - Evidence values include `afterUndoPreset: "Universal"`, `afterRedoPreset: "Clarity"`, `persistedPresetName: "Session Safety Chain"`, `persistedListeningApprovedAfterChecks: true`, `persistedListeningApprovedAfterDirtyChange: false`, and `persistedBassAfterDirtyChange: 0.5`.
 - Remaining gap: this is release-package state safety evidence, not human listening approval or render-history/library work.
 
+2026-05-12 packaged Album Master state baseline:
+
+- Added `npm run test:tauri-release-album-state`.
+- The smoke launches the release EXE, restores a two-track Album Master autosave, verifies Undo/Redo for album title, generated transitions, boundary style, boundary seconds, selected-track role override, and selected-track preset override, then verifies the redone state persists through `load_recent_session`.
+- Evidence: `test-output/tauri-release-album-state-smoke/tauri-release-album-state-smoke.json`.
+- Evidence values include album title `Release Album State -> Release Album Redone`, transitions `false -> true`, boundary `direct -> crossfade`, boundary seconds `2.0 s -> 4.5 s`, track role `auto -> heavy_djent`, and track preset `auto -> bright-air`.
+- Remaining gap: this is state-safety evidence only; it does not render or listen to album audio.
+
 ## Phase 8: Album Master Near-Term Path
 
 Goal: build the user's required album workflow on the Track Master foundation.

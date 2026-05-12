@@ -17,7 +17,62 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Visible Reference Playback
+## Latest Codex Pass: Release Album State Undo/Redo Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/package.json`
+- `desktop/tests/tauri-release-album-state-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added `npm run test:tauri-release-album-state`.
+- The new packaged smoke launches the release EXE, restores a seeded two-track Album Master autosave, then verifies Undo/Redo for album title, generated transitions, boundary style, boundary seconds, selected-track role override, and selected-track preset override.
+- The smoke waits for autosave and verifies the final redone Album Master state persists through `load_recent_session`.
+- No app code changed in this pass; it adds release-package evidence around existing Album Master state-safety behavior.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-release-album-state-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-state
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`
+- Relevant fields:
+  - `albumTitleRoundTrip: { undone: Release Album State, redone: Release Album Redone }`
+  - `generatedTransitionsRoundTrip: { undone: false, redone: true }`
+  - `boundaryStyleRoundTrip: { undone: direct, redone: crossfade }`
+  - `boundarySecondsRoundTrip: { undone: 2.0 s, redone: 4.5 s }`
+  - `trackRoleRoundTrip: { undone: auto, redone: heavy_djent }`
+  - `trackPresetRoundTrip: { undone: auto, redone: bright-air }`
+  - persisted session mode: `album`
+  - persisted selected-track role/preset: `heavy_djent` / `bright-air`
+
+Remaining gap:
+
+- This is Album Master state-safety evidence. It does not render, play, or listen to album audio and does not close human listening approval.
+
+Next useful slice:
+
+- Continue only with a narrow packaged evidence gap or move into a larger Live Preview/export-parity implementation slice. OS native dialog automation is still not a good unattended target unless a new reliable route is found.
+
+## Previous Codex Pass: Visible Reference Playback
 
 Date: 2026-05-12
 

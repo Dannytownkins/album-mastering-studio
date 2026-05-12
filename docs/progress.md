@@ -2,6 +2,53 @@
 
 ## 2026-05-12
 
+### Release Album State Undo/Redo Smoke Slice
+
+- Added `npm run test:tauri-release-album-state`, a packaged release EXE smoke for Album Master non-destructive state safety.
+- The smoke seeds a two-track analyzed Album Master session, then verifies Undo/Redo round trips for album metadata, generated transitions, boundary style, boundary seconds, selected-track role override, and selected-track preset override.
+- The smoke waits for autosave and verifies the final redone Album Master state persists through `load_recent_session`.
+- No app code changes were needed; this pass adds packaged evidence around existing Album Master undo/redo behavior.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-release-album-state-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-state
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node album-state smoke syntax check passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Album Master state smoke passed against the fresh release EXE.
+- Evidence: `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`.
+- Evidence values:
+  - `albumTitleRoundTrip: { undone: Release Album State, redone: Release Album Redone }`
+  - `generatedTransitionsRoundTrip: { undone: false, redone: true }`
+  - `boundaryStyleRoundTrip: { undone: direct, redone: crossfade }`
+  - `boundarySecondsRoundTrip: { undone: 2.0 s, redone: 4.5 s }`
+  - `trackRoleRoundTrip: { undone: auto, redone: heavy_djent }`
+  - `trackPresetRoundTrip: { undone: auto, redone: bright-air }`
+  - persisted session mode: `album`
+  - persisted selected track role/preset: `heavy_djent` / `bright-air`
+
+Honest gap:
+
+- This strengthens release-package state safety for Album Master. It does not render or listen to album audio and does not close human listening approval.
+
+Next unattended slice:
+
+- Continue with small packaged evidence gaps only where they represent real workflow risk, or move to a larger engine/preview implementation slice if the user wants to attack the Live Preview parity blocker.
+
 ### Visible Reference Playback Slice
 
 - Added a visible `Reference` audition button to Track Master when a reference track path is selected.
