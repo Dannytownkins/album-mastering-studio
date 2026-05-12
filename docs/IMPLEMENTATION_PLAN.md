@@ -15,6 +15,8 @@ Build a top-tier private desktop mastering app around two modes:
 
 Track Master ships first as the core vertical slice, but Album Master is a required near-term path because the user's personal project needs full-album mastering. Track Master is the first proof of the shared foundation, not the final destination.
 
+The product shape should follow the strongest 2025/2026 market pattern: a fast LANDR-style lane for quick analysis and export, backed by an Ozone-style deep lane where individual mastering stages can be inspected, bypassed, measured, and eventually reordered with warnings.
+
 The product must support real-time or near-real-time audition before Track Master can be called release-candidate. Non-real-time preview rendering is allowed only as temporary scaffolding while the real-time path is being built and proven.
 
 ## Non-Negotiable Product Gates
@@ -125,6 +127,13 @@ Benchmark products:
 - iZotope Ozone: assistant-driven mastering, preset/product language, metering.
 - Steinberg WaveLab: professional montage, loudness, DDP/export discipline.
 - LANDR/eMastered/BandLab: one-click expectations and quick export path.
+- Sonible, Mastering The Mix, YouLean, ADPTR Metric AB, Matchering, CloudBounce, Masterchannel, RoEx, and Bakuage: metering, assistant, reference, limiter, album, and open technical reference patterns.
+
+Primary new research input:
+
+- `docs/most-recent-mastering-app-research.md`
+
+Use this research to classify product patterns as table stakes, differentiators, later-stage ideas, or claims needing verification. Do not treat the full research dossier as an automatic backlog.
 
 Research questions:
 
@@ -134,6 +143,7 @@ Research questions:
 - Can Tauri plus native Rust audio meet the latency and fidelity bar?
 - Does JUCE materially simplify real-time audio, DSP, waveform, and export parity?
 - What architecture minimizes rewrite risk while maximizing audio seriousness?
+- Which research-backed product patterns are table stakes, which are differentiators, and which are later-stage distractions?
 
 Deliverable:
 
@@ -399,6 +409,14 @@ Native audio requirement:
 - Browser audio is allowed for scaffolding but must not be assumed final.
 - Serious real-time audition probably needs a native audio layer.
 
+Playback stabilization requirement:
+
+- Measure click-to-playing latency, not just whether the audio eventually starts.
+- Record cache hit vs cache miss behavior for `prepare_playback_file`.
+- Instrument frontend audio events: `loadstart`, `loadedmetadata`, `canplay`, `canplaythrough`, `play`, `playing`, `pause`, and `error`.
+- Capture `audio.readyState`, `networkState`, `duration`, `currentTime`, file URL, source path, playback cache path, and any `audio.play()` promise rejection.
+- A smoke test is insufficient if manual playback feels frozen or delayed.
+
 ## Phase 5: Real-Time Audition Spike
 
 Goal: prove the app can support responsive controls by ear.
@@ -427,6 +445,13 @@ Controls to prove first:
 - Width.
 - Volume Match.
 - Basic intensity subset.
+
+Research-backed design constraints:
+
+- Keep assistant analysis, target matching, and heavy render work off the audio/playback path.
+- Smooth all live control changes to avoid zipper noise.
+- Treat Web Audio as a useful comparison baseline, but prove whether it can meet the user's ear-facing latency expectations on real local audio.
+- If limiter, saturation, or linear-phase behavior cannot be live safely, expose them as render-faithful preview stages until a native path exists.
 
 Then continue toward:
 
@@ -475,6 +500,18 @@ Quality checks:
 - Codec preview risk when enabled.
 - Non-finite analysis guard.
 - Source/master sanity comparisons.
+- Dither misuse risk.
+- Stereo correlation/mono-fold risk when width is changed.
+- Dynamic-range risk using LRA/PSR-style metrics when available.
+
+Delivery presets:
+
+- Streaming Universal: about `-14 LUFS integrated`, `-1 dBTP`.
+- Apple/Sound Check: about `-16 LUFS`, `-1 dBTP`.
+- Broadcast/EBU R128: about `-23 LUFS`, `-1 dBTP`.
+- Club/Beatport: about `-7 to -9 LUFS`, `-1 dBTP`, with explicit loudness/dynamics warnings.
+- CD/album loud master: about `-11 to -9 LUFS`, with lossless-oriented ceiling options such as `-0.3 dBTP`.
+- Custom: user-controlled target LUFS and ceiling.
 
 Quality language:
 
@@ -663,6 +700,43 @@ Use research:
 - `mastering-settings-reference.md`
 - `compass_artifact_wf-...markdown.md`
 - `docs/research-implementation-notes.md`
+- `docs/most-recent-mastering-app-research.md`
+
+Research-backed DSP target chain:
+
+1. Input gain / level staging.
+2. Corrective EQ.
+3. Resonance or dynamic spectral control.
+4. Multiband dynamics.
+5. Tonal EQ.
+6. Mid/Side processing.
+7. Saturation / tape / exciter.
+8. Stereo imaging.
+9. True-peak limiter / maximizer.
+10. Export-only dither when reducing bit depth.
+
+Module priorities:
+
+- BS.1770-style integrated, short-term, and momentary loudness.
+- True-peak estimation via oversampling.
+- Minimum-phase EQ as the default first-layer control.
+- Linear-phase EQ only after latency/pre-ringing/offline-render behavior is understood.
+- Safe stereo width with low-band protection and correlation/mono warnings.
+- Transparent look-ahead limiter with quality modes and render/offline oversampling.
+- TPDF dither for word-length reduction, disabled for 24-bit or float exports unless explicitly needed.
+- Codec/normalization preview as a later differentiator after playback, limiting, metering, and export are stable.
+
+DSP verification checklist:
+
+- Loudness agrees with a BS.1770 reference implementation within documented tolerance.
+- True peak agrees with an upsampled reference meter within documented tolerance.
+- Bypass/null tests pass for linear modules where applicable.
+- Multiband crossover recombination is near-null when no gain changes are applied.
+- Fast automation produces no zippering.
+- Silence and near-silence do not create denormal CPU spikes.
+- Nonlinear blocks do not create uncontrolled aliasing at high drive.
+- Offline render matches live preview where modes are intended to be identical.
+- Dither appears only when reducing word length and does not double-apply.
 
 Modernization rule:
 
@@ -721,6 +795,9 @@ Initial rough targets:
 - Import does not block UI.
 - Analyze progress is visible.
 - Waveform appears quickly enough to keep trust.
+- First playback start after clicking Original/Mastered is measured and explained.
+- Cached playback starts promptly enough to use by ear.
+- First-time transcode/cache delay is visible and labeled when unavoidable.
 - Lightweight real-time controls respond under about 150 ms.
 - Heavier macro controls respond under about 500 ms.
 - Preview/export shows progress and can be canceled when safe.

@@ -1,6 +1,6 @@
 # Album Mastering Studio Product Canon
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 This is the canonical product mission and decision record for Album Mastering Studio. Future agents must read this file before doing product, UI, DSP, architecture, or planning work. If another document conflicts with this one, treat this file as the product source of truth unless the user explicitly changes direction.
 
@@ -492,6 +492,7 @@ Known research inputs:
 - deep-research-report.md
 - compass_artifact_wf-0dd25647-771b-4682-8d9d-4d900af5f667_text_markdown.md
 - docs/research-implementation-notes.md
+- docs/most-recent-mastering-app-research.md
 
 Use these to inform:
 
@@ -518,6 +519,43 @@ Already implemented according to current notes:
 - Normalization preview.
 - Richer metering.
 - Report/dashboard improvements.
+
+## Mandatory Takeaways From 2026 Product Research
+
+The 2026-05-12 competitive research is useful, but only a small part belongs in product canon. Treat `docs/most-recent-mastering-app-research.md` as reference material; this section captures the mandatory decisions it reinforces.
+
+Mandatory product principles:
+
+- Keep the two-tier shape: a fast mastering lane backed by a deeper inspection/control lane.
+- The fast lane remains mandatory: Drop/Add -> Analyze -> Universal/safe settings -> Audition -> Export.
+- Track Master must become stable before advanced research features are allowed to drive the roadmap.
+- Album Master remains required, but it should build on the stable Track Master foundation.
+- Do not clone competitor UI, proprietary terminology, or hidden DSP claims. Use other products as evidence for expectations, not as source material to copy.
+- Keep the visible preset set small. Do not let the research expand the main preset row into a large genre browser.
+- Do not ship a standalone "make louder" feature disconnected from LUFS, ceiling, limiter risk, and dynamic-range warnings.
+
+Mandatory trust principles:
+
+- Listening and standards-aware metering are both core trust pillars.
+- Volume Match remains optional and off by default. The default audition should reveal the actual mastered level; Volume Match is for fair tone comparison and never changes export level.
+- Delivery targets must be explicit, plain-language presets rather than mystery settings.
+- Platform target values can drift. Any public or release-facing platform claim must be verified before relying on it.
+- Do not use "AI" language unless the implemented system can prove what it is doing. Prefer analysis-driven, explainable recommendations.
+- The assistant should explain recommendations in human terms: what it measured, what target it is moving toward, what it changed, and how confident it is.
+
+Mandatory audio-quality principles:
+
+- Limiter quality, true-peak behavior, loudness measurement, stereo safety, and dither correctness matter more than adding more presets.
+- Minimum-phase EQ should be the default for first-layer tonal controls.
+- Linear-phase processing, codec preview, target-curve overlays, multi-reference systems, DDP, stem separation, and neural repair features are not product-canon requirements for the current stabilization phase.
+- Stereo widening must be phase-safe. Low-band widening should be protected or avoided unless the engine proves it is safe.
+- Dither is an export-only concern and should only happen when reducing bit depth.
+
+Mandatory Album Master direction:
+
+- Album Master should become more than batch mastering. It must eventually help with track-to-track consistency, album-level intent, per-track adaptation, and sequence review.
+- The most important album insight from the research is the future consistency map: per-track loudness, dynamic range, true peak, low/high energy, and deviation from album mean.
+- DDP, ISRC, PQ-sheet, vinyl premaster, and advanced delivery authoring are valuable later directions, not current blockers.
 
 Still important to revisit:
 
