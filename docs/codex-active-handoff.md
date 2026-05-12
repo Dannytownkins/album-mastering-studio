@@ -17,7 +17,63 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Visible Live Preview Contract
+## Latest Codex Pass: Live Preview Contract Drift Guard
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/tests/tauri-webview-ui-smoke.mjs`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+
+What changed:
+
+- Added a frontend runtime guard that compares the loaded Python engine Live Preview contract against the bundled Web Audio config.
+- The guard normalizes engine-only fields out of the comparison and exposes `window.__AMS_LIVE_PREVIEW_CONTRACT_DRIFT__`.
+- The visible `Contract drift` chip only appears when a mismatch exists.
+- Extended both the broad WebView UI smoke and packaged Track Preview UI smoke to assert no drift in the current build.
+
+Verification already run:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-webview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run test:tauri-ui
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-webview-ui-smoke\tauri-webview-ui-smoke.json`
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - Broad UI `livePreviewContractDrift: []`
+  - Broad UI `livePreviewContractDriftVisible: false`
+  - Track Preview `livePreviewContractDrift: []`
+  - Track Preview `livePreviewContractDriftVisible: false`
+  - Track Preview `previewParityAfterLivePreview: Approx audition`
+
+Remaining gap:
+
+- This catches packaged contract/config drift. It still is not export-engine-faithful live DSP or human listening approval.
+
+Next useful slice:
+
+- Continue toward shared/native live DSP parity if working unattended.
+- If the user is present, run and record a listening pass.
+
+## Previous Codex Pass: Visible Live Preview Contract
 
 Date: 2026-05-12
 

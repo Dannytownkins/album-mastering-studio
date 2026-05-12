@@ -72,6 +72,8 @@ try {
   assert.equal(evidence.livePreviewContractLoaded, true);
   assert.equal(evidence.livePreviewContractModelId, "web-audio-first-control-model");
   assert.deepEqual(evidence.livePreviewContractModeledControls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.deepEqual(evidence.livePreviewContractDrift, []);
+  assert.equal(evidence.livePreviewContractDriftVisible, false);
   assert.match(evidence.livePreviewModeledStatus, /Live model: Low, Mid, High, Width, Intensity/);
   assert.match(evidence.livePreviewRenderOnlyStatus, /Render-only:/);
   assert.equal(evidence.livePreviewRenderOnlyIncludesLufs, true);
@@ -386,6 +388,9 @@ function uiSmokeExpression() {
   const previewParityStatus = text(document.querySelector('.preview-parity-status'));
   const livePreviewContractLoaded = await waitFor(() => window.__AMS_LIVE_PREVIEW_CONTRACT__?.modelId === 'web-audio-first-control-model', 5000);
   const livePreviewContract = window.__AMS_LIVE_PREVIEW_CONTRACT__ || {};
+  const livePreviewContractDrift = window.__AMS_LIVE_PREVIEW_CONTRACT_DRIFT__ || [];
+  const livePreviewContractDriftVisible = Array.from(document.querySelectorAll('.live-contract-status.warn'))
+    .some((item) => text(item).includes('Contract drift'));
   const livePreviewModeledStatus = text(document.querySelector('.live-contract-status.modeled'));
   const livePreviewRenderOnlyStatus = text(document.querySelector('.live-contract-status.render-only'));
   const livePreviewRenderOnlyIncludesLufs = livePreviewRenderOnlyStatus.includes('LUFS');
@@ -470,6 +475,8 @@ function uiSmokeExpression() {
     livePreviewContractLoaded,
     livePreviewContractModelId: livePreviewContract.modelId,
     livePreviewContractModeledControls: livePreviewContract.modeledControls,
+    livePreviewContractDrift,
+    livePreviewContractDriftVisible,
     livePreviewModeledStatus,
     livePreviewRenderOnlyStatus,
     livePreviewRenderOnlyIncludesLufs,

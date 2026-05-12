@@ -166,6 +166,8 @@ try {
   assert.deepEqual(evidence.livePreviewContractModeledControls, ["Low", "Mid", "High", "Width", "Intensity"]);
   assert.deepEqual(evidence.livePreviewContractWindowControls, evidence.livePreviewContractModeledControls);
   assert.equal(evidence.livePreviewContractWindowModelId, evidence.livePreviewContractModelId);
+  assert.deepEqual(evidence.livePreviewContractDrift, []);
+  assert.equal(evidence.livePreviewContractDriftVisible, false);
   assert.match(evidence.livePreviewModeledStatus, /Live model: Low, Mid, High, Width, Intensity/);
   assert.match(evidence.livePreviewRenderOnlyStatus, /Render-only:/);
   assert.equal(evidence.livePreviewRenderOnlyIncludesTone, true);
@@ -380,6 +382,9 @@ function trackPreviewExpression() {
     throw new Error('Live Preview contract did not load into the visible app state');
   }
   const livePreviewWindowContract = window.__AMS_LIVE_PREVIEW_CONTRACT__ || {};
+  const livePreviewContractDrift = window.__AMS_LIVE_PREVIEW_CONTRACT_DRIFT__ || [];
+  const livePreviewContractDriftVisible = Array.from(document.querySelectorAll('.live-contract-status.warn'))
+    .some((item) => text(item).includes('Contract drift'));
   const livePreviewModeledStatus = text(document.querySelector('.live-contract-status.modeled'));
   const livePreviewRenderOnlyStatus = text(document.querySelector('.live-contract-status.render-only'));
   const masteredActionButton = () => buttons().find((item) => text(item).startsWith('Mastered') && item.closest('.audition-actions'));
@@ -795,6 +800,8 @@ function trackPreviewExpression() {
     livePreviewContractModeledControls: livePreviewContract.modeledControls,
     livePreviewContractWindowModelId: livePreviewWindowContract.modelId,
     livePreviewContractWindowControls: livePreviewWindowContract.modeledControls,
+    livePreviewContractDrift,
+    livePreviewContractDriftVisible,
     livePreviewModeledStatus,
     livePreviewRenderOnlyStatus,
     livePreviewRenderOnlyIncludesTone: livePreviewRenderOnlyStatus.includes('tone'),

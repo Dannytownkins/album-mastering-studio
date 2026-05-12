@@ -2,6 +2,46 @@
 
 ## 2026-05-12
 
+### Live Preview Contract Drift Guard Slice
+
+- Added a runtime guard that compares the loaded Python engine Live Preview contract against the bundled Web Audio config used by the frontend.
+- The guard normalizes the contract to the same fields as `desktop/src/livePreviewConfig.json`, ignoring engine-only metadata such as `exportControl`.
+- The app exposes `window.__AMS_LIVE_PREVIEW_CONTRACT_DRIFT__` for smoke/debug evidence and only shows a visible `Contract drift` chip if mismatch is detected.
+- Extended both the broad WebView UI smoke and packaged Track Preview smoke to assert the drift array is empty and no drift warning is visible.
+
+Verification:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-webview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run test:tauri-ui
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Node smoke syntax checks passed.
+- Python compile passed.
+- Dev WebView UI smoke passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Release-backed Track Preview UI smoke passed.
+- Evidence values:
+  - Broad UI `livePreviewContractDrift: []`
+  - Broad UI `livePreviewContractDriftVisible: false`
+  - Track Preview `livePreviewContractDrift: []`
+  - Track Preview `livePreviewContractDriftVisible: false`
+  - Track Preview `previewParityAfterLivePreview: Approx audition`
+
+Honest gap:
+
+- This catches packaged/config drift; it still does not make Web Audio Live Preview export-engine faithful or replace human listening approval.
+
 ### Visible Live Preview Contract Slice
 
 - Added a typed Tauri `live_preview_contract` command that calls the Python sidecar command `preview-contract --json`.

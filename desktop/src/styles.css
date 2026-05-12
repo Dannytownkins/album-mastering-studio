@@ -644,6 +644,7 @@ label {
 }
 
 .preview-parity-status.warn,
+.live-contract-status.warn,
 .native-audition-status.warn {
   border-color: var(--warn);
   background: rgba(245, 166, 35, 0.12);

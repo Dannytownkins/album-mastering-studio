@@ -667,6 +667,8 @@ The Tauri app now loads the same contract through a typed `live_preview_contract
 - `Live model: Low, Mid, High, Width, Intensity`
 - `Render-only: tone, highpass, low-mid, brightness, warmth, transients, LUFS, limiter, codec`
 
+The frontend also compares the loaded engine contract against the bundled Web Audio config at runtime. Current packaged evidence reports `livePreviewContractDrift: []` and does not show the `Contract drift` warning chip.
+
 Verification after the extraction:
 
 - `npm run build`
@@ -684,6 +686,7 @@ Interpretation:
 - It is still a shared definition for a temporary Web Audio approximation, not shared DSP with the Python export engine.
 - The contract makes the approximation boundary executable: modeled controls are `Low`, `Mid`, `High`, `Width`, and `Intensity`; unmodeled export stages include preset base tone, highpass, low-mid EQ, brightness, warmth/saturation, transient shaping, LUFS match, ceiling limiting, and codec QC.
 - The visible UI now exposes that same boundary, so `Approx audition` has concrete supporting detail instead of being only a label.
+- The packaged runtime now checks that the visible contract and bundled Web Audio model are still aligned before claiming the preview model is current.
 - The next real parity step is to define or generate common intent/DSP parameters that both offline export and the live path consume, or to move the live path toward a native engine that can share those definitions directly.
 
 ## Real-Source Album Playback Stability

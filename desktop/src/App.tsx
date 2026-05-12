@@ -114,6 +114,14 @@ type LivePreviewContract = {
   previewParity: string;
   exportFaithfulPreviewRequired: boolean;
   modeledControls: string[];
+  filters: {
+    low: { type: string; exportControl?: string; frequencyHz: number; q?: number };
+    mid: { type: string; exportControl?: string; frequencyHz: number; q?: number };
+    high: { type: string; exportControl?: string; frequencyHz: number; q?: number };
+  };
+  width: typeof livePreviewConfig.width & { exportControl?: string };
+  compressor: typeof livePreviewConfig.compressor & { exportControl?: string };
+  smoothingSeconds: number;
   unmodeledExportStages: string[];
 };
 
@@ -485,6 +493,7 @@ function App() {
   const [liveAudition, setLiveAudition] = useState(false);
   const [liveAuditionLatencyMs, setLiveAuditionLatencyMs] = useState<number | null>(null);
   const [livePreviewContract, setLivePreviewContract] = useState<LivePreviewContract | null>(null);
+  const [livePreviewContractDrift, setLivePreviewContractDrift] = useState<string[]>([]);
   const [nativePlaybackStatus, setNativePlaybackStatus] = useState<NativePlaybackStatus>(idleNativePlaybackStatus);
   const [loopSelection, setLoopSelection] = useState(false);
   const [region, setRegion] = useState<RegionSelection | null>(null);
@@ -580,7 +589,7 @@ function App() {
   const livePreviewContractModeledText = livePreviewContract?.modeledControls?.join(", ") ?? "Contract loading";
   const livePreviewContractRenderOnlyText = summarizePreviewStages(livePreviewContract?.unmodeledExportStages ?? []);
   const livePreviewContractTitle = livePreviewContract
-    ? `Engine contract ${livePreviewContract.modelId}. Render-only stages: ${formatPreviewStages(livePreviewContract.unmodeledExportStages)}.`
+    ? `Engine contract ${livePreviewContract.modelId}. ${livePreviewContractDrift.length ? `Drift: ${livePreviewContractDrift.join(", ")}.` : "Bundled live model matches."} Render-only stages: ${formatPreviewStages(livePreviewContract.unmodeledExportStages)}.`
     : "Loading the live preview contract from the Python engine.";
   const playbackVolume = useMemo(
     () => computePlaybackVolume(playItem, selectedTrack, selectedMasterAnalysis, volumeMatch),
@@ -613,10 +622,20 @@ function App() {
         pushLog(`User presets unavailable: ${String(presetsResult.reason)}`);
       }
       if (contractResult.status === "fulfilled") {
+        const drift = livePreviewContractDriftMessages(contractResult.value);
         setLivePreviewContract(contractResult.value);
-        (window as typeof window & { __AMS_LIVE_PREVIEW_CONTRACT__?: LivePreviewContract }).__AMS_LIVE_PREVIEW_CONTRACT__ =
-          contractResult.value;
+        setLivePreviewContractDrift(drift);
+        const debugWindow = window as typeof window & {
+          __AMS_LIVE_PREVIEW_CONTRACT__?: LivePreviewContract;
+          __AMS_LIVE_PREVIEW_CONTRACT_DRIFT__?: string[];
+        };
+        debugWindow.__AMS_LIVE_PREVIEW_CONTRACT__ = contractResult.value;
+        debugWindow.__AMS_LIVE_PREVIEW_CONTRACT_DRIFT__ = drift;
+        if (drift.length) {
+          pushLog(`Live Preview contract drift: ${drift.join(", ")}`);
+        }
       } else {
+        setLivePreviewContractDrift(["contract unavailable"]);
         pushLog(`Live Preview contract unavailable: ${String(contractResult.reason)}`);
       }
       setAutosaveReady(true);
@@ -2179,6 +2198,11 @@ function App() {
             <span className="live-contract-status render-only" title={livePreviewContractTitle}>
               Render-only: {livePreviewContractRenderOnlyText}
             </span>
+            {livePreviewContractDrift.length > 0 && (
+              <span className="live-contract-status warn" title={livePreviewContractTitle}>
+                Contract drift
+              </span>
+            )}
             <span className={`native-audition-status ${nativePlaybackStatus.active ? "active" : ""}`}>
               {nativePlaybackStatus.active
                 ? `${nativePlaybackKind} ${nativePlaybackStatus.paused ? "paused" : "playing"}`
@@ -3017,6 +3041,57 @@ function summarizePreviewStages(stages: string[]) {
 function formatPreviewStages(stages: string[]) {
   if (!stages.length) return "none";
   return summarizePreviewStages(stages);
+}
+
+function livePreviewContractDriftMessages(contract: LivePreviewContract) {
+  const drift: string[] = [];
+  if (contract.modelId !== livePreviewConfig.modelId) drift.push("model");
+  if (!sameFilterConfig(contractLiveFilterConfig(contract), livePreviewConfig.filters)) drift.push("filters");
+  if (!sameNumericObject(contract.width, livePreviewConfig.width)) drift.push("width");
+  if (!sameNumericObject(contract.compressor, livePreviewConfig.compressor)) drift.push("compressor");
+  if (!sameNumber(contract.smoothingSeconds, livePreviewConfig.smoothingSeconds)) drift.push("smoothing");
+  return drift;
+}
+
+function sameFilterConfig(left: ReturnType<typeof contractLiveFilterConfig>, right: typeof livePreviewConfig.filters) {
+  return (
+    left.low.type === right.low.type &&
+    sameNumber(left.low.frequencyHz, right.low.frequencyHz) &&
+    left.mid.type === right.mid.type &&
+    sameNumber(left.mid.frequencyHz, right.mid.frequencyHz) &&
+    sameNumber(left.mid.q, right.mid.q) &&
+    left.high.type === right.high.type &&
+    sameNumber(left.high.frequencyHz, right.high.frequencyHz)
+  );
+}
+
+function sameNumericObject(left: Record<string, unknown>, right: Record<string, unknown>) {
+  for (const key of Object.keys(right)) {
+    if (!sameNumber(left[key], right[key])) return false;
+  }
+  return true;
+}
+
+function contractLiveFilterConfig(contract: LivePreviewContract) {
+  return {
+    low: {
+      type: contract.filters.low.type,
+      frequencyHz: contract.filters.low.frequencyHz,
+    },
+    mid: {
+      type: contract.filters.mid.type,
+      frequencyHz: contract.filters.mid.frequencyHz,
+      q: contract.filters.mid.q,
+    },
+    high: {
+      type: contract.filters.high.type,
+      frequencyHz: contract.filters.high.frequencyHz,
+    },
+  };
+}
+
+function sameNumber(left: unknown, right: unknown) {
+  return typeof left === "number" && typeof right === "number" && Math.abs(left - right) <= 0.000001;
 }
 
 function computePlaybackVolume(
