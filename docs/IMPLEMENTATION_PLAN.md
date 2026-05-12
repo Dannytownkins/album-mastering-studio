@@ -1,6 +1,6 @@
 # Album Mastering Studio Implementation Plan
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 This is the execution map for the current Codex/Tauri/Python repo. Read `docs/PRODUCT.md` first. `PRODUCT.md` is the product canon; this file is the living implementation plan.
 
@@ -258,6 +258,59 @@ Verification:
 - Changing a control marks preview stale.
 - Export creates a non-overwriting output.
 
+Current packaged coverage:
+
+- 2026-05-12 added `npm run test:tauri-track-preview-ui`.
+- 2026-05-12 enabled Tauri `app.security.assetProtocol` for local user/temp media locations after the A/B smoke proved prepared playback files existed but WebView audio could not load them.
+- 2026-05-12 updated the WebView playback-position range to seek on `input` and update visible position immediately.
+- 2026-05-12 updated region-loop playback state so Loop start and boundary jumps update visible transport position immediately.
+- 2026-05-12 added a packaged Live Preview diagnostic that verifies the Web Audio chain is running and receives Low control changes under 150 ms.
+- 2026-05-12 added CDP mouse-drag verification for the playback-position range.
+- 2026-05-12 extended the packaged Track Preview smoke to render a second Low=+0.5 dB Python preview after the stale state and compare it against a deterministic Web Audio low-shelf model.
+- 2026-05-12 tightened the preview-parity label so missing/stale exact renders show `Render required`, rendered-preview Live Preview shows `Approx audition`, and non-live rendered preview stays labeled render-faithful.
+- 2026-05-12 fixed Track Master multi-export receipts so batch exports aggregate every independent rendered track before running quality checks.
+- The release EXE smoke restores a two-track Track Master session, selects Track 2, clicks visible `Update Preview`, and verifies a one-track preview manifest, dashboard, mastered WAV, playback-cache preparation, WebView local audio load, transport range seek, pixel-level transport seek drag, `Master ready` state, same-position A/B Original/Mastered switching, waveform region creation, region Loop behavior, Volume Match gain behavior, Live Preview control latency, `Approx audition` after live audition is armed, stale `No master` plus `Render required` after a Low EQ control change, second preview render, export-vs-live comparison fields (`same_engine: false`, `preview_parity: "approximate"`, `export_faithful_preview_required: true`), and a two-track Track Master batch export receipt (`2 rendered track path(s) exist`).
+- Evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
+- Remaining Phase 3/4 gaps: actual export-engine parity implementation for live audition and human listening approval.
+- 2026-05-12 added a separate `listeningApproved` autosaved session flag and an `Approved after listening` control.
+- The Listening Pass checklist remains a six-item activity trail; approval is stored separately so progress cannot be mistaken for human approval.
+- Render-affecting edits clear `listeningApproved`.
+- Evidence: `test-output/tauri-listening-approval-ui-smoke/tauri-webview-ui-smoke.json`.
+- 2026-05-12 broad WebView UI smoke now verifies `previewParityStatus: "Render required"` when Live Preview is armed before any exact rendered master is selected.
+- Evidence: `test-output/tauri-webview-ui-smoke/tauri-webview-ui-smoke.json`.
+- 2026-05-12 true multi-source Album Master automated evidence passed with three distinct local WAV sources supplied through `AMS_REAL_SONG_ALBUM_PATHS`.
+- Release performance evidence: `test-output/tauri-real-song-album-performance-multisong-3source/tauri-real-song-album-performance-smoke.json`.
+- UI/native playback evidence: `test-output/tauri-real-song-album-ui-multisong-3source/tauri-real-song-album-ui-smoke.json`.
+- Evidence values include `sourceMode: "multi-song"`, `distinctSourceCount: 3`, `renderTrackCount: 3`, `renderInterludeCount: 2`, passing export checks, `manifestTrackCount: 3`, `manifestInterludeCount: 2`, and 12 seconds of native album WAV stability with no stream errors or warnings.
+- Remaining human-listening gap: the app can now capture approval, but no actual user listening pass has been recorded.
+- Remaining multi-source caveat: the true multi-source run still uses 10-second excerpts from each source, not a full-song human listening pass.
+- 2026-05-12 full-source multi-song Album Master automated evidence passed with the same three distinct WAV sources using `AMS_REAL_SONG_ALBUM_CLIP_SECONDS=999`.
+- Full-source release performance evidence: `test-output/tauri-real-song-album-performance-multisong-fullsource/tauri-real-song-album-performance-smoke.json`.
+- Full-source UI/native playback evidence: `test-output/tauri-real-song-album-ui-multisong-fullsource/tauri-real-song-album-ui-smoke.json`.
+- Full-source evidence values include `analysisDurationsSeconds: [118.56, 116.00, 148.56]`, `renderTrackCount: 3`, `renderInterludeCount: 2`, passing export checks, `manifestTrackCount: 3`, `manifestInterludeCount: 2`, an album sequence duration of about `387.54s`, and 30 seconds of native album WAV stability with no stream errors or warnings.
+- Remaining full-source caveat: this is still automated verification, not human listening approval or musical approval of the generated transitions.
+- 2026-05-12 `Update Preview` was tightened into an immediate export-engine audition handoff: after the Python-rendered preview completes, the app prepares and plays the rendered master in the transport.
+- The preview-parity label now follows the active playback path rather than the armed Live Preview toggle: source playback with Web Audio remains `Approx audition`, stale/missing exact renders remain `Render required`, and Python-rendered master playback shows `Render-faithful preview`.
+- Packaged Track Preview evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
+- Broad WebView UI evidence: `test-output/tauri-update-preview-handoff-ui-smoke/tauri-webview-ui-smoke.json`.
+- Evidence values include `previewParityAfterLivePreview: "Approx audition"`, `previewParityAfterControlChange: "Render required"`, `previewParityAfterUpdatePreview: "Render-faithful preview"`, `exportEngineAuditionPath == parityPreviewMasterPath`, `exportEngineAuditionEngine: "python-render-track-master"`, and the existing negative comparison `same_engine: false`.
+- Remaining Live Preview caveat: this makes the Python-engine audition one click closer, but Web Audio Live Preview is still approximate and not export-engine parity.
+- 2026-05-12 added bounded Python-engine `Render Region` audition for selected waveform regions or a playhead window.
+- Tauri command `render_track_region_preview` trims the source with FFmpeg into `region-source.wav`, points a one-track project at that clip, disables transitions/album WAV/codec preview, then calls the existing Python `render-project` flow through `render_project_product`.
+- Packaged Track Preview evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
+- Broad WebView UI evidence: `test-output/tauri-region-preview-ui-smoke/tauri-webview-ui-smoke.json`.
+- Evidence values include `regionPreviewParity: "Render-faithful region"`, `regionPreviewSourcePath` ending in `region-source.wav`, `regionPreviewManifest.track_count: 1`, `regionPreviewManifest.interlude_count: 0`, `regionEngineAuditionEngine: "python-render-track-region-preview"`, `regionEngineAuditionStartSeconds: 1`, and `regionEngineAuditionDurationSeconds: 1.1949685534591197`.
+- Remaining region-preview caveat: this is faster bounded export-engine audition, not true real-time export-engine DSP.
+- 2026-05-12 added release-backed real-song region-preview turnaround smoke: `npm run test:tauri-real-song-region-preview`.
+- Real-song region preview evidence: `test-output/tauri-real-song-region-preview-smoke/tauri-real-song-region-preview-smoke.json`.
+- Evidence values include source validation `ok`, source duration `186.31997916666663s`, region start `65.21199270833331s`, region duration `12s`, `renderDurationMs: 8476.3`, rendered region duration `12s`, clipped source `region-source.wav`, passing export checks, playback cache prep `27.9ms`, and a 3-second native playback probe with `played_output_frames: 144000`, `callback_count: 300`, no stream errors, and no warnings.
+- Remaining real-song caveat: this is one automated real-MP3 timing/probe pass, not human listening approval or real-time live DSP.
+- 2026-05-12 added release-backed visible UI coverage for the real-song Track Master `Render Region` path: `npm run test:tauri-real-song-region-ui`.
+- The visible region readout now falls back to selected-track analysis duration when transport audio is not loaded, so analyzed tracks show real region times before playback starts.
+- Real-song region UI evidence: `test-output/tauri-real-song-region-ui-smoke/tauri-real-song-region-ui-smoke.json`.
+- Evidence values include `regionReadoutAfterDrag: "01:05 - 01:17 (00:12)"`, `regionPreviewParity: "Render-faithful region"`, `regionEngineAuditionEngine: "python-render-track-region-preview"`, start `65.03621914308174s`, duration `12.011193625524115s`, rendered duration `12.011s`, `manifest.track_count: 1`, `manifest.interlude_count: 0`, clipped source `region-source.wav`, existing manifest/dashboard/source/master artifacts, and a 12.011s transport duration.
+- Remaining real-song UI caveat: this proves the visible release UI can render and audition a bounded region from one real MP3; it is still render-first and not human listening approval.
+
 No-victory-lap check:
 
 - A pretty screen is not enough.
@@ -417,6 +470,17 @@ No-victory-lap check:
 - Source files are never changed.
 - Autosave must not corrupt explicit project files.
 
+2026-05-12 packaged persistence baseline:
+
+- Added `npm run test:tauri-project-persistence`.
+- The smoke launches the release EXE, restores a two-track Album Master session with a known `.ams.json` path, clicks the visible `Save` button, reads the saved project back, and renders that saved project through the Python engine sidecar.
+- Passing evidence:
+  - saved project: `test-output/tauri-project-persistence-smoke/saved-album.ams.json`
+  - render evidence: `test-output/tauri-project-persistence-smoke/rendered-from-saved-project/manifest.json`
+  - export checks status: `pass`
+  - render warnings: `0`
+- Remaining gap: OS file-picker Open and Save-As dialog flows are not automated.
+
 ## Phase 8: Album Master Near-Term Path
 
 Goal: build the user's required album workflow on the Track Master foundation.
@@ -466,6 +530,13 @@ Implement primitives:
 - Fade out/in.
 - Ring-out.
 - Reverse swell only if it sounds useful.
+
+Current coverage:
+
+- 2026-05-12 Python boundary regressions cover `direct`, `gap`, `fade`, `ring-out`, and `crossfade` with generated transitions disabled.
+- 2026-05-12 Tauri runtime smoke renders `gap`, `fade`, `ring-out`, and `crossfade` through `render_album_master` with generated transitions disabled.
+- `fade` is intentionally represented as a manifest boundary with track-only cue points because it fades adjacent edges without inserting a separate boundary chunk.
+- 2026-05-12 WebView UI smoke proves the `Boundary` selector can choose every non-direct primitive and that Boundary Seconds updates.
 
 Generated interludes:
 
@@ -562,6 +633,44 @@ Initial rough targets:
 - 8-track album export gives meaningful progress.
 
 Agents must establish baselines on the actual machine and refine these budgets with evidence.
+
+2026-05-12 packaged release baseline:
+
+- Added `npm run test:tauri-performance`.
+- Added `npm run test:tauri-real-song-performance`.
+- Added `npm run test:tauri-real-song-album-performance`.
+- Current local synthetic 8-track baseline:
+  - launch to Tauri invoke ready: `628.4 ms`
+  - source validation, 8 tracks: `255 ms`
+  - analysis, 8 tracks, 128 waveform bins: `2636.4 ms`
+  - album render, 8 tracks, continuous WAV, no generated transitions: `9745.3 ms`
+- Current local real-song Track Master baseline using `Lay the Money on the Desk (1).mp3` outside the repo:
+  - source duration: `186.31997916666663` seconds
+  - launch to Tauri invoke ready: `424.9 ms`
+  - source validation: `71.8 ms`
+  - analysis, 256 waveform bins: `5035.6 ms`
+  - playback-cache preparation: `1.9 ms`
+  - Track Master render: `29610.6 ms`
+  - export checks: `1.9 ms`
+- Current local real-song-derived Album Master baseline using three 10-second clips from `Lay the Money on the Desk (1).mp3` outside the repo:
+  - launch to Tauri invoke ready: `650.7 ms`
+  - source validation, 3 clips: `107.1 ms`
+  - analysis, 3 clips, 256 waveform bins: `2838 ms`
+  - Album Master render, continuous WAV, 2 generated transitions: `15166.3 ms`
+  - export checks: `3.5 ms`
+- 2026-05-12 real-song Album Master smokes now support `AMS_REAL_SONG_ALBUM_PATHS` for true multi-song input:
+  - accepts a JSON array or Windows path-delimited list of local song paths
+  - validates two to eight paths, at least two distinct files, and file existence before rendering
+  - preserves the existing `AMS_REAL_SONG_PATH` single-song fallback
+  - records `sourceMode`, `sourcePaths`, `distinctSourceCount`, and per-clip source metadata in evidence JSON
+- Latest verification still used the single-MP3 fallback because no second distinct song path was available:
+  - packaged evidence: `test-output/tauri-real-song-album-performance-multisource-ready/tauri-real-song-album-performance-smoke.json`
+  - visible UI evidence: `test-output/tauri-real-song-album-ui-multisource-ready/tauri-real-song-album-ui-smoke.json`
+  - both recorded `sourceMode: single-song-derived-clips` and `distinctSourceCount: 1`
+- Evidence:
+  - `test-output/tauri-release-performance-smoke/tauri-release-performance-smoke.json`
+  - `test-output/tauri-real-song-performance-smoke/tauri-real-song-performance-smoke.json`
+  - `test-output/tauri-real-song-album-performance-smoke/tauri-real-song-album-performance-smoke.json`
 
 ## Phase 13: Release And Installer Hardening
 

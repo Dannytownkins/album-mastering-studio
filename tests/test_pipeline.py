@@ -230,6 +230,91 @@ class PipelineTest(unittest.TestCase):
             self.assertTrue(Path(interludes[0]["output"]).exists())
             self.assertTrue((output_dir / "album_sequence.wav").exists())
 
+    def test_disabled_project_transitions_preserve_direct_album_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "inputs"
+            output_dir = root / "outputs"
+            project_path = root / "album.ams.json"
+            input_dir.mkdir()
+            self._write_sine(input_dir / "01_a.wav", 220.0, 0.35)
+            self._write_sine(input_dir / "02_b.wav", 261.63, 0.35)
+
+            project = create_project(
+                [input_dir],
+                project_path,
+                RenderOptions(interlude_duration=1.0, interlude_style="ambient", album_wav=True, codec_preview=False),
+                album_title="Direct Boundaries Test",
+            )
+            for transition in project["transitions"]:
+                transition["enabled"] = False
+            project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+
+            manifest = render_project(project_path, output_dir)
+
+            self.assertEqual(manifest["track_count"], 2)
+            self.assertEqual(manifest["interlude_count"], 0)
+            self.assertEqual([item["type"] for item in manifest["sequence"]], ["track", "track"])
+            self.assertEqual([cue["type"] for cue in manifest["cue_points"]], ["track", "track"])
+            self.assertEqual(manifest["settings"]["generated_transitions"], False)
+            self.assertEqual(manifest["settings"]["default_boundary_style"], "direct")
+            self.assertEqual(len(list((output_dir / "interludes").glob("*.wav"))), 0)
+            self.assertTrue((output_dir / "album_sequence.wav").exists())
+
+    def test_project_boundary_primitives_render_without_generated_interludes(self) -> None:
+        expected_cue_types = {
+            "gap": ["track", "boundary", "track"],
+            "fade": ["track", "track"],
+            "ring-out": ["track", "boundary", "track"],
+            "crossfade": ["track", "boundary", "track"],
+        }
+        for boundary_style in ("gap", "fade", "ring-out", "crossfade"):
+            with self.subTest(boundary_style=boundary_style):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    input_dir = root / "inputs"
+                    output_dir = root / "outputs"
+                    project_path = root / "album.ams.json"
+                    input_dir.mkdir()
+                    self._write_sine(input_dir / "01_a.wav", 220.0, 0.35)
+                    self._write_sine(input_dir / "02_b.wav", 261.63, 0.35)
+
+                    project = create_project(
+                        [input_dir],
+                        project_path,
+                        RenderOptions(interlude_duration=1.0, interlude_style="ambient", album_wav=True, codec_preview=False),
+                        album_title=f"{boundary_style} Boundary Test",
+                    )
+                    project["settings"]["generated_transitions"] = False
+                    project["settings"]["default_boundary_style"] = boundary_style
+                    project["settings"]["default_boundary_duration"] = 0.5
+                    for transition in project["transitions"]:
+                        transition["enabled"] = False
+                        transition["boundary_style"] = boundary_style
+                        transition["boundary_duration_seconds"] = 0.5
+                    project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+
+                    manifest = render_project(project_path, output_dir)
+
+                    self.assertEqual(manifest["interlude_count"], 0)
+                    self.assertEqual(manifest["settings"]["generated_transitions"], False)
+                    self.assertEqual(manifest["settings"]["default_boundary_style"], boundary_style)
+                    self.assertEqual(manifest["settings"]["default_boundary_duration"], 0.5)
+                    boundaries = [item for item in manifest["sequence"] if item["type"] == "boundary"]
+                    self.assertEqual(len(boundaries), 1)
+                    self.assertEqual(boundaries[0]["style"], boundary_style)
+                    self.assertEqual(boundaries[0]["duration_seconds"], 0.5)
+                    self.assertEqual(len(list((output_dir / "interludes").glob("*.wav"))), 0)
+                    cue_types = [cue["type"] for cue in manifest["cue_points"]]
+                    self.assertEqual(cue_types, expected_cue_types[boundary_style])
+                    boundary_cues = [cue for cue in manifest["cue_points"] if cue["type"] == "boundary"]
+                    if boundary_style == "fade":
+                        self.assertEqual(boundary_cues, [])
+                    else:
+                        self.assertEqual(len(boundary_cues), 1)
+                        self.assertAlmostEqual(boundary_cues[0]["duration_seconds"], 0.5, places=2)
+                    self.assertTrue((output_dir / "album_sequence.wav").exists())
+
     def test_project_preserves_tweak_lufs_and_inherit_transition_semantics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

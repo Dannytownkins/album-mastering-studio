@@ -8,6 +8,16 @@ export type Analysis = {
   transient_density?: number;
 };
 
+export type SourceValidation = {
+  path: string;
+  exists: boolean;
+  supported: boolean;
+  is_directory: boolean;
+  status: "ok" | "missing" | "unsupported" | "unreadable";
+  detail: string;
+  diagnostic?: string | null;
+};
+
 export type Track = {
   id: string;
   path: string;
@@ -19,6 +29,10 @@ export type Track = {
   analysis?: Analysis;
   waveform?: number[];
   masteredPath?: string;
+  masteredAnalysis?: Analysis;
+  qualityWarnings?: string[];
+  lastOutputDir?: string;
+  sourceStatus?: SourceValidation;
 };
 
 export type TransitionArtifact = {
@@ -32,6 +46,7 @@ export type TransitionArtifact = {
 export type RenderManifest = {
   track_count: number;
   interlude_count: number;
+  album_story?: string;
   album_sequence?: string | null;
   cue_sheet?: string | null;
   outputs?: {
@@ -43,12 +58,15 @@ export type RenderManifest = {
   sequence?: Array<Record<string, unknown>>;
   warnings?: string[];
   dashboard?: string;
+  settings?: Record<string, unknown>;
 };
 
-export type CliResult = {
-  code: number | null;
-  stdout: string;
-  stderr: string;
+export type ProductRenderResult = {
+  output_dir: string;
+  project_path: string;
+  manifest_path: string;
+  dashboard_path?: string | null;
+  manifest: RenderManifest;
 };
 
 export type Settings = {
@@ -70,6 +88,9 @@ export type Settings = {
   bitDepth: number;
   outputFormat: string;
   codecPreview: boolean;
+  transitionsEnabled: boolean;
+  boundaryStyle: string;
+  boundaryDuration: number;
   transitionStyle: string;
   transitionDuration: number;
   tweakLufs: number;

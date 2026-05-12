@@ -18,6 +18,7 @@ from .mastering import PRESETS, FineTune, MasterResult, apply_edge_treatment, li
 from .standards import delivery_profile
 
 ProgressCallback = Callable[[dict], None]
+BOUNDARY_STYLE_CHOICES = ("direct", "gap", "fade", "ring-out", "crossfade")
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,8 @@ class TransitionSpec:
     duration_seconds: float
     style: str
     enabled: bool = True
+    boundary_style: str = "direct"
+    boundary_duration_seconds: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -336,8 +339,10 @@ def render_sequence(
         track = loaded.spec
         source = track.path
         track_arc = arc_plan.tracks[index - 1].to_dict()
-        head_treatment = arc_plan.transitions[index - 2].head_treatment if index > 1 else None
-        tail_treatment = arc_plan.transitions[index - 1].tail_treatment if index <= len(arc_plan.transitions) else None
+        head_transition = transitions[index - 2] if index > 1 and index - 2 < len(transitions) else None
+        tail_transition = transitions[index - 1] if index <= len(transitions) else None
+        head_treatment = arc_plan.transitions[index - 2].head_treatment if head_transition and head_transition.enabled else None
+        tail_treatment = arc_plan.transitions[index - 1].tail_treatment if tail_transition and tail_transition.enabled else None
         track_preset = _track_preset_name(track, options)
         result = master_track(
             loaded.samples,
@@ -386,8 +391,8 @@ def render_sequence(
                 "arc": track_arc,
                 "mastering_moves": track_arc["mastering"],
                 "edge_treatments": {
-                    "head": arc_plan.transitions[index - 2].head_treatment if index > 1 else None,
-                    "tail": arc_plan.transitions[index - 1].tail_treatment if index <= len(arc_plan.transitions) else None,
+                    "head": arc_plan.transitions[index - 2].head_treatment if head_transition and head_transition.enabled else None,
+                    "tail": arc_plan.transitions[index - 1].tail_treatment if tail_transition and tail_transition.enabled else None,
                 },
                 "warnings": track_warnings,
                 "rationale": track_arc["rationale"],
@@ -443,6 +448,20 @@ def render_sequence(
                         "rationale": _actual_transition_rationale(transition_arc, transition),
                     }
                 )
+            elif transition.boundary_style != "direct":
+                sequence.append(
+                    {
+                        "type": "boundary",
+                        "between": [index, index + 1],
+                        "style": transition.boundary_style,
+                        "duration_seconds": transition.boundary_duration_seconds,
+                        "handoff": arc_plan.transitions[index - 1].handoff,
+                        "tail_treatment": None,
+                        "head_treatment": None,
+                        "warnings": [],
+                        "rationale": _boundary_rationale(transition, arc_plan.transitions[index - 1].handoff),
+                    }
+                )
             completed_steps += 1
 
     album_path: Path | None = None
@@ -488,6 +507,9 @@ def render_sequence(
             "bit_depth": options.bit_depth,
             "delivery_profile": profile.key,
             "codec_preview": options.codec_preview,
+            "generated_transitions": any(transition.enabled for transition in transitions),
+            "default_boundary_style": transitions[0].boundary_style if transitions else "direct",
+            "default_boundary_duration": transitions[0].boundary_duration_seconds if transitions else 0.0,
             "target_lufs": options.target_lufs,
             "ceiling_dbfs": options.ceiling_dbfs,
             "interlude_duration": options.interlude_duration,
@@ -533,7 +555,7 @@ def render_sequence(
         "warnings": warnings,
         "album_warnings": album_warnings,
         "sequence": sequence,
-        "decision_log": _decision_log(arc_plan, sequence),
+        "decision_log": _decision_log(arc_plan, sequence, transitions),
     }
     manifest_path = output_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -599,6 +621,8 @@ def create_project(
                 "duration_seconds": options.interlude_duration,
                 "style": options.interlude_style,
                 "enabled": True,
+                "boundary_style": "direct",
+                "boundary_duration_seconds": 0.0,
             }
             for index in range(1, len(tracks))
         ],
@@ -688,11 +712,39 @@ def _build_album_sequence_with_cues(
     cues: list[dict] = []
     cursor = 0
     cue_index = 1
+    pending_head_skip = 0
+    pending_head_fade = 0
 
     for index, (track, audio, result, _) in enumerate(mastered):
         title = track.title or track.path.stem
-        chunks.append(audio)
-        end = cursor + int(audio.shape[0])
+        track_audio = audio.astype(np.float32, copy=True)
+        if pending_head_skip > 0:
+            track_audio = track_audio[min(pending_head_skip, max(track_audio.shape[0] - 1, 0)) :]
+            pending_head_skip = 0
+        if pending_head_fade > 0:
+            track_audio = _fade_head(track_audio, pending_head_fade)
+            pending_head_fade = 0
+
+        transition = transitions[index] if index < len(mastered) - 1 and index < len(transitions) else None
+        boundary_frames = (
+            _boundary_frame_count(transition, options.sample_rate, track_audio, mastered[index + 1][1])
+            if transition and not transition.enabled
+            else 0
+        )
+        crossfade_chunk = None
+        if transition and not transition.enabled and transition.boundary_style == "crossfade" and boundary_frames > 0:
+            current_tail = track_audio[-boundary_frames:]
+            next_head = mastered[index + 1][1][:boundary_frames]
+            crossfade_chunk = _equal_power_crossfade(current_tail, next_head, boundary_frames)
+            track_audio = track_audio[:-boundary_frames]
+            pending_head_skip = boundary_frames
+        elif transition and not transition.enabled and transition.boundary_style in {"fade", "ring-out"} and boundary_frames > 0:
+            track_audio = _fade_tail(track_audio, boundary_frames)
+            if transition.boundary_style == "fade":
+                pending_head_fade = boundary_frames
+
+        chunks.append(track_audio)
+        end = cursor + int(track_audio.shape[0])
         cues.append(
             _cue_point(
                 cue_index,
@@ -714,12 +766,32 @@ def _build_album_sequence_with_cues(
 
         if index >= len(mastered) - 1:
             continue
-        transition = transitions[index] if index < len(transitions) else TransitionSpec(
+        transition = transition or TransitionSpec(
             duration_seconds=options.interlude_duration,
             style=options.interlude_style,
             enabled=True,
         )
         if not transition.enabled:
+            boundary_chunk = crossfade_chunk
+            if transition.boundary_style in {"gap", "ring-out"} and boundary_frames > 0:
+                boundary_chunk = _silence(boundary_frames)
+            if boundary_chunk is not None and boundary_chunk.shape[0] > 0:
+                chunks.append(boundary_chunk)
+                end = cursor + int(boundary_chunk.shape[0])
+                cues.append(
+                    _cue_point(
+                        cue_index,
+                        "boundary",
+                        f"{_boundary_display_name(transition.boundary_style)} {index + 1} to {index + 2}",
+                        cursor,
+                        end,
+                        options.sample_rate,
+                        style=transition.boundary_style,
+                        album_title=album_title,
+                    )
+                )
+                cue_index += 1
+                cursor = end
             continue
         transition_number = index + 1
         interlude = (rendered_interludes or {}).get(transition_number)
@@ -757,6 +829,66 @@ def _build_album_sequence_with_cues(
     if not chunks:
         return np.zeros((0, 2), dtype=np.float32), []
     return np.concatenate(chunks, axis=0).astype(np.float32), cues
+
+
+def _boundary_frame_count(
+    transition: TransitionSpec | None,
+    sample_rate: int,
+    current_audio: np.ndarray,
+    next_audio: np.ndarray | None = None,
+) -> int:
+    if not transition or transition.boundary_style == "direct":
+        return 0
+    requested = int(sample_rate * max(float(transition.boundary_duration_seconds), 0.0))
+    if requested <= 0:
+        return 0
+    if transition.boundary_style == "gap":
+        return requested
+    if transition.boundary_style == "crossfade" and next_audio is not None:
+        return max(0, min(requested, current_audio.shape[0] // 2, next_audio.shape[0] // 2))
+    return max(0, min(requested, current_audio.shape[0] // 2))
+
+
+def _fade_tail(samples: np.ndarray, frames: int) -> np.ndarray:
+    if frames <= 0 or samples.shape[0] == 0:
+        return samples
+    output = samples.astype(np.float32, copy=True)
+    frames = min(frames, output.shape[0])
+    envelope = np.cos(np.linspace(0.0, np.pi / 2.0, frames, dtype=np.float32))
+    output[-frames:] *= envelope[:, np.newaxis]
+    return output
+
+
+def _fade_head(samples: np.ndarray, frames: int) -> np.ndarray:
+    if frames <= 0 or samples.shape[0] == 0:
+        return samples
+    output = samples.astype(np.float32, copy=True)
+    frames = min(frames, output.shape[0])
+    envelope = np.sin(np.linspace(0.0, np.pi / 2.0, frames, dtype=np.float32))
+    output[:frames] *= envelope[:, np.newaxis]
+    return output
+
+
+def _equal_power_crossfade(left: np.ndarray, right: np.ndarray, frames: int) -> np.ndarray:
+    frames = min(frames, left.shape[0], right.shape[0])
+    if frames <= 0:
+        return np.zeros((0, 2), dtype=np.float32)
+    out_env = np.cos(np.linspace(0.0, np.pi / 2.0, frames, dtype=np.float32))[:, np.newaxis]
+    in_env = np.sin(np.linspace(0.0, np.pi / 2.0, frames, dtype=np.float32))[:, np.newaxis]
+    return ((left[-frames:] * out_env) + (right[:frames] * in_env)).astype(np.float32)
+
+
+def _silence(frames: int) -> np.ndarray:
+    return np.zeros((max(int(frames), 0), 2), dtype=np.float32)
+
+
+def _boundary_display_name(style: str) -> str:
+    return {
+        "gap": "Gap",
+        "fade": "Fade",
+        "ring-out": "Ring-out",
+        "crossfade": "Crossfade",
+    }.get(style, "Boundary")
 
 
 def _cue_point(cue_index: int, kind: str, title: str, start: int, end: int, sample_rate: int, **extra) -> dict:
@@ -816,11 +948,17 @@ def _cue_escape(value: str) -> str:
 
 
 def _project_transitions(project: dict, options: RenderOptions, track_count: int) -> list[TransitionSpec]:
+    settings = project.get("settings", {})
+    generated_default = bool(settings.get("generated_transitions", True))
+    boundary_style_default = _normalize_boundary_style(settings.get("default_boundary_style", "direct"))
+    boundary_duration_default = _safe_boundary_duration(settings.get("default_boundary_duration", 0.0))
     transitions = [
         TransitionSpec(
             duration_seconds=options.interlude_duration,
             style=options.interlude_style,
-            enabled=True,
+            enabled=generated_default,
+            boundary_style=boundary_style_default,
+            boundary_duration_seconds=boundary_duration_default,
         )
         for _ in range(max(track_count - 1, 0))
     ]
@@ -839,9 +977,30 @@ def _project_transitions(project: dict, options: RenderOptions, track_count: int
         transitions[after_track - 1] = TransitionSpec(
             duration_seconds=float(raw.get("duration_seconds", options.interlude_duration)),
             style=style,
-            enabled=bool(raw.get("enabled", True)),
+            enabled=bool(raw.get("enabled", generated_default)),
+            boundary_style=_normalize_boundary_style(raw.get("boundary_style", boundary_style_default)),
+            boundary_duration_seconds=_safe_boundary_duration(
+                raw.get("boundary_duration_seconds", boundary_duration_default)
+            ),
         )
     return transitions
+
+
+def _normalize_boundary_style(value: object) -> str:
+    style = str(value or "direct").strip().lower().replace("_", "-")
+    if style in {"none", "off", "preserve"}:
+        style = "direct"
+    if style not in BOUNDARY_STYLE_CHOICES:
+        choices = ", ".join(BOUNDARY_STYLE_CHOICES)
+        raise ValueError(f"Unknown boundary style '{style}'. Choose one of: {choices}")
+    return style
+
+
+def _safe_boundary_duration(value: object) -> float:
+    try:
+        return max(float(value), 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _load_tracks(tracks: list[TrackSpec], sample_rate: int) -> list[LoadedTrack]:
@@ -862,6 +1021,8 @@ def _resolve_transition_plan(transitions: list[TransitionSpec], arc_plan: AlbumA
                 else transition.duration_seconds,
                 style=planned.style if transition.style == "auto" else transition.style,
                 enabled=transition.enabled,
+                boundary_style=transition.boundary_style,
+                boundary_duration_seconds=transition.boundary_duration_seconds,
             )
         )
     return resolved
@@ -928,7 +1089,7 @@ def _album_story(arc_plan: AlbumArcPlan) -> str:
     )
 
 
-def _decision_log(arc_plan: AlbumArcPlan, sequence: list[dict]) -> dict[str, list[str]]:
+def _decision_log(arc_plan: AlbumArcPlan, sequence: list[dict], transitions: list[TransitionSpec]) -> dict[str, list[str]]:
     track_decisions = [
         item["rationale"]
         for item in sequence
@@ -937,10 +1098,12 @@ def _decision_log(arc_plan: AlbumArcPlan, sequence: list[dict]) -> dict[str, lis
     transition_decisions = [
         item["rationale"]
         for item in sequence
-        if item.get("type") == "interlude" and item.get("rationale")
+        if item.get("type") in {"interlude", "boundary"} and item.get("rationale")
     ]
     edge_decisions = []
-    for transition in arc_plan.transitions:
+    for index, transition in enumerate(arc_plan.transitions):
+        if index >= len(transitions) or not transitions[index].enabled:
+            continue
         edge_decisions.append(f"Track {transition.after_track} tail: {transition.tail_treatment['rationale']}")
         edge_decisions.append(f"Track {transition.after_track + 1} head: {transition.head_treatment['rationale']}")
     return {
@@ -957,6 +1120,19 @@ def _actual_transition_rationale(transition_arc: dict, transition: TransitionSpe
         return rationale
     return (
         f"{rationale} Rendered with project override {transition.style} for {transition.duration_seconds:.1f}s."
+    )
+
+
+def _boundary_rationale(transition: TransitionSpec, handoff: str) -> str:
+    names = {
+        "gap": "timed gap",
+        "fade": "fade out/in",
+        "ring-out": "ring-out",
+        "crossfade": "equal-power crossfade",
+    }
+    readable = names.get(transition.boundary_style, transition.boundary_style)
+    return (
+        f"Used a {readable} boundary for {handoff.replace('_', ' ')} so the continuous album WAV changes songs without generating a musical interlude."
     )
 
 
