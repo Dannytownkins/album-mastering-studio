@@ -60,6 +60,7 @@ type PreviewArtifact = {
   revision: number;
   path: string;
   outputDir: string;
+  auditionStartSeconds?: number;
   analysis?: Analysis;
   warnings?: string[];
 };
@@ -505,10 +506,11 @@ function App() {
   const hasCurrentRender = renderRevision !== null && renderRevision === sessionRevision;
   const hasStaleRender = renderRevision !== null && renderRevision !== sessionRevision;
   const transitions = useMemo(() => (hasStaleRender ? [] : manifestTransitions(manifest)), [manifest, hasStaleRender]);
-  const selectedPreviewMaster =
+  const selectedPreviewArtifact =
     selectedTrack && previewArtifact?.trackId === selectedTrack.id && previewArtifact.revision === sessionRevision
-      ? previewArtifact.path
-      : undefined;
+      ? previewArtifact
+      : null;
+  const selectedPreviewMaster = selectedPreviewArtifact?.path;
   const selectedRegionPreview =
     selectedTrack && regionPreviewArtifact?.trackId === selectedTrack.id && regionPreviewArtifact.revision === sessionRevision
       ? regionPreviewArtifact
@@ -559,7 +561,11 @@ function App() {
   const previewParityTitle = regionPreviewPlaying
     ? "Render Region used the same Python export engine on a bounded source window."
     : selectedMaster
-    ? "Live Preview is a Web Audio approximation. Update Preview renders through the export engine."
+    ? liveAuditionActive
+      ? "Live Preview is a Web Audio approximation. Update Preview renders through the export engine."
+      : selectedPreviewArtifact?.auditionStartSeconds != null
+        ? `Rendered preview used the Python export engine and was cued at ${formatTime(selectedPreviewArtifact.auditionStartSeconds)}.`
+        : "Update Preview renders the current settings through the export engine."
     : "Update Preview renders the current settings through the export engine.";
   const playbackVolume = useMemo(
     () => computePlaybackVolume(playItem, selectedTrack, selectedMasterAnalysis, volumeMatch),
@@ -1490,6 +1496,7 @@ function App() {
         revision: revisionAtStart,
         path: masterPath,
         outputDir,
+        auditionStartSeconds,
         analysis: trackItem?.after,
         warnings,
       });
@@ -1505,11 +1512,20 @@ function App() {
       if (options.audition) {
         pendingSeekRef.current = clamp(auditionStartSeconds, 0, Math.max(sourceDuration - 0.1, 0));
         (window as typeof window & {
-          __AMS_EXPORT_ENGINE_AUDITION__?: { engine: string; path: string; revision: number; trackId: string };
+          __AMS_EXPORT_ENGINE_AUDITION__?: {
+            engine: string;
+            path: string;
+            revision: number;
+            sourceDurationSeconds: number;
+            startSeconds: number;
+            trackId: string;
+          };
         }).__AMS_EXPORT_ENGINE_AUDITION__ = {
           engine: "python-render-track-master",
           path: masterPath,
           revision: revisionAtStart,
+          sourceDurationSeconds: sourceDuration,
+          startSeconds: auditionStartSeconds,
           trackId: track.id,
         };
         await setAudio({

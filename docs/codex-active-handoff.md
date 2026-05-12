@@ -17,7 +17,75 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Fast Region Audition-Only Render
+## Latest Codex Pass: Cue-Preserving Exact/Approx Audition Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Updated `Update Preview` to record the source audition cue point in the preview artifact and in `window.__AMS_EXPORT_ENGINE_AUDITION__`.
+- The `Render-faithful preview` status tooltip now discloses that the rendered preview used the Python export engine and was cued at the captured source time.
+- Extended the release-backed Track Preview UI smoke to verify that after `Update Preview` hands the transport to a Python-rendered master, Live Preview is only armed, the cue point is preserved, and the parity badge says `Render-faithful preview`.
+- The smoke then switches back to `Original` and verifies Live Preview becomes active again, the Web Audio snapshot is active, and the parity badge returns to `Approx audition`.
+- The export-vs-live comparison now asserts a material measured difference, so the test no longer accepts merely finite proxy metrics.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+npm run build
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+npm run test:tauri-ui
+cd ..
+```
+
+Verification note:
+
+- `npm run test:tauri-ui` was attempted after the tooltip copy change, but it requires a running Tauri dev WebView on CDP port `9222`; no dev WebView was running, so the harness stopped before reaching the app.
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `previewParityAfterUpdatePreview: Render-faithful preview`
+  - `exportEngineAuditionEngine: python-render-track-master`
+  - `exportEngineAuditionTransportIncludesMastered: true`
+  - `exportAuditionExpectedStartSeconds: 1.664367`
+  - `exportEngineAuditionStartSeconds: 1.664367`
+  - `exportEngineAuditionCurrentTimeSeconds: 1.664367`
+  - `exportEngineAuditionSourceDurationSeconds: 4`
+  - `previewParityTitleAfterUpdatePreview: Rendered preview used the Python export engine and was cued at 00:01.`
+  - `livePreviewStatusAfterUpdatePreview: Live Preview armed ~10 ms`
+  - `approximateLiveSourceReady: true`
+  - `previewParityAfterReturnToLiveSource: Approx audition`
+  - `livePreviewStatusAfterReturnToSource: Live Preview active ~10 ms`
+  - `liveSnapshotAfterReturnToSource.active: true`
+  - `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - `exportVsLiveComparison.export_minus_live_lufs_proxy: 7.20928073777454`
+  - `exportVsLiveComparison.rms_difference_dbfs: -20.8393990077294`
+  - `exportVsLiveComparison.exportLoudnessDeltaVsSource: 7.2706778159778`
+  - `exportVsLiveComparison.liveLoudnessDeltaVsSource: 0.0613970782032673`
+
+Remaining gap:
+
+- This proves the UI cues and labels the rendered-master and live-source playback paths correctly after switching. Web Audio Live Preview is still approximate and not export-engine parity.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
+
+## Previous Codex Pass: Fast Region Audition-Only Render
 
 Date: 2026-05-12
 

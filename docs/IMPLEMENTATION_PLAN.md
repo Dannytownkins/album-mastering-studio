@@ -322,6 +322,10 @@ Current packaged coverage:
 - Full Track Master renders, Album Master renders, and the direct/default region-preview backend command still use the default scored/dashboard path.
 - Evidence values now include real-song UI region `dashboardExists: false` and `dashboardSkippedForAudition: true`, direct backend region-preview `dashboardExists: true`, and Track Preview UI `regionPreviewDashboardExists: false` while `previewDashboardExists: true`.
 - Remaining fast-region caveat: this is a faster render-first audition loop, not true real-time export-engine DSP parity.
+- 2026-05-12 `Update Preview` now records the source audition cue point in the preview artifact and `window.__AMS_EXPORT_ENGINE_AUDITION__`, and the `Render-faithful preview` tooltip discloses the Python export-engine cue time.
+- Packaged Track Preview evidence now verifies the Python-rendered master resumes at the captured cue point (`1.664367s` expected and actual), then switching back to `Original` with Live Preview armed returns to active Web Audio audition and `Approx audition`.
+- The same smoke now asserts the export-vs-live comparison is materially different: `exportDiffersFromLiveMaterially: true`, `export_minus_live_lufs_proxy: 7.20928073777454`, and `rms_difference_dbfs: -20.8393990077294`.
+- Remaining cue-preserving audition caveat: this improves handoff honesty and preserves the audition point, but Web Audio Live Preview is still approximate and not shared export-engine DSP.
 
 No-victory-lap check:
 

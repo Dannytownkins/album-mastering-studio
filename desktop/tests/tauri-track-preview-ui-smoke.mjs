@@ -171,12 +171,30 @@ try {
   assert.equal(evidence.previewParityAfterUpdatePreview, "Render-faithful preview");
   assert.equal(evidence.exportEngineAuditionPath, evidence.parityPreviewMasterPath);
   assert.equal(evidence.exportEngineAuditionEngine, "python-render-track-master");
+  assert.ok(Math.abs(evidence.exportEngineAuditionStartSeconds - evidence.exportAuditionExpectedStartSeconds) <= 0.25);
+  assert.ok(evidence.exportEngineAuditionCurrentTimeSeconds >= Math.max(0, evidence.exportAuditionExpectedStartSeconds - 0.25));
+  assert.ok(evidence.exportEngineAuditionCurrentTimeSeconds <= evidence.exportAuditionExpectedStartSeconds + 3);
+  assert.ok(evidence.exportEngineAuditionSourceDurationSeconds > evidence.exportAuditionExpectedStartSeconds);
+  assert.match(evidence.previewParityTitleAfterUpdatePreview, /Python export engine/);
+  assert.equal(evidence.previewParityTitleAfterUpdatePreview.includes(evidence.exportAuditionExpectedCueText), true);
   assert.equal(evidence.exportEngineAuditionTransportIncludesMastered, true);
+  assert.match(evidence.livePreviewStatusAfterUpdatePreview, /Live Preview armed/);
+  assert.equal(evidence.approximateLiveSourceReady, true);
+  assert.equal(evidence.previewParityAfterReturnToLiveSource, "Approx audition");
+  assert.match(evidence.livePreviewStatusAfterReturnToSource, /Live Preview active/);
+  assert.equal(evidence.liveSnapshotAfterReturnToSource.active, true);
   assert.equal(evidence.exportVsLiveComparison.offline_engine, "python-render-track-master");
   assert.equal(evidence.exportVsLiveComparison.live_preview_engine, "web-audio-low-shelf-model");
   assert.equal(evidence.exportVsLiveComparison.same_engine, false);
   assert.equal(evidence.exportVsLiveComparison.preview_parity, "approximate");
   assert.equal(evidence.exportVsLiveComparison.export_faithful_preview_required, true);
+  assert.equal(evidence.exportVsLiveComparison.exportDiffersFromLiveMaterially, true);
+  assert.ok(Math.abs(evidence.exportVsLiveComparison.export_minus_live_lufs_proxy) >= 1);
+  assert.ok(evidence.exportVsLiveComparison.rms_difference_dbfs > -60);
+  assert.ok(
+    evidence.exportVsLiveComparison.exportLoudnessDeltaVsSource >
+      evidence.exportVsLiveComparison.liveLoudnessDeltaVsSource + 0.5,
+  );
   assert.equal(evidence.exportVsLiveComparison.source_path, fixturePaths[1]);
   assert.equal(evidence.exportVsLiveComparison.export_path, evidence.parityPreviewMasterPath);
   assert.deepEqual(evidence.exportVsLiveComparison.tuning, liveParityTuning);
@@ -304,6 +322,10 @@ function trackPreviewExpression() {
   const invoke = window.__TAURI_INTERNALS__?.invoke;
   if (typeof invoke !== 'function') throw new Error('Tauri invoke is not available in this WebView');
   const text = (element) => (element?.textContent || '').replace(/\\s+/g, ' ').trim();
+  const formatClock = (seconds) => {
+    const total = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+    return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+  };
   const buttons = () => Array.from(document.querySelectorAll('button'));
   const buttonByText = (label) => {
     const button = buttons().find((item) => text(item).includes(label));
@@ -552,6 +574,8 @@ function trackPreviewExpression() {
       log: logText().slice(-1000)
     }));
   }
+  const exportAuditionExpectedStartSeconds = audio()?.currentTime || 0;
+  const exportAuditionExpectedCueText = formatClock(exportAuditionExpectedStartSeconds);
   parityPreviewButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const parityPreviewReadyVisible = await waitFor(() => {
     const matches = Array.from(logText().matchAll(/Preview ready: ([^\\n]+)/g));
@@ -588,7 +612,32 @@ function trackPreviewExpression() {
   const previewParityAfterUpdatePreview = text(document.querySelector('.preview-parity-status'));
   const exportEngineAuditionPath = window.__AMS_EXPORT_ENGINE_AUDITION__?.path || '';
   const exportEngineAuditionEngine = window.__AMS_EXPORT_ENGINE_AUDITION__?.engine || '';
+  const exportEngineAuditionStartSeconds = window.__AMS_EXPORT_ENGINE_AUDITION__?.startSeconds ?? null;
+  const exportEngineAuditionSourceDurationSeconds = window.__AMS_EXPORT_ENGINE_AUDITION__?.sourceDurationSeconds ?? null;
+  const exportEngineAuditionCurrentTimeSeconds = audio()?.currentTime || 0;
+  const previewParityTitleAfterUpdatePreview = document.querySelector('.preview-parity-status')?.getAttribute('title') || '';
   const exportEngineAuditionTransportIncludesMastered = transportLabel().includes('Mastered');
+  const livePreviewStatusAfterUpdatePreview = text(document.querySelector('.live-audition-status'));
+  buttonByText('Original').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const approximateLiveSourceReady = await waitFor(() => {
+    const snapshot = window.__AMS_LIVE_AUDITION__ || {};
+    return Boolean(
+      transportLabel().includes('Original') &&
+      snapshot.active === true &&
+      text(document.querySelector('.preview-parity-status')) === 'Approx audition'
+    );
+  }, 10000);
+  if (!approximateLiveSourceReady) {
+    throw new Error('Original playback did not return to approximate Live Preview after rendered preview handoff: ' + JSON.stringify({
+      liveAudition: window.__AMS_LIVE_AUDITION__ || null,
+      previewParity: text(document.querySelector('.preview-parity-status')),
+      status: text(document.querySelector('.live-audition-status')),
+      transportLabel: transportLabel()
+    }));
+  }
+  const previewParityAfterReturnToLiveSource = text(document.querySelector('.preview-parity-status'));
+  const livePreviewStatusAfterReturnToSource = text(document.querySelector('.live-audition-status'));
+  const liveSnapshotAfterReturnToSource = window.__AMS_LIVE_AUDITION__ || {};
   const trackBatchExportButton = buttonByText('Export Master');
   const trackBatchExportButtonEnabledBefore = !trackBatchExportButton.disabled;
   if (!trackBatchExportButtonEnabledBefore) {
@@ -679,13 +728,24 @@ function trackPreviewExpression() {
     masteredButtonEnabledAfterControlChange,
     previewParityAfterControlChange,
     parityPreviewButtonEnabledBefore,
+    exportAuditionExpectedStartSeconds,
+    exportAuditionExpectedCueText,
     parityPreviewReadyVisible,
     parityPreviewMasterPath,
     parityMasterStatusAfterRender,
     previewParityAfterUpdatePreview,
     exportEngineAuditionPath,
     exportEngineAuditionEngine,
+    exportEngineAuditionStartSeconds,
+    exportEngineAuditionSourceDurationSeconds,
+    exportEngineAuditionCurrentTimeSeconds,
+    previewParityTitleAfterUpdatePreview,
     exportEngineAuditionTransportIncludesMastered,
+    livePreviewStatusAfterUpdatePreview,
+    approximateLiveSourceReady,
+    previewParityAfterReturnToLiveSource,
+    livePreviewStatusAfterReturnToSource,
+    liveSnapshotAfterReturnToSource,
     trackBatchExportButtonEnabledBefore,
     trackBatchReceiptVisible,
     trackBatchReceiptText,
@@ -911,7 +971,18 @@ print(json.dumps({
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  return JSON.parse(result.stdout);
+  const comparison = JSON.parse(result.stdout);
+  const exportLoudnessDeltaVsSource = Math.abs(comparison.export_lufs_proxy - comparison.source_lufs_proxy);
+  const liveLoudnessDeltaVsSource = Math.abs(comparison.live_lufs_proxy - comparison.source_lufs_proxy);
+  return {
+    ...comparison,
+    exportDiffersFromLiveMaterially:
+      Math.abs(comparison.export_minus_live_lufs_proxy) >= 1 &&
+      comparison.rms_difference_dbfs > -60 &&
+      exportLoudnessDeltaVsSource > liveLoudnessDeltaVsSource + 0.5,
+    exportLoudnessDeltaVsSource,
+    liveLoudnessDeltaVsSource,
+  };
 }
 
 function restoreStateFile() {
