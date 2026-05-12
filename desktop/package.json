@@ -27,6 +27,7 @@
     "test:tauri-real-song-region-ui": "node tests/tauri-real-song-region-ui-smoke.mjs",
     "test:tauri-real-song-album-performance": "node tests/tauri-real-song-album-performance-smoke.mjs",
     "test:tauri-project-persistence": "node tests/tauri-project-persistence-smoke.mjs",
+    "test:tauri-release-session-safety": "node tests/tauri-release-session-safety-smoke.mjs",
     "test:tauri-track-preview-ui": "node tests/tauri-track-preview-ui-smoke.mjs"
   },
   "dependencies": {

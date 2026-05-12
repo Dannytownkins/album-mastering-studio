@@ -525,6 +525,14 @@ No-victory-lap check:
   - render warnings: `0`
 - Remaining gap: OS file-picker Open and Save-As dialog flows are not automated.
 
+2026-05-12 packaged session-safety baseline:
+
+- Added `npm run test:tauri-release-session-safety`.
+- The smoke launches the release EXE, restores a two-track Track Master autosave, verifies Undo/Redo through a Universal -> Clarity preset round trip, saves a user preset, persists listening approval, then changes Low to `+0.50 dB` and verifies listening approval is cleared and persisted as not approved.
+- Evidence: `test-output/tauri-release-session-safety-smoke/tauri-release-session-safety-smoke.json`.
+- Evidence values include `afterUndoPreset: "Universal"`, `afterRedoPreset: "Clarity"`, `persistedPresetName: "Session Safety Chain"`, `persistedListeningApprovedAfterChecks: true`, `persistedListeningApprovedAfterDirtyChange: false`, and `persistedBassAfterDirtyChange: 0.5`.
+- Remaining gap: this is release-package state safety evidence, not human listening approval or render-history/library work.
+
 ## Phase 8: Album Master Near-Term Path
 
 Goal: build the user's required album workflow on the Track Master foundation.

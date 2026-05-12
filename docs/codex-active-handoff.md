@@ -17,7 +17,64 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Direct Project Path Persistence
+## Latest Codex Pass: Release Session Safety Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/package.json`
+- `desktop/tests/tauri-release-session-safety-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added `npm run test:tauri-release-session-safety`.
+- The new packaged smoke launches the release EXE, restores a seeded two-track Track Master autosave, verifies Undo/Redo through a Universal -> Clarity preset round trip, saves a user preset, persists listening approval, then changes Low to `+0.50 dB` and verifies listening approval clears and persists as not approved.
+- The smoke backs up and restores the user's local `recent-session.json` and `user-presets.json`.
+- No app code changed in this pass; it adds release-package evidence around existing state-safety behavior.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-release-session-safety-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-session-safety
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`
+- Relevant fields:
+  - `restoredSessionTitle: Release Session Safety`
+  - `trackCountLabel: 2 / 8 tracks`
+  - `afterUndoPreset: Universal`
+  - `afterRedoPreset: Clarity`
+  - `persistedPresetName: Session Safety Chain`
+  - `persistedListeningApprovedAfterChecks: true`
+  - `persistedListeningApprovedAfterDirtyChange: false`
+  - `persistedBassAfterDirtyChange: 0.5`
+  - `lowControlReadoutAfterChange: +0.50 dB`
+
+Remaining gap:
+
+- This is release-package state-safety evidence. Human listening approval, continuous native Live Preview DSP parity, and native OS dialog automation remain open.
+
+Next useful slice:
+
+- If the user is present, run and record a real listening pass.
+- If unattended, choose another narrow packaged smoke only where it covers a real product risk; do not try to close human listening or native OS dialogs by documentation.
+
+## Previous Codex Pass: Direct Project Path Persistence
 
 Date: 2026-05-12
 

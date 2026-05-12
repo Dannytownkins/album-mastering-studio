@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 release session safety: packaged release EXE smoke restores a two-track Track Master autosave, verifies Undo/Redo through Universal -> Clarity, saves a user preset, persists listening approval, then changes Low to `+0.50 dB` and verifies listening approval is cleared and persisted as not approved.
 - 2026-05-12 direct Project path persistence: packaged project persistence smoke saves a `.ams.json` copy through the visible Project path field, mutates the album title, loads the original project path back, verifies the title is restored, then renders and export-checks the loaded project.
 - 2026-05-12 visible track reorder controls: packaged Track Preview smoke clicks Move Up on Track 2, verifies the order changes from `[Preview Fixture 1, Preview Fixture 2]` to `[Preview Fixture 2, Preview Fixture 1]`, verifies the moved track remains selected as `Track 1`, then continues through preview and batch export checks.
 - 2026-05-12 native Live Preview playback handoff: packaged Track Preview smoke clicks visible `Native Play` with source Live Preview active and verifies `Native Live Preview playing`, `Rust model: 1.36 width, 0.40 intensity`, a 192000-frame Rust model output, and clean stop.

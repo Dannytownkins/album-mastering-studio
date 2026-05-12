@@ -2,6 +2,54 @@
 
 ## 2026-05-12
 
+### Release Session Safety Smoke Slice
+
+- Added `npm run test:tauri-release-session-safety`, a packaged release EXE smoke for session recoverability and non-destructive state safety.
+- The smoke seeds a two-track Track Master autosave, launches/restores the release app, verifies Undo/Redo through a Universal -> Clarity preset round trip, saves a user preset, records listening approval, confirms that approval persists to the local autosaved session, then changes the Low control and verifies listening approval is invalidated and persisted as not approved.
+- Backed up/restored the user's `recent-session.json` and `user-presets.json` around the smoke.
+- No app code changes were needed; this pass adds packaged evidence around already-implemented state contracts.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-release-session-safety-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-session-safety
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node session-safety smoke syntax check passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged release session-safety smoke passed against the fresh release EXE.
+- Evidence: `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`.
+- Evidence values:
+  - `restoredSessionTitle: Release Session Safety`
+  - `trackCountLabel: 2 / 8 tracks`
+  - `afterUndoPreset: Universal`
+  - `afterRedoPreset: Clarity`
+  - `persistedPresetName: Session Safety Chain`
+  - `persistedListeningApprovedAfterChecks: true`
+  - `persistedListeningApprovedAfterDirtyChange: false`
+  - `persistedBassAfterDirtyChange: 0.5`
+  - `lowControlReadoutAfterChange: +0.50 dB`
+
+Honest gap:
+
+- This strengthens release-package evidence for session safety. It does not close human listening approval, continuous native Live Preview DSP parity, or native OS dialog automation.
+
+Next unattended slice:
+
+- Keep adding narrow packaged smokes only where they cover real product risk. The remaining major blockers still need either user listening or a larger engine/preview implementation slice.
+
 ### Direct Project Path Persistence Slice
 
 - Added a visible `Project` path field to the session strip with direct `Load` and `Save` controls for editable `.ams.json` files.
