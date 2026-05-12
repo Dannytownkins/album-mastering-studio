@@ -2,6 +2,50 @@
 
 ## 2026-05-12
 
+### Visible Reference Playback Slice
+
+- Added a visible `Reference` audition button to Track Master when a reference track path is selected.
+- Reference playback uses the existing playback-cache path and is labeled as unprocessed comparison audio; it does not change export level or mastering settings.
+- The preview parity pill now shows `Reference playback` while reference audio is active instead of implying a missing/stale master.
+- Extended the packaged Track Preview smoke to seed a reference track, click the visible `Reference` button, and verify the transport and parity copy before continuing through the existing A/B, region, Live Preview, native playback, and batch export checks.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node Track Preview smoke syntax check passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Preview UI smoke passed against the fresh release EXE.
+- Evidence: `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`.
+- Evidence values:
+  - `referenceButtonEnabledAfterPreview: true`
+  - `referencePlaybackReadyVisible: true`
+  - `referenceTransportLabel: 01_track_preview_fixture - Reference`
+  - `referencePreviewParity: Reference playback`
+  - `referencePreviewParityTitle` states the reference is unprocessed comparison audio and does not change export level or mastering settings.
+
+Honest gap:
+
+- This makes reference audition discoverable in the main Track Master comparison row. It is still analysis/playback-only reference support, not automatic reference matching.
+
+Next unattended slice:
+
+- Add the packaged Album Master state undo/redo smoke recommended by the read-only scout: album metadata, boundary style/seconds, generated transitions, track role override, track preset override, and persisted redone state.
+
 ### Release Session Safety Smoke Slice
 
 - Added `npm run test:tauri-release-session-safety`, a packaged release EXE smoke for session recoverability and non-destructive state safety.

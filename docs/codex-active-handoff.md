@@ -17,7 +17,59 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Release Session Safety Smoke
+## Latest Codex Pass: Visible Reference Playback
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added a visible `Reference` audition button to the Track Master audition row when `settings.referenceTrack` is set.
+- Reference playback is prepared through the existing playback-cache path and labeled as unprocessed comparison audio.
+- The preview parity pill now shows `Reference playback` while reference audio is active, instead of warning as if no master exists.
+- Extended the packaged Track Preview smoke to seed a reference track, click the visible `Reference` button, verify transport/parity copy, then continue through the existing A/B, region, Live Preview, native playback, and batch export coverage.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `referenceButtonEnabledAfterPreview: true`
+  - `referencePlaybackReadyVisible: true`
+  - `referenceTransportLabel: 01_track_preview_fixture - Reference`
+  - `referencePreviewParity: Reference playback`
+  - `referencePreviewParityTitle` says reference playback is unprocessed comparison audio and does not change export level or mastering settings.
+
+Remaining gap:
+
+- Reference support is still audition/reporting only. It does not automatically match tonal balance or loudness to the reference track.
+
+Next useful slice:
+
+- Read-only scout recommended a packaged Album Master state undo/redo smoke. That should be next if unattended: album metadata, boundary style/seconds, generated transitions, track role override, track preset override, and persisted redone state.
+
+## Previous Codex Pass: Release Session Safety Smoke
 
 Date: 2026-05-12
 

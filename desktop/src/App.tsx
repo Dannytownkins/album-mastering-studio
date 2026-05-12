@@ -581,6 +581,7 @@ function App() {
   const selectedRegionSeconds =
     region && selectedTimelineDuration > 0 ? Math.max(0, region.end - region.start) * selectedTimelineDuration : 0;
   const liveAuditionActive = liveAudition && playItem?.kind === "source";
+  const referencePlaying = playItem?.kind === "reference";
   const nativePlaybackLabel = nativePlaybackStatus.label ?? "";
   const nativeAbPlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.startsWith("Native A/B");
   const nativeFilePlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.startsWith("Native file:");
@@ -595,11 +596,15 @@ function App() {
     : "Not approved";
   const previewParityLabel = regionPreviewPlaying
     ? "Render-faithful region"
+    : referencePlaying
+    ? "Reference playback"
     : selectedMaster
     ? liveAuditionActive ? "Approx audition" : "Render-faithful preview"
     : "Render required";
   const previewParityTitle = regionPreviewPlaying
     ? "Render Region used the same Python export engine on a bounded source window."
+    : referencePlaying
+    ? "Reference playback is unprocessed comparison audio. It does not change export level or mastering settings."
     : selectedMaster
     ? liveAuditionActive
       ? "Live Preview is a Web Audio approximation. Update Preview renders through the export engine."
@@ -2305,6 +2310,13 @@ function App() {
               <Activity size={16} /> Mastered
             </button>
             <button
+              disabled={!settings.referenceTrack}
+              onClick={() => settings.referenceTrack && setAudio({ label: `${fileStem(settings.referenceTrack)} - Reference`, path: settings.referenceTrack, kind: "reference" })}
+              title="Plays the selected reference track unprocessed for comparison. Export settings are unchanged."
+            >
+              <GitCompare size={16} /> Reference
+            </button>
+            <button
               className={liveAudition ? "active" : ""}
               disabled={!selectedTrack?.analysis}
               onClick={toggleLiveAudition}
@@ -2345,7 +2357,7 @@ function App() {
                 : "Offline preview"}
             </span>
             <span
-              className={`preview-parity-status ${liveAuditionActive || (!selectedMaster && !regionPreviewPlaying) ? "warn" : ""}`}
+              className={`preview-parity-status ${!referencePlaying && (liveAuditionActive || (!selectedMaster && !regionPreviewPlaying)) ? "warn" : ""}`}
               title={previewParityTitle}
             >
               {previewParityLabel}

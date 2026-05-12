@@ -141,6 +141,11 @@ try {
   assert.equal(evidence.previewReadyVisible, true);
   assert.equal(evidence.masterStatusAfterPreview, "Master ready");
   assert.equal(evidence.masteredButtonEnabledAfterPreview, true);
+  assert.equal(evidence.referenceButtonEnabledAfterPreview, true);
+  assert.equal(evidence.referencePlaybackReadyVisible, true);
+  assert.match(evidence.referenceTransportLabel, /Reference/);
+  assert.equal(evidence.referencePreviewParity, "Reference playback");
+  assert.match(evidence.referencePreviewParityTitle, /unprocessed comparison audio/);
   assert.equal(evidence.playbackReadyVisible, true);
   assert.equal(evidence.abSourceReadyVisible, true);
   assert.equal(evidence.abMasterReadyVisible, true);
@@ -389,7 +394,7 @@ function seedTrackPreviewSessionExpression() {
       year: "",
       upc: "",
       outputDir: outputRoot,
-      referenceTrack: "",
+      referenceTrack: fixturePaths[0],
       preset: "streaming",
       arc: "cinematic",
       arcIntensity: 1,
@@ -534,6 +539,16 @@ function trackPreviewExpression() {
   const playbackCachePath = await invoke('prepare_playback_file', { path: previewMasterPath });
   const abButton = (label) => Array.from(document.querySelectorAll('.ab-switch button')).find((item) => text(item) === label);
   const transportLabel = () => text(document.querySelector('.transport-label'));
+  const referenceButton = buttonByText('Reference');
+  const referenceButtonEnabledAfterPreview = !referenceButton.disabled;
+  referenceButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const referencePlaybackReadyVisible = await waitFor(
+    () => logText().includes('Playback ready: 01_track_preview_fixture - Reference') && transportLabel().includes('Reference'),
+    30000,
+  );
+  const referenceTransportLabel = transportLabel();
+  const referencePreviewParity = text(document.querySelector('.preview-parity-status'));
+  const referencePreviewParityTitle = document.querySelector('.preview-parity-status')?.getAttribute('title') || '';
   const transportSeekInput = () => document.querySelector('input[aria-label="Playback position"]');
   const audio = () => document.querySelector('audio');
   const setRangeValue = (input, value) => {
@@ -913,6 +928,11 @@ function trackPreviewExpression() {
     previewMasterPath,
     masterStatusAfterPreview,
     masteredButtonEnabledAfterPreview,
+    referenceButtonEnabledAfterPreview,
+    referencePlaybackReadyVisible,
+    referenceTransportLabel,
+    referencePreviewParity,
+    referencePreviewParityTitle,
     playbackReadyVisible: playbackReadyVisible && Boolean(playbackMatch),
     playbackCachePath,
     abSourceReadyVisible,
