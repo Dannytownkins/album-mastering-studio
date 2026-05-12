@@ -13,6 +13,7 @@ const outputRoot =
   path.join(repoRoot, "test-output", "tauri-project-persistence-smoke");
 const inputsDir = path.join(outputRoot, "inputs");
 const savedProjectPath = path.join(outputRoot, "saved-album.ams.json");
+const directProjectPath = path.join(outputRoot, "direct-path-copy.ams.json");
 const renderOutput = path.join(outputRoot, "rendered-from-saved-project");
 const cdpPort = process.env.TAURI_CDP_PORT || "9347";
 const cdpBase = `http://127.0.0.1:${cdpPort}`;
@@ -70,6 +71,8 @@ try {
     releaseExeExists: existsSync(releaseExe),
     savedProjectPath,
     savedProjectExists: existsSync(savedProjectPath),
+    directProjectPath,
+    directProjectExists: existsSync(directProjectPath),
     savedProject,
     screenshot: screenshotPath,
     screenshotExists: existsSync(screenshotPath),
@@ -89,6 +92,12 @@ try {
   assert.equal(evidence.trackCountLabel, "2 / 8 tracks");
   assert.equal(evidence.saveLogVisible, true);
   assert.equal(evidence.savedProjectExists, true);
+  assert.equal(evidence.directProjectFieldVisible, true);
+  assert.equal(evidence.directProjectSaveLogVisible, true);
+  assert.equal(evidence.directProjectExists, true);
+  assert.equal(evidence.directProjectAlbumTitle, "Persistence Smoke Album");
+  assert.equal(evidence.directProjectLoadRestoredTitle, true);
+  assert.equal(evidence.directProjectPathAfterLoad, savedProjectPath);
   assert.equal(evidence.savedProject.version, 1);
   assert.equal(evidence.savedProject.album_title, "Persistence Smoke Album");
   assert.equal(evidence.savedProject.metadata.artist, "Persistence Artist");
@@ -204,11 +213,38 @@ function projectPersistenceExpression() {
     }
     return false;
   };
+  const setInputValue = (input, value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const labelByText = (label) => Array.from(document.querySelectorAll('label')).find((item) => text(item).startsWith(label));
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
   const trackCountLabel = text(document.querySelector('.library .panel-title span'));
   buttonByText('.top-actions button', 'Save').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const saveLogVisible = await waitFor(() => document.body.innerText.includes('Saved project:'), 10000);
   const loadedProject = await invoke('read_json', { path: ${JSON.stringify(savedProjectPath)} });
+  const projectField = labelByText('Project');
+  const projectInput = projectField?.querySelector('input');
+  const directProjectSaveButton = Array.from(projectField?.querySelectorAll('button') || []).find((item) => text(item) === 'Save');
+  const directProjectLoadButton = Array.from(projectField?.querySelectorAll('button') || []).find((item) => text(item) === 'Load');
+  const directProjectFieldVisible = Boolean(projectInput && directProjectSaveButton && directProjectLoadButton);
+  if (!directProjectFieldVisible) throw new Error('Direct project path field was not visible');
+  setInputValue(projectInput, ${JSON.stringify(directProjectPath)});
+  directProjectSaveButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const directProjectSaveLogVisible = await waitFor(() => document.body.innerText.includes(${JSON.stringify(directProjectPath)}), 10000);
+  const directProject = await invoke('read_json', { path: ${JSON.stringify(directProjectPath)} });
+  const albumInput = labelByText('Album')?.querySelector('input');
+  if (!albumInput) throw new Error('Album title input not found');
+  setInputValue(albumInput, 'Mutation Should Be Replaced');
+  const mutationVisible = await waitFor(() => albumInput.value === 'Mutation Should Be Replaced', 3000);
+  setInputValue(projectInput, ${JSON.stringify(savedProjectPath)});
+  directProjectLoadButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const directProjectLoadRestoredTitle = await waitFor(() => {
+    const input = labelByText('Album')?.querySelector('input');
+    return input?.value === 'Persistence Smoke Album';
+  }, 10000);
+  const directProjectPathAfterLoad = labelByText('Project')?.querySelector('input')?.value || '';
   const render = await invoke('render_album_master', { project: loadedProject, outputDir: ${JSON.stringify(renderOutput)} });
   const exportChecks = await invoke('run_export_checks', { manifest: render.manifest });
   const trackItems = (render.manifest.sequence || []).filter((item) => item.type === 'track');
@@ -217,6 +253,12 @@ function projectPersistenceExpression() {
     activeMode,
     trackCountLabel,
     saveLogVisible,
+    directProjectFieldVisible,
+    directProjectSaveLogVisible,
+    directProjectAlbumTitle: directProject.album_title,
+    directProjectLoadRestoredTitle,
+    directProjectPathAfterLoad,
+    mutationVisible,
     loadedProjectAlbumTitle: loadedProject.album_title,
     renderTrackCount: render.manifest.track_count,
     renderInterludeCount: render.manifest.interlude_count,

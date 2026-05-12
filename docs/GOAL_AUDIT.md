@@ -18,7 +18,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 - Human listening approval has not been recorded.
 - Live Preview remains an explicit Web Audio approximation for continuous control updates; the visible native path now has a rendered Rust-model handoff, but not continuous native DSP.
-- OS file-picker Open and Save-As dialog flows remain unautomated.
+- OS file-picker Open and Save-As dialog flows remain unautomated. Direct path-based project Load/Save is now covered as a deterministic fallback, but it is not native dialog coverage.
 
 ## Coverage Map
 
@@ -29,11 +29,12 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Python engine contract | `album-master preview-contract --json`, `live_preview_contract()`, and unit regression keep `desktop/src/livePreviewConfig.json` aligned with engine-owned control definitions. | Covered |
 | Album Master path | Automated release evidence covers multi-source and full-source Album Master render, transitions, album WAV, dashboard, export checks, and native album playback stability. | Covered with listening caveat |
 | Docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and `docs/ENGINE_DECISION_RECORD.md` record current evidence and known gaps. | Covered |
-| Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, and local render/check/report flow remain the core path. | Covered |
+| Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, local render/check/report flow, and direct `.ams.json` path Load/Save remain the core path. | Covered |
 | Release package | `npm run tauri:build` has rebuilt the sidecar, release EXE, MSI, and NSIS bundles in recent loops. | Covered with rerun-before-release rule |
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 direct Project path persistence: packaged project persistence smoke saves a `.ams.json` copy through the visible Project path field, mutates the album title, loads the original project path back, verifies the title is restored, then renders and export-checks the loaded project.
 - 2026-05-12 visible track reorder controls: packaged Track Preview smoke clicks Move Up on Track 2, verifies the order changes from `[Preview Fixture 1, Preview Fixture 2]` to `[Preview Fixture 2, Preview Fixture 1]`, verifies the moved track remains selected as `Track 1`, then continues through preview and batch export checks.
 - 2026-05-12 native Live Preview playback handoff: packaged Track Preview smoke clicks visible `Native Play` with source Live Preview active and verifies `Native Live Preview playing`, `Rust model: 1.36 width, 0.40 intensity`, a 192000-frame Rust model output, and clean stop.
 - 2026-05-12 native Live Preview model oracle: packaged Track Preview smoke prepares one source through `prepare_playback_file`, renders both the Python sidecar model and Rust native offline model from that source, and compares 192000 frames at 48000 Hz with `rms_difference_dbfs: -101.14268111252326` and `max_abs_difference: 1.5288591384887695e-05`.
@@ -58,8 +59,8 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Best next slices when the user is not actively listening:
 
-1. Automate packaged Open plus explicit Save As coverage if reliable Windows dialog automation is available; keep the blocker documented if native OS dialogs remain too flaky to drive unattended.
-2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented, especially around project Open/Save-As if a reliable OS-dialog strategy is chosen.
+1. Automate packaged Open plus explicit Save As coverage only if a reliable Windows dialog automation route is found; keep the blocker documented while native OS dialogs remain too flaky to drive unattended.
+2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented.
 3. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Python render-faithful preview, or Python render-faithful region.
 
 Best next slice when the user is present:

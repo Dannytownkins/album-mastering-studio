@@ -227,6 +227,14 @@ label {
   gap: 6px;
 }
 
+.inline-field.triple {
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+}
+
+.project-path-field {
+  grid-column: span 2;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 330px minmax(560px, 1fr) 355px;

@@ -2,6 +2,53 @@
 
 ## 2026-05-12
 
+### Direct Project Path Persistence Slice
+
+- Added a visible `Project` path field to the session strip with direct `Load` and `Save` controls for editable `.ams.json` files.
+- Added an explicit `Save As` top action and `Ctrl+Shift+S` shortcut while preserving existing `Open` and `Save` dialog actions.
+- This gives the local workflow a deterministic path-based fallback when native OS file dialogs are not automatable or are unreliable in packaged smoke runs.
+- Extended the packaged project persistence smoke to save through the direct Project path field, deliberately mutate the album title, load the original project path back, and render/export-check the loaded project.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-project-persistence-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-project-persistence
+cd ..
+git diff --check
+```
+
+Results:
+
+- Node project persistence smoke syntax check passed.
+- Python compile passed.
+- Desktop TypeScript/Vite build and CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged project persistence smoke passed against the fresh release EXE.
+- Diff hygiene passed.
+- Evidence values:
+  - `directProjectFieldVisible: true`
+  - `directProjectSaveLogVisible: true`
+  - `directProjectExists: true`
+  - `directProjectAlbumTitle: Persistence Smoke Album`
+  - `directProjectLoadRestoredTitle: true`
+  - `directProjectPathAfterLoad: test-output\tauri-project-persistence-smoke\saved-album.ams.json`
+  - `renderTrackCount: 2`
+  - export checks status: `pass`
+
+Honest gap:
+
+- This strengthens project persistence without relying on OS dialogs. It does not close the native Open/Save-As dialog automation blocker; earlier packaged dialog probes stayed pending and did not surface a discoverable native dialog.
+
+Next unattended slice:
+
+- Keep OS-dialog automation listed as open unless a reliable automation route is found. Prefer another narrow packaged smoke for a non-dialog workflow, or wait for user presence to run the real listening pass.
+
 ### Visible Track Reorder Controls Slice
 
 - Added visible Move Up and Move Down controls to each Track Master library row, alongside the existing remove action.

@@ -17,7 +17,65 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Visible Track Reorder Controls
+## Latest Codex Pass: Direct Project Path Persistence
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/tests/tauri-project-persistence-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added a visible `Project` path field with direct `Load` and `Save` controls for editable `.ams.json` files.
+- Added explicit `Save As` and `Ctrl+Shift+S` while preserving existing dialog-backed `Open` and `Save`.
+- Extended the packaged project persistence smoke to save through the direct Project path field, mutate the album title, load the original project path back, and render/export-check the loaded project.
+- This is a deterministic project-file fallback, not proof that native OS dialogs are automatable.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-project-persistence-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-project-persistence
+cd ..
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-project-persistence-smoke\tauri-project-persistence-smoke.json`
+- Relevant fields:
+  - `directProjectFieldVisible: true`
+  - `directProjectSaveLogVisible: true`
+  - `directProjectExists: true`
+  - `directProjectAlbumTitle: Persistence Smoke Album`
+  - `directProjectLoadRestoredTitle: true`
+  - `directProjectPathAfterLoad: test-output\tauri-project-persistence-smoke\saved-album.ams.json`
+  - `renderTrackCount: 2`
+  - export checks status: `pass`
+
+Remaining gap:
+
+- Direct project path persistence is covered. Native OS file-picker Open/Save-As automation remains open because packaged dialog probes stayed pending and did not surface a discoverable native dialog.
+
+Next useful slice:
+
+- Keep OS-dialog automation listed as open unless a reliable native-dialog route is found.
+- Prefer another narrow packaged smoke for a non-dialog workflow, or wait for user presence to run the real listening pass.
+- If the user is present, run and record a real listening pass.
+
+## Previous Codex Pass: Visible Track Reorder Controls
 
 Date: 2026-05-12
 

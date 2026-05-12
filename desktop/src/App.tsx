@@ -703,7 +703,7 @@ function App() {
         openProject();
       } else if (event.ctrlKey && key === "s") {
         event.preventDefault();
-        saveProject();
+        event.shiftKey ? saveProjectAs() : saveProject();
       } else if (event.ctrlKey && key === "r") {
         event.preventDefault();
         mode === "track" ? exportTrackMasters() : renderAlbum(true);
@@ -1305,8 +1305,7 @@ function App() {
   async function openProject() {
     const selected = await open({ multiple: false, filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }] });
     if (typeof selected !== "string") return;
-    const project = await invoke<any>("read_json", { path: selected });
-    loadProject(project, selected);
+    await openProjectFromPath(selected);
   }
 
   async function saveProject() {
@@ -1323,6 +1322,52 @@ function App() {
     });
     setProjectPath(selected);
     pushLog(`Saved project: ${selected}`);
+  }
+
+  async function saveProjectAs() {
+    const selected = await save({
+      defaultPath: projectPath || `${settings.outputDir || repoRoot}\\album.ams.json`,
+      filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
+    });
+    if (typeof selected !== "string") return;
+    await saveProjectToPath(selected);
+  }
+
+  async function openProjectFromPath(path: string = projectPath) {
+    const trimmed = path.trim();
+    if (!trimmed) {
+      pushLog("Open project skipped: no project path.");
+      setProgressLabel("Enter a project path first.");
+      return;
+    }
+    try {
+      const project = await invoke<any>("read_json", { path: trimmed });
+      loadProject(project, trimmed);
+    } catch (error) {
+      pushLog(`Open project failed: ${String(error)}`);
+      setProgressLabel("Project open failed.");
+    }
+  }
+
+  async function saveProjectToPath(path: string = projectPath) {
+    const trimmed = path.trim();
+    if (!trimmed) {
+      pushLog("Save project skipped: no project path.");
+      setProgressLabel("Enter a project path first.");
+      return;
+    }
+    try {
+      await invoke("write_project", {
+        path: trimmed,
+        project: buildProject(mode === "album", tracks),
+      });
+      setProjectPath(trimmed);
+      pushLog(`Saved project: ${trimmed}`);
+      setProgressLabel("Project saved.");
+    } catch (error) {
+      pushLog(`Save project failed: ${String(error)}`);
+      setProgressLabel("Project save failed.");
+    }
   }
 
   function loadProject(project: any, path: string) {
@@ -2030,6 +2075,7 @@ function App() {
           <button onClick={redoSession} disabled={busy || !redoStack.length} title="Redo"><Redo2 size={16} /></button>
           <button onClick={openProject} title="Open project"><FolderOpen size={16} /> Open</button>
           <button onClick={saveProject} title="Save project"><Save size={16} /> Save</button>
+          <button onClick={saveProjectAs} title="Save project as"><Save size={16} /> Save As</button>
           <button onClick={() => openLocalPath(settings.outputDir, "output folder")} title="Open output folder"><FolderOpen size={16} /> Output</button>
           <button onClick={() => alert("Album Mastering Studio\nLocal Tauri shell with Python engine sidecar.")} title="About"><Info size={16} /></button>
         </div>
@@ -2053,6 +2099,14 @@ function App() {
           <div className="inline-field">
             <input value={settings.referenceTrack} onChange={(event) => updateSettings({ referenceTrack: event.target.value })} />
             <button onClick={chooseReference}>Pick</button>
+          </div>
+        </label>
+        <label className="wide project-path-field">
+          Project
+          <div className="inline-field triple">
+            <input value={projectPath} onChange={(event) => setProjectPath(event.target.value)} />
+            <button onClick={() => openProjectFromPath()}>Load</button>
+            <button onClick={() => saveProjectToPath()}>Save</button>
           </div>
         </label>
       </section>
