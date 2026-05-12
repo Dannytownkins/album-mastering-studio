@@ -17,7 +17,67 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Shared First-Control Live Model Helper
+## Latest Codex Pass: Shared Live Preview Definition
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/livePreviewConfig.json`
+- `desktop/src/App.tsx`
+- `desktop/tests/live-preview-model.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+
+What changed:
+
+- Added `desktop/src/livePreviewConfig.json` as the shared definition point for the current Web Audio first-control audition model.
+- Updated the Tauri frontend to read Live Preview filter frequencies, width mapping, compressor curve, and smoothing from the JSON config.
+- Updated the deterministic smoke-test comparator to read the same config before generating the Python Web Audio-style model.
+- Rebuilt the Tauri release executable and reran the synthetic Track Preview and real-song performance smokes against the rebuilt EXE.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+cd desktop
+npm run build
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- `test-output\tauri-real-song-performance-smoke\tauri-real-song-performance-smoke.json`
+- Relevant fields:
+  - Track Preview `liveControlUnder150ms: true`
+  - Track Preview `liveIntensityUnder500ms: true`
+  - Track Preview `exportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - Track Preview `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Real song `realSongExportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - Real song `realSongExportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Real song `realSongExportVsLiveComparison.exportDominatesLiveLoudnessDelta: false`
+  - Real song `realSongExportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 3.919839091548681`
+  - Real song `realSongExportVsLiveComparison.compared_frames: 8943359`
+
+Remaining gap:
+
+- This reduces drift between the running UI and comparison evidence. It does not make Web Audio Live Preview export-engine faithful or record human listening approval.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike that uses the same intent model as offline export.
+
+## Previous Codex Pass: Shared First-Control Live Model Helper
 
 Date: 2026-05-12
 
@@ -64,11 +124,6 @@ Evidence:
 Remaining gap:
 
 - This keeps the automated evidence paths consistent. It does not make Web Audio Live Preview export-engine faithful or record human listening approval.
-
-Next useful slice:
-
-- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
-- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
 
 ## Previous Codex Pass: Real-Song First-Control Export Vs Live Smoke
 

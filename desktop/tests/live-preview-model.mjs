@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 
-export const firstControlLivePreviewTuning = {
-  bassDb: 0.5,
-  midDb: -0.25,
-  highDb: 0.35,
-  width: 0.2,
-  intensity: 0.4,
-};
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+export const livePreviewConfig = JSON.parse(
+  readFileSync(path.join(repoRoot, "desktop", "src", "livePreviewConfig.json"), "utf8"),
+);
+
+export const firstControlLivePreviewTuning = livePreviewConfig.firstControlTuning;
 
 export function compareExportVsLiveModel({ sourcePath, exportPath, outputPath, tuning = firstControlLivePreviewTuning }) {
   assert.equal(existsSync(sourcePath), true, `Source path missing for parity comparison: ${sourcePath}`);
@@ -26,6 +26,7 @@ from scipy.io import wavfile
 
 source_path, export_path, output_path, tuning_json = sys.argv[1:]
 tuning = json.loads(tuning_json)
+config = ${JSON.stringify(livePreviewConfig)}
 
 def read_wav(path):
     sample_rate, audio = wavfile.read(path)
@@ -84,7 +85,8 @@ def apply_biquad(audio, b, a):
     return np.column_stack([signal.lfilter(b, a, audio[:, channel]) for channel in range(audio.shape[1])]).astype(np.float32)
 
 def apply_width(audio, width_setting):
-    width = max(0.35, min(1.65, 1 + float(width_setting) * 1.8))
+    width_config = config["width"]
+    width = max(float(width_config["min"]), min(float(width_config["max"]), float(width_config["base"]) + float(width_setting) * float(width_config["scale"])))
     mid = (audio[:, 0] + audio[:, 1]) * 0.5
     side = (audio[:, 0] - audio[:, 1]) * 0.5
     return np.column_stack([mid + side * width, mid - side * width]).astype(np.float32), width
@@ -93,9 +95,10 @@ def apply_static_compressor(audio, intensity):
     drive = max(0.0, min(1.0, float(intensity)))
     if drive <= 0:
         return audio.astype(np.float32), 0.0
-    threshold = -18.0 - drive * 16.0
-    ratio = 1.0 + drive * 3.5
-    knee = 10.0
+    compressor = config["compressor"]
+    threshold = float(compressor["thresholdBaseDbfs"]) - drive * float(compressor["thresholdDriveScaleDb"])
+    ratio = float(compressor["ratioBase"]) + drive * float(compressor["ratioDriveScale"])
+    knee = float(compressor["kneeDb"])
     level = np.max(np.abs(audio), axis=1)
     x_db = 20.0 * np.log10(np.maximum(level, 1e-12))
     y_db = np.array(x_db, copy=True)
@@ -121,9 +124,9 @@ if source_rate != export_rate:
 
 live = source.copy()
 for design in [
-    shelf_filter("low", float(tuning.get("bassDb", 0.0)), 160.0, source_rate),
-    peaking_filter(float(tuning.get("midDb", 0.0)), 1400.0, 0.9, source_rate),
-    shelf_filter("high", float(tuning.get("highDb", 0.0)), 5600.0, source_rate),
+    shelf_filter("low", float(tuning.get("bassDb", 0.0)), float(config["filters"]["low"]["frequencyHz"]), source_rate),
+    peaking_filter(float(tuning.get("midDb", 0.0)), float(config["filters"]["mid"]["frequencyHz"]), float(config["filters"]["mid"]["q"]), source_rate),
+    shelf_filter("high", float(tuning.get("highDb", 0.0)), float(config["filters"]["high"]["frequencyHz"]), source_rate),
 ]:
     if design is not None:
         live = apply_biquad(live, design[0], design[1])
@@ -140,7 +143,7 @@ exported = exported[:length]
 difference = exported - live
 print(json.dumps({
     "offline_engine": "python-render-track-master",
-    "live_preview_engine": "web-audio-first-control-model",
+    "live_preview_engine": config["modelId"],
     "same_engine": False,
     "preview_parity": "approximate",
     "export_faithful_preview_required": True,

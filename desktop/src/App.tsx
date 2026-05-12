@@ -31,6 +31,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import livePreviewConfig from "./livePreviewConfig.json";
 import type { Analysis, ProductRenderResult, RenderManifest, Settings, SourceValidation, Track, TransitionArtifact } from "./types";
 
 const MAX_TRACKS = 8;
@@ -764,18 +765,18 @@ function App() {
     const context = new AudioContextCtor() as AudioContext;
     const source = context.createMediaElementSource(audio);
     const low = context.createBiquadFilter();
-    low.type = "lowshelf";
-    low.frequency.value = 160;
+    low.type = livePreviewConfig.filters.low.type as BiquadFilterType;
+    low.frequency.value = livePreviewConfig.filters.low.frequencyHz;
     const mid = context.createBiquadFilter();
-    mid.type = "peaking";
-    mid.frequency.value = 1400;
-    mid.Q.value = 0.9;
+    mid.type = livePreviewConfig.filters.mid.type as BiquadFilterType;
+    mid.frequency.value = livePreviewConfig.filters.mid.frequencyHz;
+    mid.Q.value = livePreviewConfig.filters.mid.q;
     const high = context.createBiquadFilter();
-    high.type = "highshelf";
-    high.frequency.value = 5600;
+    high.type = livePreviewConfig.filters.high.type as BiquadFilterType;
+    high.frequency.value = livePreviewConfig.filters.high.frequencyHz;
     const compressor = context.createDynamicsCompressor();
-    compressor.attack.value = 0.012;
-    compressor.release.value = 0.12;
+    compressor.attack.value = livePreviewConfig.compressor.attackSeconds;
+    compressor.release.value = livePreviewConfig.compressor.releaseSeconds;
     const splitter = context.createChannelSplitter(2);
     const midLeft = context.createGain();
     const midRight = context.createGain();
@@ -2919,12 +2920,18 @@ function applyLiveAuditionChain(
   options: { active: boolean; bass: number; compression: number; high: number; mid: number; outputGain: number; width: number },
 ) {
   const now = chain.context.currentTime;
-  const smoothing = 0.015;
+  const smoothing = livePreviewConfig.smoothingSeconds;
   const active = options.active;
   const bass = active ? clamp(options.bass, -6, 6) : 0;
   const mid = active ? clamp(options.mid, -6, 6) : 0;
   const high = active ? clamp(options.high, -6, 6) : 0;
-  const width = active ? clamp(1 + options.width * 1.8, 0.35, 1.65) : 1;
+  const width = active
+    ? clamp(
+        livePreviewConfig.width.base + options.width * livePreviewConfig.width.scale,
+        livePreviewConfig.width.min,
+        livePreviewConfig.width.max,
+      )
+    : livePreviewConfig.width.base;
   const drive = active ? clamp(Math.max(0, options.compression), 0, 1) : 0;
 
   chain.low.gain.setTargetAtTime(bass, now, smoothing);
@@ -2933,9 +2940,21 @@ function applyLiveAuditionChain(
   chain.sideLeft.gain.setTargetAtTime(width, now, smoothing);
   chain.sideRight.gain.setTargetAtTime(-width, now, smoothing);
   chain.output.gain.setTargetAtTime(1, now, smoothing);
-  chain.compressor.threshold.setTargetAtTime(drive > 0 ? -18 - drive * 16 : 0, now, smoothing);
-  chain.compressor.ratio.setTargetAtTime(drive > 0 ? 1 + drive * 3.5 : 1, now, smoothing);
-  chain.compressor.knee.setTargetAtTime(drive > 0 ? 10 : 0, now, smoothing);
+  chain.compressor.threshold.setTargetAtTime(
+    drive > 0
+      ? livePreviewConfig.compressor.thresholdBaseDbfs - drive * livePreviewConfig.compressor.thresholdDriveScaleDb
+      : 0,
+    now,
+    smoothing,
+  );
+  chain.compressor.ratio.setTargetAtTime(
+    drive > 0
+      ? livePreviewConfig.compressor.ratioBase + drive * livePreviewConfig.compressor.ratioDriveScale
+      : livePreviewConfig.compressor.ratioBase,
+    now,
+    smoothing,
+  );
+  chain.compressor.knee.setTargetAtTime(drive > 0 ? livePreviewConfig.compressor.kneeDb : 0, now, smoothing);
   (window as typeof window & { __AMS_LIVE_AUDITION__?: LiveAuditionSnapshot }).__AMS_LIVE_AUDITION__ = {
     active,
     bass,

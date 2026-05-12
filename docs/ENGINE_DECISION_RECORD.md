@@ -646,6 +646,23 @@ Interpretation:
 - The mismatch direction is source-dependent. On this MP3 the deterministic live model reduces loudness more than the Python-rendered master, so real-song parity checks should assert material mismatch directly instead of assuming the offline render is always louder.
 - This narrows the evidence gap from synthetic-only to one real source file. It still does not replace shared DSP definitions, native live DSP parity, or human listening approval.
 
+## Shared Web Audio Model Definition
+
+Added `desktop/src/livePreviewConfig.json` as the shared definition point for the current Web Audio first-control model. The Tauri frontend now reads the Web Audio filter frequencies, width mapping, compressor curve, and smoothing from that JSON file. The deterministic smoke-test comparator reads the same file before generating the Python model used in export-vs-live evidence.
+
+Verification after the extraction:
+
+- `npm run build`
+- `npm run tauri:build`
+- `npm run test:tauri-track-preview-ui`
+- `npm run test:tauri-real-song-performance` with `Lay the Money on the Desk (1).mp3`
+
+Interpretation:
+
+- This reduces drift between the running UI and the automated comparison model.
+- It is still a shared definition for a temporary Web Audio approximation, not shared DSP with the Python export engine.
+- The next real parity step is to define or generate common intent/DSP parameters that both offline export and the live path consume, or to move the live path toward a native engine that can share those definitions directly.
+
 ## Real-Source Album Playback Stability
 
 The real-source Album Master UI smoke now also probes native playback stability for the rendered continuous album WAV. It still drives the visible Album Master UI path first: derive local clips from the provided MP3, seed Album Master, analyze, export album, load dashboard, select `Album WAV`, and prepare transition playback. After that, it converts `album_sequence.wav` through the playback cache and runs `native_playback_file_probe` on the album cache.

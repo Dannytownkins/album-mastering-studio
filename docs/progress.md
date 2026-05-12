@@ -2,6 +2,50 @@
 
 ## 2026-05-12
 
+### Shared Live Preview Definition Slice
+
+- Added `desktop/src/livePreviewConfig.json` as the single shared definition point for the current Web Audio first-control model.
+- Updated `desktop/src/App.tsx` to read Live Preview filter frequencies, width mapping, compressor curve, and smoothing from that JSON config instead of hardcoded values.
+- Updated `desktop/tests/live-preview-model.mjs` to read the same JSON config before building the deterministic Python comparison model.
+- This reduces drift between the running Tauri UI and the export-vs-live evidence while keeping Live Preview explicitly approximate.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+cd desktop
+npm run build
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Results:
+
+- Node syntax checks passed.
+- Desktop TypeScript/Vite build passed.
+- Windows Tauri release build passed and regenerated the release EXE plus MSI/NSIS bundles.
+- Release-backed Track Preview UI smoke passed against the rebuilt EXE.
+- Release-backed real-song performance smoke passed against the rebuilt EXE.
+- Evidence values:
+  - Track Preview `liveControlUnder150ms: true`
+  - Track Preview `liveIntensityUnder500ms: true`
+  - Track Preview `exportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - Track Preview `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Real song `realSongExportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - Real song `realSongExportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - Real song `realSongExportVsLiveComparison.exportDominatesLiveLoudnessDelta: false`
+  - Real song `realSongExportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 3.919839091548681`
+  - Real song `realSongExportVsLiveComparison.compared_frames: 8943359`
+
+Honest gap:
+
+- This is a shared-definition step for the temporary Web Audio audition model. It still does not implement export-engine faithful live DSP or human listening approval.
+
 ### Shared First-Control Live Model Helper Slice
 
 - Extracted the deterministic first-control live-model comparator into `desktop/tests/live-preview-model.mjs`.
