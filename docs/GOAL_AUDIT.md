@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Listening receipt audition context: packaged Album Master Codec QC smoke verifies `listening-review.json` records the judged audition path, including `Codec preview audition`, `Album AAC 256k`, `transport_kind: codec`, Live Preview contract parity `approximate`, modeled controls including `Low`, and native playback status `ready`.
 - 2026-05-12 Listening receipt artifact: packaged Album Master Codec QC smoke verifies the visible `Save Receipt` action writes `listening-review.json` beside the render with `status: "not-approved"`, codec-preview checklist state, export checks, codec preview entries, render paths, and caveats that automation is not human approval.
 - 2026-05-12 real-song Album Master Codec QC: packaged release EXE smoke verifies `Lay the Money on the Desk (1).mp3` can be split into three album clips, rendered as Album Master with two generated transitions, and checked with album-level AAC/Opus codec previews passing `Codec QC` as `2 codec preview path(s) exist`.
 - 2026-05-12 Album Master Codec Preview audition: packaged release EXE smoke verifies Album Master exposes album-level AAC/Opus codec preview buttons, selects `Album AAC 256k`, starts/stops native playback, persists `listeningChecklist.codecPreviewAudition`, and writes manifest codec previews that exist on disk.
@@ -70,9 +71,10 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Best next slices when the user is not actively listening:
 
-1. Automate packaged Open plus explicit Save As coverage only if a reliable Windows dialog automation route is found; keep the blocker documented while native OS dialogs remain too flaky to drive unattended.
-2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented.
-3. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Python render-faithful preview, or Python render-faithful region.
+1. Promote bounded native Live Preview from proof plumbing into a visible Track Master audition action for the selected region or current playhead window, using the first-control model and native transport while keeping full export parity caveats visible.
+2. Automate packaged Open plus explicit Save As coverage only if a reliable Windows dialog automation route is found; keep the blocker documented while native OS dialogs remain too flaky to drive unattended.
+3. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented.
+4. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Python render-faithful preview, codec preview, or album/transition render output.
 
 Best next slice when the user is present:
 

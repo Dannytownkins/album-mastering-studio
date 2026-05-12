@@ -1039,6 +1039,12 @@ function App() {
 
   async function saveListeningReceipt() {
     if (!manifest || !listeningReceiptTarget || hasStaleRender) return;
+    const receiptAuditionContext = describeReceiptAuditionContext(
+      playItem,
+      previewParityLabel,
+      previewParityTitle,
+      liveAuditionActive,
+    );
     const receipt = {
       version: 1,
       created_at: new Date().toISOString(),
@@ -1071,6 +1077,45 @@ function App() {
         true_peak_shift_db: preview.true_peak_shift_db ?? null,
         warnings: preview.warnings ?? (preview.warning ? [preview.warning] : []),
       })),
+      audition_context: {
+        preview_parity: receiptAuditionContext.parity,
+        preview_note: receiptAuditionContext.note,
+        transport_label: playItem?.label ?? "",
+        transport_kind: playItem?.kind ?? null,
+        transport_path: playItem?.originalPath ?? playItem?.path ?? "",
+        compare_side: comparePair ? compareSide : null,
+        volume_match: volumeMatch,
+        live_preview: {
+          status: liveAudition ? (liveAuditionActive ? "active" : "armed") : "off",
+          contract_model_id: livePreviewContract?.modelId ?? null,
+          contract_preview_parity: livePreviewContract?.previewParity ?? null,
+          modeled_controls: livePreviewContract?.modeledControls ?? [],
+          render_only_stages: livePreviewContract?.unmodeledExportStages ?? [],
+          drift: livePreviewContractDrift,
+        },
+        native_playback: {
+          status: nativePlaybackStatus.active
+            ? `${nativePlaybackKind} ${nativePlaybackStatus.paused ? "paused" : "playing"}`
+            : "ready",
+          active: nativePlaybackStatus.active,
+          paused: nativePlaybackStatus.paused,
+          label: nativePlaybackStatus.label ?? "",
+          output_device: nativePlaybackStatus.output_device ?? null,
+          position_seconds: nativePlaybackStatus.position_seconds,
+          duration_seconds: nativePlaybackStatus.duration_seconds,
+          warnings: nativePlaybackStatus.warnings,
+          stream_errors: nativePlaybackStatus.stream_errors,
+          native_live_preview_model: nativeLivePreviewAudition
+            ? {
+                engine: nativeLivePreviewAudition.native_engine,
+                output: nativeLivePreviewAudition.output,
+                modeled_width: nativeLivePreviewAudition.modeled_width,
+                modeled_drive: nativeLivePreviewAudition.modeled_drive,
+                unmodeled_export_stages: nativeLivePreviewAudition.unmodeled_export_stages,
+              }
+            : null,
+        },
+      },
       caveats: [
         "This receipt records the local listening decision state only.",
         "Automated checks and saved receipts do not replace human sound approval.",
@@ -3207,6 +3252,57 @@ function buildTrackMasterBatchManifest(
 
 function withDashboard(manifest: RenderManifest, dashboardPath?: string | null): RenderManifest {
   return dashboardPath ? { ...manifest, dashboard: dashboardPath } : manifest;
+}
+
+function describeReceiptAuditionContext(
+  playItem: PlayItem | null,
+  fallbackParity: string,
+  fallbackNote: string,
+  liveAuditionActive: boolean,
+) {
+  if (!playItem) return { parity: fallbackParity, note: fallbackNote };
+  if (playItem.kind === "source") {
+    return liveAuditionActive
+      ? {
+          parity: "Approx audition",
+          note: "Source playback was being judged through the Web Audio Live Preview approximation.",
+        }
+      : {
+          parity: "Original source",
+          note: "Original source playback is unprocessed comparison audio.",
+        };
+  }
+  if (playItem.kind === "master") {
+    return {
+      parity: "Render-faithful preview",
+      note: "Master playback was rendered through the Python export engine.",
+    };
+  }
+  if (playItem.kind === "album") {
+    return {
+      parity: "Render-faithful album",
+      note: "Album playback was the rendered continuous album WAV.",
+    };
+  }
+  if (playItem.kind === "transition") {
+    return {
+      parity: "Render-faithful transition",
+      note: "Transition playback was rendered by the Python album engine.",
+    };
+  }
+  if (playItem.kind === "codec") {
+    return {
+      parity: "Codec preview audition",
+      note: "Codec preview playback was generated from the current render for local QC.",
+    };
+  }
+  if (playItem.kind === "reference") {
+    return {
+      parity: "Reference playback",
+      note: "Reference playback is unprocessed comparison audio and does not change export settings.",
+    };
+  }
+  return { parity: fallbackParity, note: fallbackNote };
 }
 
 function listeningReceiptPathForManifest(manifest: RenderManifest | null) {

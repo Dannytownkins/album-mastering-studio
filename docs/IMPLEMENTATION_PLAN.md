@@ -546,8 +546,9 @@ No-victory-lap check:
 
 - Added visible `Save Receipt` in the Listening Pass panel and Tauri command `write_listening_receipt`.
 - The receipt is written as `listening-review.json` beside the current render only when the render is current.
+- Extended the receipt with `audition_context` so a saved listening decision records the exact audition path: preview parity/note, current transport label/kind/path, A/B side, Volume Match, Live Preview contract details, contract drift, native playback state, and native Live Preview model metadata when present.
 - Evidence: `test-output/tauri-release-album-codec-qc-smoke/tauri-release-album-codec-qc-smoke.json`.
-- Evidence values include `listeningReceiptExists: true`, `listeningReceipt.status: "not-approved"`, `listeningReceipt.checklist.codecPreviewAudition: true`, `listeningReceipt.export_checks.status: "pass"`, and two codec-preview entries.
+- Evidence values include `listeningReceiptExists: true`, `listeningReceipt.status: "not-approved"`, `listeningReceipt.checklist.codecPreviewAudition: true`, `listeningReceipt.export_checks.status: "pass"`, two codec-preview entries, `audition_context.preview_parity: "Codec preview audition"`, `audition_context.transport_label: "Album AAC 256k"`, and `audition_context.live_preview.contract_preview_parity: "approximate"`.
 - Remaining gap: this creates a durable artifact for a listening decision; it does not create the human decision itself.
 
 2026-05-12 packaged Album Master state baseline:

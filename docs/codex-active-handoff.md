@@ -5868,16 +5868,24 @@ Result:
 
 Prioritize these before handing back "ready to run":
 
-1. Real-world Tauri run on the user's actual Crooked Hymns tracks: drag, reorder, analyze, render, play album, play transitions, inspect embedded dashboard.
-2. Native Tauri menubar and better About dialog. Header actions and shortcuts exist, but not a real OS menubar yet.
-3. Single-track audition render in Tauri so a selected song can be rendered quickly without waiting for all tracks.
-4. Live arc/transition plan preview after analyze, before render.
-5. Iteration pass diff/A-B in Tauri for `iterate-project` outputs.
-6. Actual reference-track matching, not just reference analysis/reporting.
-7. Minimum-phase EQ/filtering pass to remove remaining `filtfilt`/`sosfiltfilt` mastering/interlude artifacts.
-8. Character classifier cleanup: filename hints should be weak evidence, and `return_acoustic` should be album-role metadata rather than only a hard label.
-9. Split the old `app.py` only if the Tk fallback will keep receiving product work; otherwise keep new UI work in `desktop/`.
-10. Commit/push only after the user asks or after explicit approval.
+1. Promote bounded native Live Preview from proof plumbing into a dedicated Track Master audition action for the selected region or current playhead window. Use the engine-owned first-control model, native transport pause/seek/stop, and honest labels that it is not full export-chain parity.
+2. Real-world Tauri run on the user's actual Crooked Hymns tracks: drag, reorder, analyze, render, play album, play transitions, inspect embedded dashboard.
+3. Native Tauri menubar and better About dialog. Header actions and shortcuts exist, but not a real OS menubar yet.
+4. Single-track audition render in Tauri so a selected song can be rendered quickly without waiting for all tracks.
+5. Live arc/transition plan preview after analyze, before render.
+6. Iteration pass diff/A-B in Tauri for `iterate-project` outputs.
+7. Actual reference-track matching, not just reference analysis/reporting.
+8. Minimum-phase EQ/filtering pass to remove remaining `filtfilt`/`sosfiltfilt` mastering/interlude artifacts.
+9. Character classifier cleanup: filename hints should be weak evidence, and `return_acoustic` should be album-role metadata rather than only a hard label.
+10. Split the old `app.py` only if the Tk fallback will keep receiving product work; otherwise keep new UI work in `desktop/`.
+11. Commit/push each agent loop per current user instruction.
+
+## Latest Loop After Compaction
+
+- Extended the visible Listening Pass receipt so `listening-review.json` now records audition context: preview parity/note, active transport label/kind/path, A/B side, Volume Match, Live Preview contract state, contract drift, native playback status, and native Live Preview model metadata when present.
+- Packaged Album Master Codec QC smoke now asserts the saved receipt records `Codec preview audition`, `Album AAC 256k`, `transport_kind: codec`, Live Preview contract parity `approximate`, modeled controls including `Low`, and native playback `ready`.
+- Verification passed: `npm run build`, `node --check .\desktop\tests\tauri-release-album-codec-qc-smoke.mjs`, `python -m compileall -q src tests`, full VsDevCmd `npm run tauri:build`, `npm run test:tauri-release-album-codec-qc`, and `npm run test:integration`.
+- Scout recommendation for next loop: add a bounded native Track Master preview action for region/playhead-window audition instead of another proof-only smoke.
 
 ## Important Product Judgment
 

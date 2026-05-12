@@ -108,6 +108,12 @@ try {
   assert.equal(evidence.listeningReceipt.render.interlude_count, 0);
   assert.equal(evidence.listeningReceipt.export_checks.status, "pass");
   assert.equal(evidence.listeningReceipt.codec_previews.length, 2);
+  assert.equal(evidence.listeningReceipt.audition_context.preview_parity, "Codec preview audition");
+  assert.equal(evidence.listeningReceipt.audition_context.transport_label, "Album AAC 256k");
+  assert.equal(evidence.listeningReceipt.audition_context.transport_kind, "codec");
+  assert.equal(evidence.listeningReceipt.audition_context.live_preview.contract_preview_parity, "approximate");
+  assert.equal(evidence.listeningReceipt.audition_context.live_preview.modeled_controls.includes("Low"), true);
+  assert.equal(evidence.listeningReceipt.audition_context.native_playback.status, "ready");
   assert.equal(evidence.manifestCodecPreviewFlag, true);
   assert.equal(evidence.codecPreviewCount, 2);
   assert.equal(evidence.codecPreviewOutputsExist, true);

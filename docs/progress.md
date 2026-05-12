@@ -4989,3 +4989,31 @@ Results:
 - Add a richer transport with pause/seek/scrub and a true source/master toggle if the Tk/winsound path remains the app surface.
 - Consider level-matched A/B mode after the current non-level-matched comparison has been tested on real songs.
 - Add actual reference-track matching once the core workflow has been used on real songs.
+
+### Listening Receipt Audition Context
+
+- Extended `listening-review.json` so a saved Listening Pass now records the audition path being judged, not only checklist/export status.
+- Receipt `audition_context` now includes preview parity, explanatory note, current transport label/kind/path, A/B side, Volume Match state, Live Preview contract details, contract drift, native playback state, and native Live Preview model metadata when present.
+- The packaged Album Master Codec QC smoke verifies a codec preview receipt records `preview_parity: "Codec preview audition"`, `transport_label: "Album AAC 256k"`, `transport_kind: "codec"`, Live Preview contract parity `approximate`, modeled controls including `Low`, and native playback status `ready`.
+- The scout agent for this loop recommended the next unattended product slice: promote bounded native Live Preview from proof plumbing into a dedicated user-facing Track Master audition path for the selected region or current playhead window. Keep labels honest: this is still the first-control model, not full export-chain parity.
+
+Verification:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-release-album-codec-qc-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+npm run test:integration
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Album Codec QC release smoke syntax check passed.
+- Python compile passed.
+- Tauri release build passed and rebuilt the sidecar, release EXE, MSI, and NSIS installer.
+- Packaged Album Master Codec QC smoke passed and wrote evidence to `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`.
+- Desktop CLI contract integration test passed.
