@@ -11,9 +11,12 @@ const sourcePaths = readAlbumSourcePaths();
 const sourcePath = sourcePaths[0];
 const distinctSourceCount = new Set(sourcePaths.map((item) => path.resolve(item).toLocaleLowerCase())).size;
 const sourceMode = distinctSourceCount > 1 ? "multi-song" : "single-song-derived-clips";
+const codecQcMode =
+  process.env.AMS_REAL_SONG_ALBUM_CODEC_QC === "1" ||
+  process.env.AMS_REAL_SONG_ALBUM_CODEC_QC === "true";
 const outputRoot =
   process.env.AMS_TAURI_REAL_SONG_ALBUM_PERFORMANCE_OUTPUT ||
-  path.join(repoRoot, "test-output", "tauri-real-song-album-performance-smoke");
+  path.join(repoRoot, "test-output", codecQcMode ? "tauri-real-song-album-codec-qc-smoke" : "tauri-real-song-album-performance-smoke");
 const inputsDir = path.join(outputRoot, "inputs");
 const renderOutput = path.join(outputRoot, "album-master-real-song");
 const cdpPort = process.env.TAURI_CDP_PORT || "9346";
@@ -63,12 +66,14 @@ try {
   const launchToInvokeReadyMs = nowMs() - launchStarted;
 
   const smoke = await evaluateInWebView(cdp, realSongAlbumPerformanceExpression());
+  const codecPreviewOutputs = (smoke.codecPreviews || []).map((preview) => preview.output || "");
   const screenshot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
   const screenshotPath = path.join(outputRoot, "tauri-real-song-album-performance.png");
   writeFileSync(screenshotPath, Buffer.from(screenshot.data, "base64"));
 
   const evidence = {
     ...smoke,
+    codecQcMode,
     launchToTargetMs: roundMs(launchToTargetMs),
     launchToInvokeReadyMs: roundMs(launchToInvokeReadyMs),
     releaseExe,
@@ -93,6 +98,10 @@ try {
     manifestExists: existsSync(smoke.manifestPath),
     trackOutputExists: smoke.trackOutputPaths.map((output) => existsSync(output)),
     interludeOutputExists: smoke.interludeOutputPaths.map((output) => existsSync(output)),
+    codecPreviewCount: (smoke.codecPreviews || []).length,
+    codecPreviewOutputs,
+    codecPreviewOutputsExist: codecPreviewOutputs.every((output) => existsSync(output)),
+    codecPreviewCodecs: (smoke.codecPreviews || []).map((preview) => preview.codec),
   };
 
   assert.equal(evidence.releaseExeExists, true);
@@ -120,6 +129,15 @@ try {
   assert.ok(["pass", "warn"].includes(evidence.exportChecks.status));
   assert.equal(evidence.exportChecks.track_count, clipPaths.length);
   assert.equal(evidence.exportChecks.interlude_count, clipPaths.length - 1);
+  if (codecQcMode) {
+    assert.equal(evidence.codecPreviewRequested, true);
+    assert.equal(evidence.manifestCodecPreviewFlag, true);
+    assert.equal(evidence.codecPreviewCount, 2);
+    assert.equal(evidence.codecPreviewOutputsExist, true);
+    assert.deepEqual(evidence.codecPreviewCodecs, ["AAC 256k", "Opus 192k"]);
+    assert.equal(evidence.codecPreviewCheck?.status, "pass");
+    assert.match(evidence.codecPreviewCheck?.detail || "", /2 codec preview path\(s\) exist/);
+  }
   assert.equal(typeof evidence.albumStory, "string");
   assert.ok(evidence.albumStory.length > 20);
   assert.equal(evidence.screenshotExists, true);
@@ -140,6 +158,7 @@ function realSongAlbumPerformanceExpression() {
   if (typeof invoke !== 'function') throw new Error('Tauri invoke is not available in this WebView');
   const paths = ${JSON.stringify(clipPaths)};
   const renderOutput = ${JSON.stringify(renderOutput)};
+  const codecPreviewRequested = ${JSON.stringify(codecQcMode)};
   const timed = async (label, action) => {
     const started = performance.now();
     const result = await action();
@@ -159,7 +178,7 @@ function realSongAlbumPerformanceExpression() {
       delivery_profile: 'streaming-universal',
       ceiling_dbfs: -1.0,
       album_wav: true,
-      codec_preview: false,
+      codec_preview: codecPreviewRequested,
       generated_transitions: true,
       default_boundary_style: 'direct',
       default_boundary_duration: 2,
@@ -191,6 +210,8 @@ function realSongAlbumPerformanceExpression() {
   const trackItems = sequence.filter((item) => item.type === 'track');
   const interludeItems = sequence.filter((item) => item.type === 'interlude');
   const exportChecks = await timed('run_export_checks_real_song_album', () => invoke('run_export_checks', { manifest }));
+  const codecPreviews = manifest.codec_previews || [];
+  const codecPreviewCheck = (exportChecks.result.checks || []).find((check) => check.label === 'Codec QC') || null;
   return JSON.stringify({
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     sourceValidationDurationMs: sourceValidation.durationMs,
@@ -216,6 +237,10 @@ function realSongAlbumPerformanceExpression() {
     cueSheetPath: manifest.outputs?.cue_sheet || '',
     dashboardPath: render.result.dashboard_path,
     manifestPath: render.result.manifest_path,
+    codecPreviewRequested,
+    manifestCodecPreviewFlag: manifest.settings?.codec_preview,
+    codecPreviews,
+    codecPreviewCheck,
     exportChecksDurationMs: exportChecks.durationMs,
     exportChecks: exportChecks.result
   });

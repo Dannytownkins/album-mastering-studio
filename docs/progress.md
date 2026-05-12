@@ -2,6 +2,52 @@
 
 ## 2026-05-12
 
+### Real-Song Album Master Codec QC Smoke
+
+- Added `npm run test:tauri-real-song-album-codec-qc`, an opt-in wrapper around the existing packaged real-song Album Master performance smoke.
+- The shared real-song Album Master harness now supports `AMS_REAL_SONG_ALBUM_CODEC_QC=1`, uses a separate output root, and asserts manifest settings, album-level codec previews, preview file existence, codec names, and the `Codec QC` export-check receipt.
+- Verified the supplied MP3, `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3`, through the packaged release EXE as three derived album clips with generated transitions and album-level AAC/Opus previews.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-album-performance-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-album-codec-qc-smoke.mjs
+cd desktop
+npm run build
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-album-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Results:
+
+- Node syntax checks passed for the shared real-song Album Master harness and Codec QC wrapper.
+- Desktop TypeScript/Vite build passed.
+- Packaged real-song Album Codec QC smoke passed against the current release EXE.
+- Desktop CLI-contract integration passed.
+- Python compile passed.
+- `git diff --check` passed.
+- Evidence: `test-output\tauri-real-song-album-codec-qc-smoke\tauri-real-song-album-performance-smoke.json`.
+- Evidence values:
+  - `sourceMode: "single-song-derived-clips"`
+  - `sourceValidationStatuses: ["ok", "ok", "ok"]`
+  - `analysisDurationsSeconds: [10, 10, 10]`
+  - `renderTrackCount: 3`
+  - `renderInterludeCount: 2`
+  - `codecPreviewRequested: true`
+  - `manifestCodecPreviewFlag: true`
+  - `codecPreviewCheck.status: "pass"`
+  - `codecPreviewOutputsExist: true`
+  - `codecPreviewCodecs: ["AAC 256k", "Opus 192k"]`
+
+Honest gap:
+
+- This is real-source technical Codec QC evidence using derived clips from one MP3. It is not a true multi-song album and does not replace human listening approval.
+
 ### Album Master Codec Preview Audition Slice
 
 - Added Album Master codec-preview buttons beside the Album WAV artifact so album-level AAC and Opus previews can be selected directly from the render surface.

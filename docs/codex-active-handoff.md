@@ -17,7 +17,65 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Album Master Codec Preview Audition
+## Latest Codex Pass: Real-Song Album Master Codec QC
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/package.json`
+- `desktop/tests/tauri-real-song-album-performance-smoke.mjs`
+- `desktop/tests/tauri-real-song-album-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added `npm run test:tauri-real-song-album-codec-qc`, mirroring the existing Track Master real-song Codec QC wrapper.
+- The shared real-song Album Master performance smoke now supports `AMS_REAL_SONG_ALBUM_CODEC_QC=1` and writes to `test-output\tauri-real-song-album-codec-qc-smoke`.
+- Codec QC mode asserts `manifest.settings.codec_preview`, two album-level codec preview outputs, AAC/Opus codec labels, file existence, and a passing `Codec QC` export check.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-album-performance-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-album-codec-qc-smoke.mjs
+cd desktop
+npm run build
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-album-codec-qc
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-real-song-album-codec-qc-smoke\tauri-real-song-album-performance-smoke.json`
+- Relevant fields:
+  - `sourceMode: "single-song-derived-clips"`
+  - `sourceValidationStatuses: ["ok", "ok", "ok"]`
+  - `analysisDurationsSeconds: [10, 10, 10]`
+  - `renderTrackCount: 3`
+  - `renderInterludeCount: 2`
+  - `codecPreviewRequested: true`
+  - `manifestCodecPreviewFlag: true`
+  - `codecPreviewCheck.status: "pass"`
+  - `codecPreviewOutputsExist: true`
+  - `codecPreviewCodecs: ["AAC 256k", "Opus 192k"]`
+
+Remaining gap:
+
+- This verifies a real lossy source through album-level Codec QC using three derived clips from one MP3. It does not prove a true multi-song album Codec QC pass and does not replace human listening approval.
+
+Next useful slice:
+
+- If unattended, prefer another narrow release evidence gap only if it is real workflow risk. If the user is available, run actual listening against the MP3 outputs and record the result in the Listening Pass panel.
+
+## Previous Codex Pass: Album Master Codec Preview Audition
 
 Date: 2026-05-12
 
