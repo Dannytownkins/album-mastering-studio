@@ -2,6 +2,55 @@
 
 ## 2026-05-12
 
+### Real-Song Analyze-To-Render Region UI Smoke Slice
+
+- Tightened `desktop/tests/tauri-real-song-region-ui-smoke.mjs` so it now starts from an unanalyzed Track Master session.
+- The smoke uses FFprobe only to choose a deterministic 12-second waveform drag target; it no longer precomputes analysis through a direct `analyze_tracks` invoke before seeding the app.
+- The visible UI flow is now: load real-song Track Master session, confirm `Needs analysis`, click `Analyze`, wait for Source LUFS/Peak and waveform readiness, drag a waveform region, click `Render Region`, and verify the Python-engine region handoff.
+- The Analyze wait now fails fast if source validation blocks or Analyze fails, instead of burning the full smoke timeout.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-region-ui-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-ui-smoke'
+$env:AMS_REAL_SONG_REGION_SECONDS='12'
+npm run test:tauri-real-song-region-ui
+cd ..
+```
+
+Results:
+
+- Node syntax check passed for the updated smoke.
+- Release-backed real-song Analyze -> Render Region UI smoke passed.
+- Evidence: `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- Evidence values:
+  - `initialAnalysisStatus: Needs analysis`
+  - `analyzeButtonEnabled: true`
+  - `renderRegionDisabledBeforeAnalyze: true`
+  - `analysisCompletedVisible: true`
+  - `analysisStatusAfterAnalyze: Analyzed`
+  - `sourceLufsText: Source LUFS-12.4 LUFS`
+  - `sourcePeakText: Source Peak-0.4 dBFS`
+  - `waveformEnabledAfterAnalyze: true`
+  - `exportEnabledAfterAnalyze: true`
+  - `renderRegionEnabledAfterAnalyze: true`
+  - `regionReadoutAfterDrag: 01:05 - 01:17 (00:12)`
+  - `regionPreviewParity: Render-faithful region`
+  - `regionEngineAuditionEngine: python-render-track-region-preview`
+  - `regionRenderedDurationSeconds: 12.011`
+  - `manifestExists: true`
+  - `dashboardExists: true`
+  - `regionSourceExists: true`
+  - `regionMasterExists: true`
+  - `screenshotExists: true`
+
+Honest gap:
+
+- This proves the visible release UI can analyze the real MP3 and then render/audition a bounded region. It is still an automated smoke, not human listening approval or true real-time export-engine DSP.
+
 ### Real-Song Render Region UI Smoke Slice
 
 - Added release-backed real-song UI coverage for the visible Track Master `Render Region` path.

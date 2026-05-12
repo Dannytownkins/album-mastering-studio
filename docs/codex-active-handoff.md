@@ -17,7 +17,71 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Real-Song Render Region UI Smoke
+## Latest Codex Pass: Real-Song Analyze-To-Render Region UI Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-real-song-region-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Tightened the release-backed real-song region UI smoke so it starts from an unanalyzed Track Master session.
+- The smoke now uses FFprobe only to choose a deterministic 12-second waveform drag target.
+- The smoke no longer computes analysis through a direct `analyze_tracks` invoke before seeding the app.
+- The visible UI path now confirms `Needs analysis`, clicks `Analyze`, waits for Source LUFS/Peak and waveform readiness, confirms `Render Region` becomes enabled, drags the waveform region, clicks `Render Region`, and verifies the Python-engine region handoff.
+- The Analyze wait fails fast if source validation blocks or Analyze fails, instead of burning the full smoke timeout.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-region-ui-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-region-ui-smoke'
+$env:AMS_REAL_SONG_REGION_SECONDS='12'
+npm run test:tauri-real-song-region-ui
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- Relevant fields:
+  - `initialAnalysisStatus: Needs analysis`
+  - `analyzeButtonEnabled: true`
+  - `renderRegionDisabledBeforeAnalyze: true`
+  - `analysisCompletedVisible: true`
+  - `analysisStatusAfterAnalyze: Analyzed`
+  - `sourceLufsText: Source LUFS-12.4 LUFS`
+  - `sourcePeakText: Source Peak-0.4 dBFS`
+  - `waveformEnabledAfterAnalyze: true`
+  - `exportEnabledAfterAnalyze: true`
+  - `renderRegionEnabledAfterAnalyze: true`
+  - `regionReadoutAfterDrag: 01:05 - 01:17 (00:12)`
+  - `regionPreviewParity: Render-faithful region`
+  - `regionEngineAuditionEngine: python-render-track-region-preview`
+  - `regionRenderedDurationSeconds: 12.011`
+  - `manifestExists: true`
+  - `dashboardExists: true`
+  - `regionSourceExists: true`
+  - `regionMasterExists: true`
+  - `screenshotExists: true`
+
+Remaining gap:
+
+- This is still automated UI evidence against one real MP3. It is not human listening approval or true real-time export-engine DSP.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward reducing region-preview turnaround or deeper export-engine live audition parity.
+
+## Previous Codex Pass: Real-Song Render Region UI Smoke
 
 Date: 2026-05-12
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -100,6 +100,16 @@ try {
   assert.equal(evidence.activeMode, "Track Master");
   assert.equal(evidence.trackVisible, true);
   assert.equal(evidence.trackCountLabel, "1 / 8 tracks");
+  assert.equal(evidence.analyzeButtonEnabled, true);
+  assert.equal(evidence.initialAnalysisStatus, "Needs analysis");
+  assert.equal(evidence.renderRegionDisabledBeforeAnalyze, true);
+  assert.equal(evidence.analysisCompletedVisible, true);
+  assert.equal(evidence.analysisStatusAfterAnalyze, "Analyzed");
+  assert.equal(evidence.sourceLufsVisible, true);
+  assert.equal(evidence.sourcePeakVisible, true);
+  assert.equal(evidence.waveformEnabledAfterAnalyze, true);
+  assert.equal(evidence.exportEnabledAfterAnalyze, true);
+  assert.equal(evidence.renderRegionEnabledAfterAnalyze, true);
   assert.equal(evidence.regionCreated, true);
   assert.notEqual(evidence.regionReadoutAfterDrag, "No region selected");
   assert.notEqual(evidence.regionReadoutAfterDrag, "00:00 - 00:00 (00:00)");
@@ -139,20 +149,7 @@ try {
 
 async function seedRealSongTrackSession(cdp) {
   const title = fileStem(sourcePath);
-  const analysisRows = await evaluateInWebView(
-    cdp,
-    `(async () => {
-      const rows = await window.__TAURI_INTERNALS__.invoke('analyze_tracks', {
-        paths: [${JSON.stringify(sourcePath)}],
-        sampleRate: 48000,
-        waveformBins: 256
-      });
-      return JSON.stringify(rows);
-    })()`,
-  );
-  assert.equal(analysisRows.length, 1);
-  const row = analysisRows[0];
-  const sourceDuration = row.analysis?.duration_seconds || 0;
+  const sourceDuration = probeDurationSeconds(sourcePath);
   assert.ok(sourceDuration > 0, "Real-song UI region smoke could not read source duration.");
   const requestedSeconds = Math.max(0.25, Math.min(requestedRegionSeconds, 60));
   const expectedRegionStartSeconds = Math.min(Math.max(5, sourceDuration * 0.35), Math.max(sourceDuration - 0.5, 0));
@@ -205,8 +202,6 @@ async function seedRealSongTrackSession(cdp) {
         isrc: "",
         character: "auto",
         preset: "auto",
-        analysis: row.analysis,
-        waveform: row.waveform,
       },
     ],
     selectedTrackId: "real-song-region-ui",
@@ -226,16 +221,13 @@ async function seedRealSongTrackSession(cdp) {
     })()`,
   );
   return {
-    analysisDurationSeconds: sourceDuration,
-    analysisIntegratedLufs: row.analysis?.integrated_lufs ?? null,
-    analysisTruePeakDbfs: row.analysis?.true_peak_dbfs ?? null,
     expectedRegionDurationSeconds,
     expectedRegionStartSeconds,
     regionEndFraction,
     regionStartFraction,
     sourcePath,
+    sourceDurationSeconds: sourceDuration,
     title,
-    waveformBins: row.waveform?.length ?? 0,
   };
 }
 
@@ -263,6 +255,47 @@ function realSongRegionUiExpression(seeded) {
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
   const trackCountLabel = text(document.querySelector('.library .panel-title span'));
   const trackVisible = document.body.innerText.includes(${JSON.stringify(seeded.title)});
+  const analyzeButton = buttonByText('Analyze');
+  const analyzeButtonEnabled = !analyzeButton.disabled;
+  const exportButton = buttonByText('Export Master');
+  const renderRegionButtonBeforeAnalyze = buttonByText('Render Region');
+  const renderRegionDisabledBeforeAnalyze = renderRegionButtonBeforeAnalyze.disabled;
+  const initialAnalysisStatus = text(document.querySelector('.status-pills .pill:nth-child(1)'));
+  analyzeButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  const analysisCompletedVisible = await waitFor(() => {
+    const progress = text(document.querySelector('.progress-readout'));
+    if (
+      document.querySelector('.source-repair-panel') ||
+      logText().includes('Analyze blocked:') ||
+      logText().includes('Analyze failed:') ||
+      progress.includes('Fix missing or unreadable source files.') ||
+      progress.includes('Analyze failed.')
+    ) {
+      throw new Error('Visible Analyze failed source validation: ' + JSON.stringify({
+        log: logText().slice(-2000),
+        progress
+      }));
+    }
+    return logText().includes('Analyzed 1 track(s).');
+  }, 180000);
+  if (!analysisCompletedVisible) {
+    throw new Error('Visible Analyze did not complete for the real-song track: ' + JSON.stringify({
+      log: logText().slice(-2000),
+      progress: text(document.querySelector('.progress-readout'))
+    }));
+  }
+  const waveformReady = await waitFor(() => {
+    const canvas = document.querySelector('canvas.wave-large');
+    return Boolean(canvas && !canvas.classList.contains('disabled'));
+  }, 10000);
+  if (!waveformReady) throw new Error('Waveform did not become enabled after visible Analyze');
+  const sourceLufsText = text(Array.from(document.querySelectorAll('.metric')).find((item) => text(item).startsWith('Source LUFS')));
+  const sourcePeakText = text(Array.from(document.querySelectorAll('.metric')).find((item) => text(item).startsWith('Source Peak')));
+  const sourceLufsVisible = Boolean(sourceLufsText && !sourceLufsText.includes('--'));
+  const sourcePeakVisible = Boolean(sourcePeakText && !sourcePeakText.includes('--'));
+  const exportEnabledAfterAnalyze = !exportButton.disabled;
+  const renderRegionEnabledAfterAnalyze = !buttonByText('Render Region').disabled;
+  const analysisStatusAfterAnalyze = text(document.querySelector('.status-pills .pill:nth-child(1)'));
   const waveform = document.querySelector('canvas.wave-large');
   if (!waveform) throw new Error('Waveform canvas not found');
   const waveRect = waveform.getBoundingClientRect();
@@ -331,6 +364,18 @@ function realSongRegionUiExpression(seeded) {
     activeMode,
     trackCountLabel,
     trackVisible,
+    analyzeButtonEnabled,
+    initialAnalysisStatus,
+    renderRegionDisabledBeforeAnalyze,
+    analysisCompletedVisible,
+    analysisStatusAfterAnalyze,
+    sourceLufsText,
+    sourcePeakText,
+    sourceLufsVisible,
+    sourcePeakVisible,
+    waveformEnabledAfterAnalyze: waveformReady,
+    exportEnabledAfterAnalyze,
+    renderRegionEnabledAfterAnalyze,
     regionCreated,
     regionReadoutAfterDrag,
     regionPreviewButtonEnabledBefore,
@@ -452,6 +497,22 @@ function safeRemove(target) {
 function fileSummary(target) {
   const stats = statSync(target);
   return { path: target, size: stats.size, modified: stats.mtime.toISOString() };
+}
+
+function probeDurationSeconds(target) {
+  const result = spawnSync("ffprobe", [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration",
+    "-of",
+    "default=nokey=1:noprint_wrappers=1",
+    target,
+  ], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const duration = Number(result.stdout.trim());
+  assert.ok(Number.isFinite(duration) && duration > 0, `Invalid ffprobe duration for ${target}: ${result.stdout}`);
+  return duration;
 }
 
 function fileStem(target) {

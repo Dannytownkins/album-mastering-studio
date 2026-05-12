@@ -310,6 +310,10 @@ Current packaged coverage:
 - Real-song region UI evidence: `test-output/tauri-real-song-region-ui-smoke/tauri-real-song-region-ui-smoke.json`.
 - Evidence values include `regionReadoutAfterDrag: "01:05 - 01:17 (00:12)"`, `regionPreviewParity: "Render-faithful region"`, `regionEngineAuditionEngine: "python-render-track-region-preview"`, start `65.03621914308174s`, duration `12.011193625524115s`, rendered duration `12.011s`, `manifest.track_count: 1`, `manifest.interlude_count: 0`, clipped source `region-source.wav`, existing manifest/dashboard/source/master artifacts, and a 12.011s transport duration.
 - Remaining real-song UI caveat: this proves the visible release UI can render and audition a bounded region from one real MP3; it is still render-first and not human listening approval.
+- 2026-05-12 tightened the same real-song region UI smoke so it starts from an unanalyzed Track Master session and clicks the visible `Analyze` button before `Render Region`.
+- Evidence values now include `initialAnalysisStatus: "Needs analysis"`, `analysisStatusAfterAnalyze: "Analyzed"`, visible Source LUFS/Peak text, waveform readiness, `Export Master` enabled after analysis, `Render Region` disabled before analysis and enabled after analysis, then the same render-faithful region handoff.
+- The smoke fails fast if source validation blocks or Analyze fails.
+- Remaining Analyze -> Render Region caveat: this is still automated UI evidence against one real MP3, not human listening approval or true real-time export-engine DSP.
 
 No-victory-lap check:
 
