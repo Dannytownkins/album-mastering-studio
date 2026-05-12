@@ -5057,3 +5057,40 @@ Results:
 Remaining caveat:
 
 - Native Preview is still the first-control Live Preview model, not full export-chain parity. `Update Preview`, `Render Region`, and `Export Master` remain the release-faithful Python export-engine paths.
+
+### Recent Renders Rail
+
+- Added a local Recent Renders rail in the lower engine panel.
+- Completed Track Preview, Region Preview, Track Export, Album Export, and Album Masters runs now create render-history entries with label, kind, summary, output folder, dashboard path, manifest path, primary audio path, track count, and transition count.
+- Recent render history is included in the autosaved session snapshot and restored with the rest of the app state.
+- Each history card exposes Play, Dashboard, and Open actions when the corresponding artifact exists.
+- Added Clear to reset the local history list without touching rendered files.
+
+Verification:
+
+```powershell
+npm run build
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+python -m compileall -q src tests
+cd desktop
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+npm run test:integration
+cd ..
+python -m unittest discover -s tests
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Track Preview smoke syntax check passed.
+- Python compile passed.
+- Tauri release build passed and rebuilt the sidecar, release EXE, MSI, and NSIS installer.
+- Packaged Track Preview UI smoke passed and wrote evidence to `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`.
+- Desktop CLI contract integration test passed.
+- Full Python unittest suite passed: 22 tests.
+- Evidence values include `renderHistoryCardCount: 4`, `renderHistoryIncludesTrackPreview: true`, `renderHistoryIncludesRegionPreview: true`, `renderHistoryIncludesTrackExport: true`, `renderHistoryDashboardEnabled: true`, `renderHistoryDashboardLoaded: true`, and `persistedRenderHistoryCount: 3`.
+
+Next candidate from scout:
+
+- Add Album Master Boundary Preview so the user can audition an adjacent-track boundary before full album export. Keep it labeled as a bounded boundary audition, not full-album listening approval.

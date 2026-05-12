@@ -5896,6 +5896,16 @@ Prioritize these before handing back "ready to run":
 - Verification passed: Python compile, focused preview-model tests, `npm run build`, Rust `cargo check`, full VsDevCmd `npm run tauri:build`, `npm run test:tauri-track-preview-ui`, `npm run test:integration`, and full `python -m unittest discover -s tests` with 22 tests.
 - Caveat: this is still first-control model audition. Full export-chain parity remains intentionally assigned to `Update Preview`, `Render Region`, and `Export Master`.
 
+## Latest Recent Renders Loop
+
+- Added a Recent Renders rail in the lower engine panel.
+- Track Preview, Region Preview, Track Export, Album Export, and Album Masters completions now record local history entries with artifact paths and counts.
+- History entries are autosaved with the session, restored on startup, and expose Play, Dashboard, and Open actions when those artifacts exist.
+- Packaged Track Preview UI smoke verifies recent render cards for Track Preview, Region Preview, and Track Export, loads a dashboard from history, and confirms render history persists through `load_recent_session`.
+- Evidence values: `renderHistoryCardCount: 4`, `renderHistoryIncludesTrackPreview: true`, `renderHistoryIncludesRegionPreview: true`, `renderHistoryIncludesTrackExport: true`, `renderHistoryDashboardEnabled: true`, `renderHistoryDashboardLoaded: true`, `persistedRenderHistoryCount: 3`.
+- Verification passed: `npm run build`, smoke syntax check, Python compile, full VsDevCmd `npm run tauri:build`, `npm run test:tauri-track-preview-ui`, `npm run test:integration`, and full `python -m unittest discover -s tests` with 22 tests.
+- Scout recommendation for next loop: Album Master Boundary Preview, a visible bounded adjacent-track boundary audition before full album export.
+
 ## Important Product Judgment
 
 Do not over-focus on making the first local DSP chain academically perfect. But do fix claims that make the tool untrustworthy: limiter behavior, tempo gating, visible metering/analysis, playback loop, project save/load, and warning/report honesty.

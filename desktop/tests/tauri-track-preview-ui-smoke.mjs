@@ -357,6 +357,13 @@ try {
   assert.equal(evidence.trackBatchReceiptTextIncludesSingleTrackSummary, false);
   assert.equal(evidence.trackBatchReceiptTextIncludesTrackOutputs, true);
   assert.equal(evidence.trackBatchReceiptTextIncludesTwoRenderedPaths, true);
+  assert.equal(evidence.renderHistoryCardCount >= 3, true);
+  assert.equal(evidence.renderHistoryIncludesTrackPreview, true);
+  assert.equal(evidence.renderHistoryIncludesRegionPreview, true);
+  assert.equal(evidence.renderHistoryIncludesTrackExport, true);
+  assert.equal(evidence.renderHistoryDashboardEnabled, true);
+  assert.equal(evidence.renderHistoryDashboardLoaded, true);
+  assert.equal(evidence.persistedRenderHistoryCount >= 3, true);
   assert.deepEqual(
     (evidence.previewManifest.sequence || []).filter((item) => item.type === "track").map((item) => item.title),
     ["Preview Fixture 2"],
@@ -974,6 +981,29 @@ function trackPreviewExpression() {
       log: logText().slice(-2000)
     }));
   }
+  await waitFor(() => document.querySelectorAll('.render-history-card').length >= 3, 5000);
+  const renderHistoryCards = Array.from(document.querySelectorAll('.render-history-card'));
+  const renderHistoryText = text(document.querySelector('.render-history'));
+  const renderHistoryIncludesTrackPreview = renderHistoryText.includes('Track Preview');
+  const renderHistoryIncludesRegionPreview = renderHistoryText.includes('Region Preview');
+  const renderHistoryIncludesTrackExport = renderHistoryText.includes('Track Export');
+  const trackExportHistoryCard = renderHistoryCards.find((card) => text(card).includes('Track Export'));
+  const renderHistoryDashboardButton = Array.from(trackExportHistoryCard?.querySelectorAll('button') || [])
+    .find((button) => text(button).includes('Dashboard'));
+  const renderHistoryDashboardEnabled = Boolean(renderHistoryDashboardButton && !renderHistoryDashboardButton.disabled);
+  if (renderHistoryDashboardButton) {
+    renderHistoryDashboardButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  }
+  const renderHistoryDashboardLoaded = await waitFor(
+    () => logText().includes('Loaded dashboard from history:'),
+    5000,
+  );
+  let persistedRenderHistoryCount = 0;
+  await waitFor(async () => {
+    const session = await invoke('load_recent_session');
+    persistedRenderHistoryCount = session?.renderHistory?.length || 0;
+    return persistedRenderHistoryCount >= 3;
+  }, 12000);
   return JSON.stringify({
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     activeMode,
@@ -1115,7 +1145,14 @@ function trackPreviewExpression() {
     trackBatchReceiptTextIncludesBatchSummary,
     trackBatchReceiptTextIncludesSingleTrackSummary,
     trackBatchReceiptTextIncludesTrackOutputs,
-    trackBatchReceiptTextIncludesTwoRenderedPaths
+    trackBatchReceiptTextIncludesTwoRenderedPaths,
+    renderHistoryCardCount: renderHistoryCards.length,
+    renderHistoryIncludesTrackPreview,
+    renderHistoryIncludesRegionPreview,
+    renderHistoryIncludesTrackExport,
+    renderHistoryDashboardEnabled,
+    renderHistoryDashboardLoaded,
+    persistedRenderHistoryCount
   });
 })()
 `;

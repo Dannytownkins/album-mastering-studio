@@ -36,6 +36,7 @@ import type { Analysis, CodecPreview, ProductRenderResult, RenderManifest, Setti
 
 const MAX_TRACKS = 8;
 const MAX_HISTORY = 80;
+const MAX_RENDER_HISTORY = 12;
 
 type StudioMode = "track" | "album";
 type AuditionSide = "source" | "master";
@@ -69,6 +70,22 @@ type PreviewArtifact = {
 type RegionPreviewArtifact = PreviewArtifact & {
   startSeconds: number;
   durationSeconds: number;
+};
+
+type RenderHistoryItem = {
+  id: string;
+  createdAt: string;
+  mode: StudioMode;
+  kind: "track-preview" | "region-preview" | "track-export" | "album-export" | "album-masters";
+  label: string;
+  summary: string;
+  outputRoot: string;
+  dashboardPath?: string;
+  manifestPath?: string;
+  primaryAudioPath?: string;
+  primaryAudioKind?: PlayItem["kind"];
+  trackCount: number;
+  interludeCount: number;
 };
 
 type CliEvent = {
@@ -229,6 +246,7 @@ type SessionSnapshot = {
   loopSelection: boolean;
   listeningChecklist?: ListeningChecklist;
   listeningApproved?: boolean;
+  renderHistory?: RenderHistoryItem[];
 };
 
 type AutosavedSession = SessionSnapshot & {
@@ -527,6 +545,7 @@ function App() {
   const [listeningChecklist, setListeningChecklist] = useState<ListeningChecklist>(emptyListeningChecklist);
   const [listeningApproved, setListeningApproved] = useState(false);
   const [listeningReceiptPath, setListeningReceiptPath] = useState("");
+  const [renderHistory, setRenderHistory] = useState<RenderHistoryItem[]>([]);
   const [userPresets, setUserPresets] = useState<UserPreset[]>([]);
   const [selectedUserPresetId, setSelectedUserPresetId] = useState("");
   const [userPresetName, setUserPresetName] = useState("Custom chain");
@@ -826,7 +845,7 @@ function App() {
       });
     }, 700);
     return () => window.clearTimeout(handle);
-  }, [autosaveReady, mode, tracks, selectedTrackId, settings, projectPath, region, waveformZoom, advancedOpen, volumeMatch, liveAudition, loopSelection, listeningChecklist, listeningApproved]);
+  }, [autosaveReady, mode, tracks, selectedTrackId, settings, projectPath, region, waveformZoom, advancedOpen, volumeMatch, liveAudition, loopSelection, listeningChecklist, listeningApproved, renderHistory]);
 
   function pushLog(message: string) {
     setLogs((current) => [...current.slice(-400), message]);
@@ -927,6 +946,7 @@ function App() {
       loopSelection,
       listeningChecklist,
       listeningApproved,
+      renderHistory,
     };
   }
 
@@ -959,6 +979,7 @@ function App() {
     setLoopSelection(Boolean(snapshot.loopSelection && snapshot.region));
     setListeningChecklist(normalizeListeningChecklist(snapshot.listeningChecklist));
     setListeningApproved(Boolean(snapshot.listeningApproved));
+    setRenderHistory(normalizeRenderHistory(snapshot.renderHistory));
     setManifest(null);
     setExportChecks(null);
     setDashboardPath("");
@@ -1374,6 +1395,19 @@ function App() {
       setManifest(batchManifest);
       await updateExportChecks(batchManifest);
       setDashboardPath(lastDashboard);
+      recordRenderHistory({
+        mode: "track",
+        kind: "track-export",
+        label: `${settings.albumTitle || "Track Master"} Export`,
+        summary: `${tracks.length} independent master${tracks.length === 1 ? "" : "s"}`,
+        outputRoot: exportRoot,
+        dashboardPath: lastDashboard,
+        manifestPath: "",
+        primaryAudioPath: renderedTrackItems[0]?.output ?? "",
+        primaryAudioKind: "master",
+        trackCount: renderedTrackItems.length,
+        interludeCount: 0,
+      });
       pushLog(`Track Master export complete: ${tracks.length} independent master(s). ${exportRoot}`);
       setProgressLabel("Track Master export complete.");
     } catch (error) {
@@ -1410,6 +1444,19 @@ function App() {
       setListeningReceiptPath("");
       pushLog(`Album render complete: ${loaded.track_count} masters, ${loaded.interlude_count} transitions. ${outputDir}`);
       setDashboardPath(result.dashboard_path ?? "");
+      recordRenderHistory({
+        mode: "album",
+        kind: albumWav ? "album-export" : "album-masters",
+        label: `${settings.albumTitle || "Album Master"} ${albumWav ? "Album" : "Masters"}`,
+        summary: `${loaded.track_count} track${loaded.track_count === 1 ? "" : "s"}, ${loaded.interlude_count} transition${loaded.interlude_count === 1 ? "" : "s"}`,
+        outputRoot: outputDir,
+        dashboardPath: result.dashboard_path ?? "",
+        manifestPath: loaded.outputs?.manifest ?? "",
+        primaryAudioPath: loaded.album_sequence ?? manifestTrackItems(loaded)[0]?.output ?? "",
+        primaryAudioKind: loaded.album_sequence ? "album" : "master",
+        trackCount: loaded.track_count ?? tracks.length,
+        interludeCount: loaded.interlude_count ?? 0,
+      });
       setProgress(1);
       setProgressLabel("Album render complete.");
     } catch (error) {
@@ -1775,6 +1822,19 @@ function App() {
       setDashboardPath(result.dashboard_path ?? "");
       setListeningReceiptPath("");
       await updateExportChecks(loaded);
+      recordRenderHistory({
+        mode: "track",
+        kind: "track-preview",
+        label: `${track.title} Preview`,
+        summary: "Python export-engine preview",
+        outputRoot: outputDir,
+        dashboardPath: result.dashboard_path ?? "",
+        manifestPath: loaded.outputs?.manifest ?? "",
+        primaryAudioPath: masterPath,
+        primaryAudioKind: "master",
+        trackCount: loaded.track_count ?? 1,
+        interludeCount: loaded.interlude_count ?? 0,
+      });
       if (options.audition) {
         pendingSeekRef.current = clamp(auditionStartSeconds, 0, Math.max(sourceDuration - 0.1, 0));
         (window as typeof window & {
@@ -1881,6 +1941,19 @@ function App() {
       });
       setProgress(1);
       setProgressLabel("Region preview ready.");
+      recordRenderHistory({
+        mode: "track",
+        kind: "region-preview",
+        label: `${track.title} Region`,
+        summary: `${formatTime(windowToRender.startSeconds)} for ${formatTime(windowToRender.durationSeconds)}`,
+        outputRoot: outputDir,
+        dashboardPath: result.dashboard_path ?? "",
+        manifestPath: loaded.outputs?.manifest ?? "",
+        primaryAudioPath: masterPath,
+        primaryAudioKind: "master",
+        trackCount: loaded.track_count ?? 1,
+        interludeCount: loaded.interlude_count ?? 0,
+      });
       pushLog(`Region engine preview ready: ${masterPath}`);
       return masterPath;
     } catch (error) {
@@ -2247,6 +2320,38 @@ function App() {
     } catch (error) {
       pushLog(`Open ${label} failed: ${String(error)}`);
     }
+  }
+
+  function recordRenderHistory(item: Omit<RenderHistoryItem, "id" | "createdAt">) {
+    const createdAt = new Date().toISOString();
+    const id = `${createdAt}-${item.kind}-${slug(item.label)}`;
+    setRenderHistory((current) => {
+      const next = [
+        { ...item, id, createdAt },
+        ...current.filter((candidate) => candidate.outputRoot !== item.outputRoot || candidate.kind !== item.kind),
+      ];
+      return next.slice(0, MAX_RENDER_HISTORY);
+    });
+  }
+
+  function clearRenderHistory() {
+    setRenderHistory([]);
+    pushLog("Recent renders cleared.");
+  }
+
+  function playRenderHistoryItem(item: RenderHistoryItem) {
+    if (!item.primaryAudioPath) return;
+    setAudio({
+      label: item.label,
+      path: item.primaryAudioPath,
+      kind: item.primaryAudioKind ?? "master",
+    });
+  }
+
+  function showRenderHistoryDashboard(item: RenderHistoryItem) {
+    if (!item.dashboardPath) return;
+    setDashboardPath(item.dashboardPath);
+    pushLog(`Loaded dashboard from history: ${item.dashboardPath}`);
   }
 
   function selectPreset(tile: PresetTile) {
@@ -2846,6 +2951,13 @@ function App() {
               ))}
             </div>
           )}
+          <RenderHistoryPanel
+            items={renderHistory}
+            onClear={clearRenderHistory}
+            onOpen={(item) => item.outputRoot && openLocalPath(item.outputRoot, "render output")}
+            onPlay={playRenderHistoryItem}
+            onShowDashboard={showRenderHistoryDashboard}
+          />
         </div>
 
         <div className="dashboard-pane">
@@ -2980,6 +3092,50 @@ function ChecklistToggle({ label, checked, onChange }: { label: string; checked:
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
+  );
+}
+
+function RenderHistoryPanel({
+  items,
+  onClear,
+  onOpen,
+  onPlay,
+  onShowDashboard,
+}: {
+  items: RenderHistoryItem[];
+  onClear: () => void;
+  onOpen: (item: RenderHistoryItem) => void;
+  onPlay: (item: RenderHistoryItem) => void;
+  onShowDashboard: (item: RenderHistoryItem) => void;
+}) {
+  return (
+    <div className="render-history" aria-label="Recent Renders">
+      <div className="panel-title compact">
+        <span>Recent Renders</span>
+        <small>{items.length}</small>
+        <button disabled={!items.length} onClick={onClear}>Clear</button>
+      </div>
+      {items.length ? (
+        <div className="render-history-list">
+          {items.map((item) => (
+            <div className="render-history-card" key={item.id}>
+              <div className="render-history-copy">
+                <strong>{item.label}</strong>
+                <span>{renderHistoryKindLabel(item.kind)} | {item.summary}</span>
+                <small>{shortDateTime(item.createdAt)} | {item.trackCount} track{item.trackCount === 1 ? "" : "s"} / {item.interludeCount} transition{item.interludeCount === 1 ? "" : "s"}</small>
+              </div>
+              <div className="render-history-actions">
+                <button disabled={!item.primaryAudioPath} onClick={() => onPlay(item)}><Play size={14} /> Play</button>
+                <button disabled={!item.dashboardPath} onClick={() => onShowDashboard(item)}><FileDown size={14} /> Dashboard</button>
+                <button disabled={!item.outputRoot} onClick={() => onOpen(item)}><FolderOpen size={14} /> Open</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty mini">No recent renders.</div>
+      )}
+    </div>
   );
 }
 
@@ -3420,6 +3576,54 @@ function manifestTransitions(manifest: RenderManifest | null): TransitionArtifac
   return ((manifest?.sequence ?? []).filter((item) => item.type === "interlude") as unknown as TransitionArtifact[]) ?? [];
 }
 
+function normalizeRenderHistory(value?: RenderHistoryItem[] | null): RenderHistoryItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item.id === "string" && typeof item.label === "string")
+    .map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt || new Date().toISOString(),
+      mode: (item.mode === "album" ? "album" : "track") as StudioMode,
+      kind: normalizeRenderHistoryKind(item.kind),
+      label: item.label,
+      summary: item.summary || "",
+      outputRoot: item.outputRoot || "",
+      dashboardPath: item.dashboardPath || "",
+      manifestPath: item.manifestPath || "",
+      primaryAudioPath: item.primaryAudioPath || "",
+      primaryAudioKind: item.primaryAudioKind || "master",
+      trackCount: Number(item.trackCount) || 0,
+      interludeCount: Number(item.interludeCount) || 0,
+    }))
+    .slice(0, MAX_RENDER_HISTORY);
+}
+
+function normalizeRenderHistoryKind(value: RenderHistoryItem["kind"]): RenderHistoryItem["kind"] {
+  if (["track-preview", "region-preview", "track-export", "album-export", "album-masters"].includes(value)) {
+    return value;
+  }
+  return "track-export";
+}
+
+function renderHistoryKindLabel(kind: RenderHistoryItem["kind"]) {
+  if (kind === "track-preview") return "Track Preview";
+  if (kind === "region-preview") return "Region Preview";
+  if (kind === "track-export") return "Track Export";
+  if (kind === "album-export") return "Album Export";
+  return "Album Masters";
+}
+
+function shortDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown time";
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function snapshotTrack(track: Track): Track {
   return {
     id: track.id || crypto.randomUUID(),
@@ -3482,6 +3686,7 @@ function serializeSnapshot(snapshot: SessionSnapshot) {
     loopSelection: snapshot.loopSelection,
     listeningChecklist: normalizeListeningChecklist(snapshot.listeningChecklist),
     listeningApproved: Boolean(snapshot.listeningApproved),
+    renderHistory: normalizeRenderHistory(snapshot.renderHistory),
   });
 }
 

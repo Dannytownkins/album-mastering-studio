@@ -367,6 +367,10 @@ Current packaged coverage:
 - Evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
 - Evidence values include `boundedNativePreviewButtonEnabledBefore: true`, `boundedNativePreviewStarted: true`, `boundedNativePreviewStopped: true`, `native_engine: "rust-native-live-preview-model"`, `source_start_seconds: 1`, `duration_seconds: 1.195`, `frame_count: 57360`, and `Native Live Preview playing`.
 - Remaining native-preview caveat: this is bounded first-control model audition, not continuous native DSP or full export-chain parity. `Update Preview`, `Render Region`, and `Export Master` remain the release-faithful Python paths.
+- 2026-05-12 added a Recent Renders rail. Completed Track Preview, Region Preview, Track Export, Album Export, and Album Masters runs record local artifact entries with Play, Dashboard, and Open actions, and the list persists in autosave.
+- Evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
+- Evidence values include `renderHistoryCardCount: 4`, `renderHistoryIncludesTrackPreview: true`, `renderHistoryIncludesRegionPreview: true`, `renderHistoryIncludesTrackExport: true`, `renderHistoryDashboardLoaded: true`, and `persistedRenderHistoryCount: 3`.
+- Remaining render-history caveat: this is a lightweight recent-artifact rail, not a searchable project library or permanent catalog.
 
 No-victory-lap check:
 

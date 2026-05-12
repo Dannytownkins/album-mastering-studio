@@ -1071,6 +1071,59 @@ label {
   color: var(--gold);
 }
 
+.render-history {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+}
+
+.render-history-list {
+  display: grid;
+  gap: 7px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.render-history-card {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line-soft);
+  background: #171a17;
+  padding: 8px;
+}
+
+.render-history-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.render-history-copy strong {
+  color: var(--text);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.render-history-copy span,
+.render-history-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.render-history-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.render-history-actions button {
+  justify-content: center;
+  min-width: 0;
+  padding-inline: 6px;
+}
+
 .dashboard-pane {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -1162,6 +1215,11 @@ label {
   place-items: center;
   border: 1px dashed var(--line);
   color: var(--muted);
+}
+
+.empty.mini {
+  min-height: 52px;
+  font-size: 12px;
 }
 
 .log {
