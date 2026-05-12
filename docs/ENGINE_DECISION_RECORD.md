@@ -611,6 +611,41 @@ Interpretation:
 - The measured delta still supports the same decision: Web Audio Live Preview is approximate scaffolding, not shared/export-engine DSP.
 - The next parity step is not more labeling; it is either calibrated shared DSP definitions or a native live path that uses the same intent model as offline export.
 
+## Real-Song First-Control Export Vs Live Comparison
+
+The release-backed real-song performance smoke now runs the first-control comparison against the user-provided MP3 instead of only synthetic fixtures. It uses the real playback-cache WAV as the deterministic live-model source and a second Python Track Master render with the same first-control tuning as the export reference.
+
+Evidence from `npm run test:tauri-real-song-performance` with `Lay the Money on the Desk (1).mp3`:
+
+```json
+{
+  "analysisDurationSeconds": 186.31997916666663,
+  "firstControlRenderDurationMs": 27192.7,
+  "live_preview_engine": "web-audio-first-control-model",
+  "modeled_controls": ["Low", "Mid", "High", "Width", "Intensity"],
+  "tuning": {
+    "bassDb": 0.5,
+    "midDb": -0.25,
+    "highDb": 0.35,
+    "width": 0.2,
+    "intensity": 0.4
+  },
+  "exportDiffersFromLiveMaterially": true,
+  "export_minus_live_lufs_proxy": 3.919839091548681,
+  "rms_difference_dbfs": -25.193622894439955,
+  "exportLoudnessDeltaVsSource": 3.546476951229728,
+  "liveLoudnessDeltaVsSource": 7.466316042778409,
+  "exportAndLiveLoudnessDeltaDifference": 3.919839091548681,
+  "compared_frames": 8943359
+}
+```
+
+Interpretation:
+
+- Real user audio confirms the same architectural risk: the current Web Audio first-control model and Python export do not produce the same result.
+- The mismatch direction is source-dependent. On this MP3 the deterministic live model reduces loudness more than the Python-rendered master, so real-song parity checks should assert material mismatch directly instead of assuming the offline render is always louder.
+- This narrows the evidence gap from synthetic-only to one real source file. It still does not replace shared DSP definitions, native live DSP parity, or human listening approval.
+
 ## Real-Source Album Playback Stability
 
 The real-source Album Master UI smoke now also probes native playback stability for the rendered continuous album WAV. It still drives the visible Album Master UI path first: derive local clips from the provided MP3, seed Album Master, analyze, export album, load dashboard, select `Album WAV`, and prepare transition playback. After that, it converts `album_sequence.wav` through the playback cache and runs `native_playback_file_probe` on the album cache.
@@ -732,6 +767,6 @@ Remaining required evidence:
 - Real audio listening pass.
 - Longer playback stability pass across more real songs and complete album-length runs.
 - CPU/memory sampling during live control changes and full-session use.
-- Deeper export-vs-live comparison on real user audio and across preset/advanced live-control settings.
+- Deeper export-vs-live comparison across preset/advanced live-control settings and additional real songs.
 - Native transport beyond bounded A/B audition: direct full-file pause/seek exists; visible real-song Album WAV smoke, streaming/cancel behavior, and complete-session stability still remain.
 - True multi-song source pass when more than one real song is available.

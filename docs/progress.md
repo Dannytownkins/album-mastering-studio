@@ -2,6 +2,47 @@
 
 ## 2026-05-12
 
+### Real-Song First-Control Export Vs Live Smoke Slice
+
+- Extended `desktop/tests/tauri-real-song-performance-smoke.mjs` so the release-backed real-song performance smoke now records first-control export-vs-live evidence against the user-provided MP3.
+- The smoke still validates, analyzes, playback-caches, renders, checks, screenshots, and records the baseline Track Master output.
+- It now also renders a second real-song Track Master pass with the first-control tuning set and compares that Python-rendered output against a deterministic `web-audio-first-control-model` generated from the real playback-cache WAV.
+- The real-song threshold checks material mismatch directly. On this track the live model changes loudness more than the Python master, so the harness does not assume the export is always louder than the live model.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+cd desktop
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Results:
+
+- Node syntax check passed.
+- Release-backed real-song performance smoke passed.
+- Evidence: `test-output\tauri-real-song-performance-smoke\tauri-real-song-performance-smoke.json`
+- Evidence values:
+  - `analysisDurationSeconds: 186.31997916666663`
+  - `firstControlRenderDurationMs: 27192.7`
+  - `realSongExportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - `realSongExportVsLiveComparison.modeled_controls: [Low, Mid, High, Width, Intensity]`
+  - `realSongExportVsLiveComparison.tuning: { bassDb: 0.5, midDb: -0.25, highDb: 0.35, width: 0.2, intensity: 0.4 }`
+  - `realSongExportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - `realSongExportVsLiveComparison.export_minus_live_lufs_proxy: 3.919839091548681`
+  - `realSongExportVsLiveComparison.rms_difference_dbfs: -25.193622894439955`
+  - `realSongExportVsLiveComparison.exportLoudnessDeltaVsSource: 3.546476951229728`
+  - `realSongExportVsLiveComparison.liveLoudnessDeltaVsSource: 7.466316042778409`
+  - `realSongExportVsLiveComparison.exportAndLiveLoudnessDeltaDifference: 3.919839091548681`
+  - `realSongExportVsLiveComparison.compared_frames: 8943359`
+  - `realSongExportVsLiveComparison.live_model_path: test-output\tauri-real-song-performance-smoke\real-song-live-preview-first-control-model.wav`
+
+Honest gap:
+
+- This adds real-user-audio evidence that the current Web Audio first-control model and Python export are materially different. It still does not implement shared/export-engine DSP parity or replace human listening approval.
+
 ### First-Control Export Vs Live Model Smoke Slice
 
 - Extended the packaged Track Preview smoke's export-vs-live comparison so it no longer compares a multi-control Live Preview run against a Low-only model.
