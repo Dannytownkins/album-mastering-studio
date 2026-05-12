@@ -332,6 +332,62 @@ fn live_preview_contract(
 }
 
 #[tauri::command]
+fn render_live_preview_model(
+    app: AppHandle,
+    state: State<'_, ProcessState>,
+    source_path: String,
+    output_path: String,
+    sample_rate: u32,
+    tuning: Value,
+) -> Result<Value, String> {
+    let source = PathBuf::from(&source_path);
+    if !source.exists() {
+        return Err(format!(
+            "Live Preview model source does not exist: {}",
+            source.display()
+        ));
+    }
+    let output = PathBuf::from(&output_path);
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Could not create Live Preview model folder {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    let tuning_json = serde_json::to_string(&tuning)
+        .map_err(|error| format!("Could not serialize Live Preview model tuning: {error}"))?;
+    let result = run_engine_command(
+        &app,
+        state.inner(),
+        vec![
+            "preview-model".to_string(),
+            source_path,
+            "--output".to_string(),
+            output_path.clone(),
+            "--sample-rate".to_string(),
+            sample_rate.to_string(),
+            "--tuning-json".to_string(),
+            tuning_json,
+        ],
+        None,
+    )?;
+    let mut summary: Value = serde_json::from_str(&result.stdout)
+        .map_err(|error| format!("Could not parse live preview model JSON: {error}"))?;
+    if !output.exists() {
+        return Err(format!(
+            "Live Preview model output was not created: {}",
+            output.display()
+        ));
+    }
+    if let Value::Object(map) = &mut summary {
+        map.insert("output_exists".to_string(), json!(true));
+    }
+    Ok(summary)
+}
+
+#[tauri::command]
 fn render_track_master(
     app: AppHandle,
     state: State<'_, ProcessState>,
@@ -2999,6 +3055,7 @@ pub fn run() {
             write_project,
             analyze_tracks,
             live_preview_contract,
+            render_live_preview_model,
             native_audio_probe,
             native_audio_stream_probe,
             native_playback_file_probe,

@@ -17,7 +17,67 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Engine-Owned Live Preview Model
+## Latest Codex Pass: Tauri Live Preview Model Bridge
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/GOAL_AUDIT.md`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+
+What changed:
+
+- Added a Tauri `render_live_preview_model` command next to `live_preview_contract`.
+- The command calls the Python sidecar `preview-model`, validates source/output behavior, parses the returned JSON, and verifies the model WAV exists.
+- Extended the packaged Track Preview smoke so the release WebView invokes the new command against the second fixture track.
+- The smoke verifies the command returns the expected engine model id, modeled controls, normalized tuning, width, drive, sample rate, frame count, and output existence.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop\src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"; cargo check
+cd ..
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_model_renders_engine_owned_reference tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_reference_wav
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `tauriLivePreviewModelPathExists: true`
+  - `live_preview_engine: web-audio-first-control-model`
+  - `modeled_controls: [Low, Mid, High, Width, Intensity]`
+  - `modeled_width: 1.36`
+  - `modeled_drive: 0.4`
+  - `output_exists: true`
+  - `frame_count: 192000`
+  - `sample_rate: 48000`
+
+Remaining gap:
+
+- This is a packaged command bridge for the deterministic reference model. It is still not export-engine-faithful real-time Live Preview and not a human listening pass.
+
+Next useful slice:
+
+- Use this Tauri-accessible model as the oracle for the next native/shared live DSP parity step.
+- If the user is present, run and record a real listening pass.
+
+## Previous Codex Pass: Engine-Owned Live Preview Model
 
 Date: 2026-05-12
 

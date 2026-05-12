@@ -21,7 +21,9 @@ The Python engine now owns both the Live Preview contract and the deterministic 
 - `live_preview_contract()` defines the modeled controls and unmodeled export stages.
 - `render_live_preview_model()` renders the deterministic reference WAV for `Low`, `Mid`, `High`, `Width`, and `Intensity`.
 - `album-master preview-model` exposes that renderer to smoke tests and diagnostics.
+- Tauri `render_live_preview_model` exposes the same sidecar command to the desktop shell.
 - The shared JS comparison helper now asks the Python CLI to render the model and only computes comparison metrics in JS/Python test glue.
+- The packaged Track Preview smoke verifies the release WebView can invoke that Tauri command and produce a 192000-frame local model WAV from the second fixture track.
 
 This reduces drift in automated evidence. It does not mean the visible Web Audio Live Preview is export-engine faithful; the UI still labels it as approximate and the contract still lists render-only export stages.
 

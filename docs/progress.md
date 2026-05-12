@@ -2,6 +2,54 @@
 
 ## 2026-05-12
 
+### Tauri Live Preview Model Bridge Slice
+
+- Added a typed Tauri `render_live_preview_model` command that calls the Python sidecar `preview-model` command.
+- The command validates the source, creates the model output folder, serializes the tuning object, parses the engine JSON, verifies the output WAV exists, and returns `output_exists: true` for evidence.
+- Extended the packaged Track Preview smoke so the release WebView invokes this command directly against the second synthetic track.
+- The smoke now verifies the bundled sidecar can render the engine-owned deterministic Live Preview reference from inside the installed-app command bridge.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop\src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"; cargo check
+cd ..
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+cd ..
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_model_renders_engine_owned_reference tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_reference_wav
+git diff --check
+```
+
+Results:
+
+- Node smoke syntax check passed.
+- Rust `cargo check` passed after adding `%USERPROFILE%\.cargo\bin` to `PATH`.
+- Desktop TypeScript/Vite build passed.
+- Desktop CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Preview UI smoke passed.
+- Python compile and focused Live Preview model tests passed.
+- Evidence values:
+  - `tauriLivePreviewModelPathExists: true`
+  - `live_preview_engine: web-audio-first-control-model`
+  - `modeled_controls: [Low, Mid, High, Width, Intensity]`
+  - `modeled_width: 1.36`
+  - `modeled_drive: 0.4`
+  - `normalized_tuning: { bassDb: 0.5, highDb: 0.35, intensity: 0.4, midDb: -0.25, width: 0.2 }`
+  - `output_exists: true`
+  - `frame_count: 192000`
+  - `sample_rate: 48000`
+
+Honest gap:
+
+- This proves the packaged Tauri app can ask the bundled engine for the deterministic reference model. It still does not make the visible Web Audio Live Preview export-engine faithful or replace human listening approval.
+
 ### Engine-Owned Live Preview Model Slice
 
 - Added `render_live_preview_model()` to the Python mastering engine as the deterministic reference renderer for the current temporary Live Preview model.

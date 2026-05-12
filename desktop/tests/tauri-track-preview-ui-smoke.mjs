@@ -83,6 +83,7 @@ try {
     ...smoke,
     ...pixelSeek,
     exportVsLiveComparison,
+    tauriLivePreviewModelPathExists: existsSync(smoke.tauriLivePreviewModelPath),
     releaseExe,
     releaseExeExists: existsSync(releaseExe),
     previewOutputDir,
@@ -168,6 +169,20 @@ try {
   assert.equal(evidence.livePreviewContractWindowModelId, evidence.livePreviewContractModelId);
   assert.deepEqual(evidence.livePreviewContractDrift, []);
   assert.equal(evidence.livePreviewContractDriftVisible, false);
+  assert.equal(evidence.tauriLivePreviewModelOutputExists, true);
+  assert.equal(evidence.tauriLivePreviewModelPathExists, true);
+  assert.equal(evidence.tauriLivePreviewModel.live_preview_engine, "web-audio-first-control-model");
+  assert.deepEqual(evidence.tauriLivePreviewModel.modeled_controls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.deepEqual(evidence.tauriLivePreviewModel.normalized_tuning, liveParityTuning);
+  assert.ok(Math.abs(evidence.tauriLivePreviewModel.modeled_width - 1.36) <= 0.001);
+  assert.ok(Math.abs(evidence.tauriLivePreviewModel.modeled_drive - 0.4) <= 0.001);
+  assert.equal(evidence.tauriLivePreviewModel.preview_parity, "approximate");
+  assert.equal(evidence.tauriLivePreviewModel.export_faithful_preview_required, true);
+  assert.equal(evidence.tauriLivePreviewModel.same_engine, false);
+  assert.equal(evidence.tauriLivePreviewModel.source, fixturePaths[1]);
+  assert.equal(evidence.tauriLivePreviewModel.output, evidence.tauriLivePreviewModelPath);
+  assert.equal(evidence.tauriLivePreviewModel.sample_rate, 48000);
+  assert.equal(evidence.tauriLivePreviewModel.frame_count, 48000 * 4);
   assert.match(evidence.livePreviewModeledStatus, /Live model: Low, Mid, High, Width, Intensity/);
   assert.match(evidence.livePreviewRenderOnlyStatus, /Render-only:/);
   assert.equal(evidence.livePreviewRenderOnlyIncludesTone, true);
@@ -387,6 +402,13 @@ function trackPreviewExpression() {
     .some((item) => text(item).includes('Contract drift'));
   const livePreviewModeledStatus = text(document.querySelector('.live-contract-status.modeled'));
   const livePreviewRenderOnlyStatus = text(document.querySelector('.live-contract-status.render-only'));
+  const tauriLivePreviewModelPath = ${JSON.stringify(path.join(outputRoot, "tauri-command-live-preview-model.wav"))};
+  const tauriLivePreviewModel = await invoke('render_live_preview_model', {
+    sourcePath: ${JSON.stringify(fixturePaths[1])},
+    outputPath: tauriLivePreviewModelPath,
+    sampleRate: 48000,
+    tuning: ${JSON.stringify(liveParityTuning)}
+  });
   const masteredActionButton = () => buttons().find((item) => text(item).startsWith('Mastered') && item.closest('.audition-actions'));
   const activeMode = text(document.querySelector('.mode-tabs button.active'));
   const trackCountLabel = text(document.querySelector('.library .panel-title span'));
@@ -802,6 +824,9 @@ function trackPreviewExpression() {
     livePreviewContractWindowControls: livePreviewWindowContract.modeledControls,
     livePreviewContractDrift,
     livePreviewContractDriftVisible,
+    tauriLivePreviewModel,
+    tauriLivePreviewModelPath,
+    tauriLivePreviewModelOutputExists: tauriLivePreviewModel.output_exists === true,
     livePreviewModeledStatus,
     livePreviewRenderOnlyStatus,
     livePreviewRenderOnlyIncludesTone: livePreviewRenderOnlyStatus.includes('tone'),

@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Tauri-side Live Preview model bridge: added a release WebView command path that invokes the bundled sidecar `preview-model` and verifies the output WAV/metadata in the packaged Track Preview smoke.
 - 2026-05-12 engine-owned deterministic Live Preview model: added `render_live_preview_model()` and `album-master preview-model`, then moved smoke comparison evidence off JS-only DSP logic.
 - Commit `80ef3c3`: guarded runtime Live Preview contract drift and verified `livePreviewContractDrift: []` in broad UI and packaged Track Preview smokes.
 - Commit `82c1941`: surfaced the engine-owned Live Preview contract in Track Master.
@@ -53,7 +54,7 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Best next slices when the user is not actively listening:
 
-1. Use the engine-owned deterministic Live Preview model as the reference target for the next native/shared live DSP parity step.
+1. Use the Tauri-accessible engine-owned model as the oracle for the next native/shared live DSP parity step.
 2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented, especially around project Open/Save-As if a reliable OS-dialog strategy is chosen.
 3. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Python render-faithful preview, or Python render-faithful region.
 
