@@ -26,7 +26,7 @@ const fixturePaths = [
 ];
 writePcm16Fixture(fixturePaths[0], 174.61, 3.8);
 writePcm16Fixture(fixturePaths[1], 261.63, 4.0);
-const liveParityTuning = { bassDb: 0.5 };
+const liveParityTuning = { bassDb: 0.5, midDb: -0.25, highDb: 0.35, width: 0.2, intensity: 0.4 };
 
 const browserArguments = [
   process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS,
@@ -61,7 +61,7 @@ try {
   const pixelSeek = await verifyPixelSeekDrag(cdp);
   const exportVsLiveComparison = compareExportVsLiveModel({
     exportPath: smoke.parityPreviewMasterPath,
-    outputPath: path.join(outputRoot, "live-preview-low-model.wav"),
+    outputPath: path.join(outputRoot, "live-preview-first-control-model.wav"),
     sourcePath: fixturePaths[1],
     tuning: liveParityTuning,
   });
@@ -196,7 +196,10 @@ try {
   assert.match(evidence.livePreviewStatusAfterReturnToSource, /Live Preview active/);
   assert.equal(evidence.liveSnapshotAfterReturnToSource.active, true);
   assert.equal(evidence.exportVsLiveComparison.offline_engine, "python-render-track-master");
-  assert.equal(evidence.exportVsLiveComparison.live_preview_engine, "web-audio-low-shelf-model");
+  assert.equal(evidence.exportVsLiveComparison.live_preview_engine, "web-audio-first-control-model");
+  assert.deepEqual(evidence.exportVsLiveComparison.modeled_controls, ["Low", "Mid", "High", "Width", "Intensity"]);
+  assert.ok(Math.abs(evidence.exportVsLiveComparison.modeled_width - 1.36) <= 0.001);
+  assert.ok(Math.abs(evidence.exportVsLiveComparison.modeled_drive - 0.4) <= 0.001);
   assert.equal(evidence.exportVsLiveComparison.same_engine, false);
   assert.equal(evidence.exportVsLiveComparison.preview_parity, "approximate");
   assert.equal(evidence.exportVsLiveComparison.export_faithful_preview_required, true);
@@ -950,7 +953,7 @@ def read_wav(path):
         audio = np.repeat(audio, 2, axis=1)
     return int(sample_rate), np.nan_to_num(audio[:, :2], nan=0.0, posinf=0.0, neginf=0.0)
 
-def low_shelf(gain_db, frequency, sample_rate):
+def shelf_filter(kind, gain_db, frequency, sample_rate):
     if abs(gain_db) < 1e-9:
         return None
     a_gain = 10 ** (gain_db / 40.0)
@@ -959,16 +962,64 @@ def low_shelf(gain_db, frequency, sample_rate):
     sinw = math.sin(w0)
     sqrt_a = math.sqrt(a_gain)
     alpha = sinw / 2 * math.sqrt(2.0)
-    b0 = a_gain * ((a_gain + 1) - (a_gain - 1) * cosw + 2 * sqrt_a * alpha)
-    b1 = 2 * a_gain * ((a_gain - 1) - (a_gain + 1) * cosw)
-    b2 = a_gain * ((a_gain + 1) - (a_gain - 1) * cosw - 2 * sqrt_a * alpha)
-    a0 = (a_gain + 1) + (a_gain - 1) * cosw + 2 * sqrt_a * alpha
-    a1 = -2 * ((a_gain - 1) + (a_gain + 1) * cosw)
-    a2 = (a_gain + 1) + (a_gain - 1) * cosw - 2 * sqrt_a * alpha
+    if kind == "low":
+        b0 = a_gain * ((a_gain + 1) - (a_gain - 1) * cosw + 2 * sqrt_a * alpha)
+        b1 = 2 * a_gain * ((a_gain - 1) - (a_gain + 1) * cosw)
+        b2 = a_gain * ((a_gain + 1) - (a_gain - 1) * cosw - 2 * sqrt_a * alpha)
+        a0 = (a_gain + 1) + (a_gain - 1) * cosw + 2 * sqrt_a * alpha
+        a1 = -2 * ((a_gain - 1) + (a_gain + 1) * cosw)
+        a2 = (a_gain + 1) + (a_gain - 1) * cosw - 2 * sqrt_a * alpha
+    else:
+        b0 = a_gain * ((a_gain + 1) + (a_gain - 1) * cosw + 2 * sqrt_a * alpha)
+        b1 = -2 * a_gain * ((a_gain - 1) + (a_gain + 1) * cosw)
+        b2 = a_gain * ((a_gain + 1) + (a_gain - 1) * cosw - 2 * sqrt_a * alpha)
+        a0 = (a_gain + 1) - (a_gain - 1) * cosw + 2 * sqrt_a * alpha
+        a1 = 2 * ((a_gain - 1) - (a_gain + 1) * cosw)
+        a2 = (a_gain + 1) - (a_gain - 1) * cosw - 2 * sqrt_a * alpha
+    return np.array([b0, b1, b2]) / a0, np.array([1.0, a1 / a0, a2 / a0])
+
+def peaking_filter(gain_db, frequency, q, sample_rate):
+    if abs(gain_db) < 1e-9:
+        return None
+    a_gain = 10 ** (gain_db / 40.0)
+    w0 = 2 * math.pi * frequency / sample_rate
+    cosw = math.cos(w0)
+    alpha = math.sin(w0) / (2 * q)
+    b0 = 1 + alpha * a_gain
+    b1 = -2 * cosw
+    b2 = 1 - alpha * a_gain
+    a0 = 1 + alpha / a_gain
+    a1 = -2 * cosw
+    a2 = 1 - alpha / a_gain
     return np.array([b0, b1, b2]) / a0, np.array([1.0, a1 / a0, a2 / a0])
 
 def apply_biquad(audio, b, a):
     return np.column_stack([signal.lfilter(b, a, audio[:, channel]) for channel in range(audio.shape[1])]).astype(np.float32)
+
+def apply_width(audio, width_setting):
+    width = max(0.35, min(1.65, 1 + float(width_setting) * 1.8))
+    mid = (audio[:, 0] + audio[:, 1]) * 0.5
+    side = (audio[:, 0] - audio[:, 1]) * 0.5
+    return np.column_stack([mid + side * width, mid - side * width]).astype(np.float32), width
+
+def apply_static_compressor(audio, intensity):
+    drive = max(0.0, min(1.0, float(intensity)))
+    if drive <= 0:
+        return audio.astype(np.float32), 0.0
+    threshold = -18.0 - drive * 16.0
+    ratio = 1.0 + drive * 3.5
+    knee = 10.0
+    level = np.max(np.abs(audio), axis=1)
+    x_db = 20.0 * np.log10(np.maximum(level, 1e-12))
+    y_db = np.array(x_db, copy=True)
+    lower = threshold - knee / 2.0
+    upper = threshold + knee / 2.0
+    over = x_db > upper
+    knee_zone = (x_db >= lower) & (x_db <= upper)
+    y_db[over] = threshold + (x_db[over] - threshold) / ratio
+    y_db[knee_zone] = x_db[knee_zone] + (1.0 / ratio - 1.0) * ((x_db[knee_zone] - lower) ** 2) / (2.0 * knee)
+    gain = np.power(10.0, (y_db - x_db) / 20.0)
+    return (audio * gain[:, None]).astype(np.float32), drive
 
 def rms_dbfs(audio):
     return 20.0 * math.log10(float(np.sqrt(np.mean(np.square(audio))) + 1e-12))
@@ -982,9 +1033,15 @@ if source_rate != export_rate:
     raise SystemExit(f"Sample-rate mismatch: {source_rate} != {export_rate}")
 
 live = source.copy()
-design = low_shelf(float(tuning.get("bassDb", 0.0)), 160.0, source_rate)
-if design is not None:
-    live = apply_biquad(live, design[0], design[1])
+for design in [
+    shelf_filter("low", float(tuning.get("bassDb", 0.0)), 160.0, source_rate),
+    peaking_filter(float(tuning.get("midDb", 0.0)), 1400.0, 0.9, source_rate),
+    shelf_filter("high", float(tuning.get("highDb", 0.0)), 5600.0, source_rate),
+]:
+    if design is not None:
+        live = apply_biquad(live, design[0], design[1])
+live, modeled_width = apply_width(live, float(tuning.get("width", 0.0)))
+live, modeled_drive = apply_static_compressor(live, float(tuning.get("intensity", 0.0)))
 live = np.clip(live, -1.0, 1.0).astype(np.float32)
 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 wavfile.write(output_path, source_rate, live)
@@ -996,11 +1053,14 @@ exported = exported[:length]
 difference = exported - live
 print(json.dumps({
     "offline_engine": "python-render-track-master",
-    "live_preview_engine": "web-audio-low-shelf-model",
+    "live_preview_engine": "web-audio-first-control-model",
     "same_engine": False,
     "preview_parity": "approximate",
     "export_faithful_preview_required": True,
     "tuning": tuning,
+    "modeled_width": modeled_width,
+    "modeled_drive": modeled_drive,
+    "modeled_controls": ["Low", "Mid", "High", "Width", "Intensity"],
     "source_path": str(Path(source_path)),
     "export_path": str(Path(export_path)),
     "sample_rate": source_rate,

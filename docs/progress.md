@@ -2,6 +2,43 @@
 
 ## 2026-05-12
 
+### First-Control Export Vs Live Model Smoke Slice
+
+- Extended the packaged Track Preview smoke's export-vs-live comparison so it no longer compares a multi-control Live Preview run against a Low-only model.
+- The deterministic live model now applies the same first-control set the smoke exercises: Low shelf, Mid peaking EQ, High shelf, mid/side Width, and a basic Intensity compressor curve.
+- The comparison remains an honesty check, not a parity claim: it records the live model as `web-audio-first-control-model`, keeps `same_engine: false`, and still requires a Python-rendered preview for export-faithful audition.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Results:
+
+- Node syntax check passed.
+- Release-backed Track Preview UI smoke passed.
+- Evidence: `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Evidence values:
+  - `exportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - `exportVsLiveComparison.modeled_controls: [Low, Mid, High, Width, Intensity]`
+  - `exportVsLiveComparison.modeled_width: 1.36`
+  - `exportVsLiveComparison.modeled_drive: 0.4`
+  - `exportVsLiveComparison.tuning: { bassDb: 0.5, midDb: -0.25, highDb: 0.35, width: 0.2, intensity: 0.4 }`
+  - `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - `exportVsLiveComparison.export_minus_live_lufs_proxy: 11.580809727845596`
+  - `exportVsLiveComparison.rms_difference_dbfs: -18.377686540787774`
+  - `exportVsLiveComparison.exportLoudnessDeltaVsSource: 7.271018109659776`
+  - `exportVsLiveComparison.liveLoudnessDeltaVsSource: 4.30979161818582`
+  - `exportVsLiveComparison.live_model_path: test-output\tauri-track-preview-ui-smoke\live-preview-first-control-model.wav`
+
+Honest gap:
+
+- This makes the automated comparison less misleading for the current first-control Live Preview path, but it still proves mismatch rather than shared/export-engine DSP parity.
+
 ### Multi-Control Live Preview Response Smoke Slice
 
 - Extended `desktop/tests/tauri-track-preview-ui-smoke.mjs` so the packaged Track Preview smoke verifies the Phase 5 first-control set, not only the Low slider.

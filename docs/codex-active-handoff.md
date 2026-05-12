@@ -17,7 +17,59 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Multi-Control Live Preview Response Smoke
+## Latest Codex Pass: First-Control Export Vs Live Model Smoke
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+
+What changed:
+
+- Updated the packaged Track Preview export-vs-live comparison so the deterministic live model covers the same first-control set the smoke now exercises.
+- The model now applies Low shelf, Mid peaking EQ, High shelf, mid/side Width, and a basic Intensity compressor curve before comparing against the Python-rendered master.
+- The evidence remains explicitly negative parity evidence: `same_engine: false`, `preview_parity: "approximate"`, and `export_faithful_preview_required: true`.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+cd desktop
+npm run test:tauri-track-preview-ui
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `exportVsLiveComparison.live_preview_engine: web-audio-first-control-model`
+  - `exportVsLiveComparison.modeled_controls: [Low, Mid, High, Width, Intensity]`
+  - `exportVsLiveComparison.modeled_width: 1.36`
+  - `exportVsLiveComparison.modeled_drive: 0.4`
+  - `exportVsLiveComparison.tuning: { bassDb: 0.5, midDb: -0.25, highDb: 0.35, width: 0.2, intensity: 0.4 }`
+  - `exportVsLiveComparison.exportDiffersFromLiveMaterially: true`
+  - `exportVsLiveComparison.export_minus_live_lufs_proxy: 11.580809727845596`
+  - `exportVsLiveComparison.rms_difference_dbfs: -18.377686540787774`
+  - `exportVsLiveComparison.exportLoudnessDeltaVsSource: 7.271018109659776`
+  - `exportVsLiveComparison.liveLoudnessDeltaVsSource: 4.30979161818582`
+  - `exportVsLiveComparison.live_model_path: test-output\tauri-track-preview-ui-smoke\live-preview-first-control-model.wav`
+
+Remaining gap:
+
+- The automated comparison now matches the first-control Live Preview surface, but it still proves mismatch rather than shared/export-engine DSP parity.
+
+Next useful slice:
+
+- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
+- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
+
+## Previous Codex Pass: Multi-Control Live Preview Response Smoke
 
 Date: 2026-05-12
 
@@ -68,11 +120,6 @@ Evidence:
 Remaining gap:
 
 - This proves the current Web Audio audition responds quickly across the first-control set and keeps stale exact renders honest. Web Audio Live Preview remains approximate and not export-engine parity.
-
-Next useful slice:
-
-- If the user is present, run a real listening pass through Track Master and/or Album Master, then record `listeningApproved` with notes.
-- If working unattended, continue toward true export-engine live audition parity, especially a native/shared-DSP spike or a deeper engine-decision record.
 
 ## Previous Codex Pass: Live Source To Engine Region Replacement Smoke
 

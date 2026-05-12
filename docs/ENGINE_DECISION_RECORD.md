@@ -572,6 +572,45 @@ Interpretation:
 - `Update Preview`, `Mastered`, `Original/Mastered`, and final exports remain the render-faithful path because they go through the Python engine and playback cache.
 - The measured fixture delta is evidence for honest labeling, not a sound-quality verdict.
 
+## First-Control Export Vs Live Comparison
+
+The packaged Track Preview UI smoke now compares the Python-rendered preview against a deterministic model of the same first-control Live Preview set that the UI exercises:
+
+- Low shelf.
+- Mid peaking EQ.
+- High shelf.
+- Mid/side Width.
+- Basic Intensity compressor curve.
+
+Evidence from `npm run test:tauri-track-preview-ui`:
+
+```json
+{
+  "live_preview_engine": "web-audio-first-control-model",
+  "modeled_controls": ["Low", "Mid", "High", "Width", "Intensity"],
+  "modeled_width": 1.36,
+  "modeled_drive": 0.4,
+  "tuning": {
+    "bassDb": 0.5,
+    "midDb": -0.25,
+    "highDb": 0.35,
+    "width": 0.2,
+    "intensity": 0.4
+  },
+  "exportDiffersFromLiveMaterially": true,
+  "export_minus_live_lufs_proxy": 11.580809727845596,
+  "rms_difference_dbfs": -18.377686540787774,
+  "exportLoudnessDeltaVsSource": 7.271018109659776,
+  "liveLoudnessDeltaVsSource": 4.30979161818582
+}
+```
+
+Interpretation:
+
+- The comparison model is now aligned with the current first-control Web Audio audition surface instead of only Low EQ.
+- The measured delta still supports the same decision: Web Audio Live Preview is approximate scaffolding, not shared/export-engine DSP.
+- The next parity step is not more labeling; it is either calibrated shared DSP definitions or a native live path that uses the same intent model as offline export.
+
 ## Real-Source Album Playback Stability
 
 The real-source Album Master UI smoke now also probes native playback stability for the rendered continuous album WAV. It still drives the visible Album Master UI path first: derive local clips from the provided MP3, seed Album Master, analyze, export album, load dashboard, select `Album WAV`, and prepare transition playback. After that, it converts `album_sequence.wav` through the playback cache and runs `native_playback_file_probe` on the album cache.
@@ -693,6 +732,6 @@ Remaining required evidence:
 - Real audio listening pass.
 - Longer playback stability pass across more real songs and complete album-length runs.
 - CPU/memory sampling during live control changes and full-session use.
-- Deeper export-vs-live comparison on real user audio and across more live-control settings.
+- Deeper export-vs-live comparison on real user audio and across preset/advanced live-control settings.
 - Native transport beyond bounded A/B audition: direct full-file pause/seek exists; visible real-song Album WAV smoke, streaming/cancel behavior, and complete-session stability still remain.
 - True multi-song source pass when more than one real song is available.
