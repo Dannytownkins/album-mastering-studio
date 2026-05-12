@@ -34,6 +34,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 engine-owned deterministic Live Preview model: added `render_live_preview_model()` and `album-master preview-model`, then moved smoke comparison evidence off JS-only DSP logic.
 - Commit `80ef3c3`: guarded runtime Live Preview contract drift and verified `livePreviewContractDrift: []` in broad UI and packaged Track Preview smokes.
 - Commit `82c1941`: surfaced the engine-owned Live Preview contract in Track Master.
 - Commit `c363ee7`: added the Python preview contract command and unit regression.
@@ -52,10 +53,9 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Best next slices when the user is not actively listening:
 
-1. Add an engine-owned deterministic Live Preview model renderer for `Low`, `Mid`, `High`, `Width`, and `Intensity`, then point smoke evidence at that reference before attempting native/shared live DSP.
-2. Continue shared/native live DSP parity work: move one more ear-facing control toward a shared model that can be used by both audition evidence and Python export intent.
-3. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented, especially around project Open/Save-As if a reliable OS-dialog strategy is chosen.
-4. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Python render-faithful preview, or Python render-faithful region.
+1. Use the engine-owned deterministic Live Preview model as the reference target for the next native/shared live DSP parity step.
+2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented, especially around project Open/Save-As if a reliable OS-dialog strategy is chosen.
+3. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Python render-faithful preview, or Python render-faithful region.
 
 Best next slice when the user is present:
 

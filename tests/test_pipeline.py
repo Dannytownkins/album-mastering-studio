@@ -14,7 +14,13 @@ from scipy.io import wavfile
 
 from album_mastering_studio.dashboard import export_dashboard
 from album_mastering_studio.iteration import iterate_project
-from album_mastering_studio.mastering import PRESETS, limit_ceiling, live_preview_contract, master_track
+from album_mastering_studio.mastering import (
+    PRESETS,
+    limit_ceiling,
+    live_preview_contract,
+    master_track,
+    render_live_preview_model,
+)
 from album_mastering_studio.analysis import analyze_audio
 from album_mastering_studio.audio_io import load_audio
 from album_mastering_studio.interludes import INTERLUDE_STYLES, make_interlude
@@ -202,6 +208,64 @@ class PipelineTest(unittest.TestCase):
             capture_output=True,
         )
         self.assertEqual(json.loads(result.stdout), contract)
+
+    def test_live_preview_model_renders_engine_owned_reference(self) -> None:
+        sample_rate = 48_000
+        source = self._sine_array(196.0, 0.42, seconds=0.6)
+        tuning = {"bassDb": 0.5, "midDb": -0.25, "highDb": 0.35, "width": 0.2, "intensity": 0.4}
+
+        result = render_live_preview_model(source, sample_rate, tuning)
+
+        self.assertEqual(result.samples.shape, source.shape)
+        self.assertEqual(result.model_id, live_preview_contract()["modelId"])
+        self.assertEqual(list(result.modeled_controls), live_preview_contract()["modeledControls"])
+        self.assertEqual(result.preview_parity, "approximate")
+        self.assertTrue(result.export_faithful_preview_required)
+        self.assertAlmostEqual(result.modeled_width, 1.36, places=3)
+        self.assertAlmostEqual(result.modeled_drive, 0.4, places=3)
+        self.assertEqual(result.tuning, tuning)
+        self.assertEqual(result.normalized_tuning, tuning)
+        self.assertFalse(np.any(np.isnan(result.samples)))
+        self.assertLessEqual(float(np.max(np.abs(result.samples))), 1.0)
+        self.assertGreater(float(np.sqrt(np.mean(np.square(result.samples - source)))), 0.00001)
+
+    def test_cli_preview_model_writes_reference_wav(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.wav"
+            output = root / "live-model.wav"
+            tuning = {"bassDb": 0.5, "midDb": -0.25, "highDb": 0.35, "width": 0.2, "intensity": 0.4}
+            self._write_sine(source, 220.0, 0.35)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "album_mastering_studio.cli",
+                    "preview-model",
+                    str(source),
+                    "--output",
+                    str(output),
+                    "--tuning-json",
+                    json.dumps(tuning),
+                ],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+            summary = json.loads(result.stdout)
+            rate, modeled = wavfile.read(output)
+            self.assertEqual(summary["live_preview_engine"], live_preview_contract()["modelId"])
+            self.assertEqual(summary["modeled_controls"], ["Low", "Mid", "High", "Width", "Intensity"])
+            self.assertEqual(summary["tuning"], tuning)
+            self.assertEqual(summary["normalized_tuning"], tuning)
+            self.assertAlmostEqual(summary["modeled_width"], 1.36, places=3)
+            self.assertAlmostEqual(summary["modeled_drive"], 0.4, places=3)
+            self.assertEqual(rate, 48_000)
+            self.assertEqual(modeled.shape[1], 2)
+            self.assertEqual(summary["frame_count"], modeled.shape[0])
+            self.assertTrue(output.exists())
 
     def test_interlude_styles_render_finite_audio(self) -> None:
         sample_rate = 48_000

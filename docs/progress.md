@@ -2,6 +2,65 @@
 
 ## 2026-05-12
 
+### Engine-Owned Live Preview Model Slice
+
+- Added `render_live_preview_model()` to the Python mastering engine as the deterministic reference renderer for the current temporary Live Preview model.
+- Added `album-master preview-model` so scripts can render that reference WAV from local audio without importing Python internals.
+- The model covers the first-control set listed by the engine contract: `Low`, `Mid`, `High`, `Width`, and `Intensity`.
+- Updated the shared JS smoke helper so export-vs-live comparison evidence calls the Python CLI instead of carrying its own DSP copy.
+- Updated the broad WebView runtime smoke to use the same helper instead of a separate embedded model.
+- Added Python unit/CLI regressions for the renderer shape, finite output, modeled controls, modeled width/drive, and written WAV output.
+
+Verification:
+
+```powershell
+python -m album_mastering_studio.cli preview-contract --json
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_config_matches_engine_contract tests.test_pipeline.PipelineTest.test_live_preview_model_renders_engine_owned_reference tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_reference_wav
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-webview-runtime-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+python -m compileall -q src tests
+python -m unittest discover -s tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+cd ..
+desktop\src-tauri\resources\engine\album-master-engine.exe preview-model --help
+cd desktop
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Results:
+
+- Focused Python renderer and CLI tests passed.
+- Full Python suite passed: `20 tests`.
+- Desktop TypeScript/Vite build passed.
+- Desktop CLI-contract integration passed.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Rebuilt sidecar exposes `preview-model --help`.
+- Packaged Track Preview UI smoke passed.
+- Real-song performance smoke passed against `Lay the Money on the Desk (1).mp3`.
+- Evidence values:
+  - Track Preview `live_preview_engine: web-audio-first-control-model`
+  - Track Preview `modeled_width: 1.36`
+  - Track Preview `modeled_drive: 0.4`
+  - Track Preview `normalized_tuning: { bassDb: 0.5, midDb: -0.25, highDb: 0.35, width: 0.2, intensity: 0.4 }`
+  - Track Preview `export_minus_live_lufs_proxy: 9.080398089816866`
+  - Track Preview `rms_difference_dbfs: -19.535890177713174`
+  - Real song `modeled_width: 1.36`
+  - Real song `modeled_drive: 0.4`
+  - Real song `export_minus_live_lufs_proxy: 0.7150013134906779`
+  - Real song `rms_difference_dbfs: -29.536255941454645`
+
+Honest gap:
+
+- This removes JS-only DSP drift from the comparison harness. It still does not make the user-facing Web Audio Live Preview export-engine faithful or replace human listening approval.
+
 ### Goal Coverage Audit Slice
 
 - Added `docs/GOAL_AUDIT.md` as a compaction-safe coverage map for the active rebuild goal.

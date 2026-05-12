@@ -64,6 +64,19 @@ class MasterResult:
 
 
 @dataclass(frozen=True)
+class LivePreviewModelResult:
+    samples: np.ndarray
+    model_id: str
+    preview_parity: str
+    export_faithful_preview_required: bool
+    modeled_controls: tuple[str, ...]
+    modeled_width: float
+    modeled_drive: float
+    tuning: dict[str, float]
+    normalized_tuning: dict[str, float]
+
+
+@dataclass(frozen=True)
 class FineTune:
     lufs_offset: float = 0.0
     ceiling_dbfs: float | None = None
@@ -400,6 +413,56 @@ def live_preview_contract() -> dict:
     }
 
 
+def render_live_preview_model(
+    samples: np.ndarray,
+    sample_rate: int,
+    tuning: dict | None = None,
+) -> LivePreviewModelResult:
+    """Render the deterministic engine-owned reference for the temporary Live Preview path."""
+    contract = live_preview_contract()
+    input_tuning = _preview_input_tuning(tuning or {})
+    normalized_tuning = {
+        "bassDb": _preview_tuning_value(input_tuning, "bassDb", "lowDb", "lowEndDb", "low_end_db", "tweak_low_end_db"),
+        "midDb": _preview_tuning_value(input_tuning, "midDb", "presenceDb", "presence_db", "tweak_presence_db"),
+        "highDb": _preview_tuning_value(input_tuning, "highDb", "airDb", "air_db", "tweak_air_db"),
+        "width": _preview_tuning_value(input_tuning, "width", "widthOffset", "tweak_width"),
+        "intensity": _preview_tuning_value(input_tuning, "intensity", "compression", "compressionOffset", "tweak_intensity"),
+    }
+
+    modeled = _preview_stereo_float(samples)
+    for design in (
+        _preview_shelf("low", normalized_tuning["bassDb"], contract["filters"]["low"]["frequencyHz"], sample_rate),
+        _peaking_eq(
+            sample_rate,
+            contract["filters"]["mid"]["frequencyHz"],
+            normalized_tuning["midDb"],
+            contract["filters"]["mid"]["q"],
+        ),
+        _preview_shelf("high", normalized_tuning["highDb"], contract["filters"]["high"]["frequencyHz"], sample_rate),
+    ):
+        if design is not None:
+            modeled = _apply_preview_biquad(modeled, design[0], design[1])
+
+    modeled, modeled_width = _apply_live_preview_width(modeled, normalized_tuning["width"], contract["width"])
+    modeled, modeled_drive = _apply_live_preview_compressor(
+        modeled,
+        normalized_tuning["intensity"],
+        contract["compressor"],
+    )
+    modeled = np.nan_to_num(np.clip(modeled, -1.0, 1.0), nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+    return LivePreviewModelResult(
+        samples=modeled,
+        model_id=contract["modelId"],
+        preview_parity=contract["previewParity"],
+        export_faithful_preview_required=bool(contract["exportFaithfulPreviewRequired"]),
+        modeled_controls=tuple(contract["modeledControls"]),
+        modeled_width=modeled_width,
+        modeled_drive=modeled_drive,
+        tuning=input_tuning,
+        normalized_tuning=normalized_tuning,
+    )
+
+
 def master_track(
     samples: np.ndarray,
     sample_rate: int,
@@ -679,6 +742,126 @@ def _stereo_width(samples: np.ndarray, width: float) -> np.ndarray:
     if peak > 1.0:
         widened /= peak
     return widened.astype(np.float32)
+
+
+def _preview_input_tuning(tuning: dict) -> dict[str, float]:
+    normalized: dict[str, float] = {}
+    for key, value in tuning.items():
+        if isinstance(value, bool):
+            continue
+        try:
+            normalized[str(key)] = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Live Preview tuning value for '{key}' must be numeric.") from exc
+    return normalized
+
+
+def _preview_tuning_value(tuning: dict[str, float], *keys: str) -> float:
+    for key in keys:
+        if key in tuning:
+            return float(tuning[key])
+    return 0.0
+
+
+def _preview_stereo_float(samples: np.ndarray) -> np.ndarray:
+    audio = np.asarray(samples, dtype=np.float32)
+    if audio.ndim == 1:
+        audio = audio[:, np.newaxis]
+    if audio.shape[1] == 1:
+        audio = np.repeat(audio, 2, axis=1)
+    elif audio.shape[1] > 2:
+        audio = audio[:, :2]
+    return np.nan_to_num(audio, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+
+
+def _apply_live_preview_width(
+    samples: np.ndarray,
+    width_setting: float,
+    width_contract: dict,
+) -> tuple[np.ndarray, float]:
+    width = float(
+        np.clip(
+            float(width_contract["base"]) + (float(width_setting) * float(width_contract["scale"])),
+            float(width_contract["min"]),
+            float(width_contract["max"]),
+        )
+    )
+    if samples.ndim != 2 or samples.shape[1] < 2:
+        return samples.astype(np.float32), width
+    left = samples[:, 0]
+    right = samples[:, 1]
+    mid = (left + right) * 0.5
+    side = (left - right) * 0.5
+    widened = np.column_stack([mid + (side * width), mid - (side * width)])
+    return widened.astype(np.float32), width
+
+
+def _apply_live_preview_compressor(
+    samples: np.ndarray,
+    intensity: float,
+    compressor_contract: dict,
+) -> tuple[np.ndarray, float]:
+    drive = float(np.clip(float(intensity), 0.0, 1.0))
+    if drive <= 0.0 or samples.size == 0:
+        return samples.astype(np.float32), drive
+
+    threshold = float(compressor_contract["thresholdBaseDbfs"]) - (drive * float(compressor_contract["thresholdDriveScaleDb"]))
+    ratio = float(compressor_contract["ratioBase"]) + (drive * float(compressor_contract["ratioDriveScale"]))
+    knee = max(float(compressor_contract["kneeDb"]), 0.0)
+    level = np.max(np.abs(samples), axis=1)
+    x_db = 20.0 * np.log10(np.maximum(level, EPSILON))
+    y_db = np.array(x_db, copy=True)
+    lower = threshold - (knee * 0.5)
+    upper = threshold + (knee * 0.5)
+    over = x_db > upper
+    y_db[over] = threshold + ((x_db[over] - threshold) / ratio)
+    if knee > 0.0:
+        knee_zone = (x_db >= lower) & (x_db <= upper)
+        y_db[knee_zone] = x_db[knee_zone] + ((1.0 / ratio) - 1.0) * ((x_db[knee_zone] - lower) ** 2) / (2.0 * knee)
+    gain = db_to_amplitude(y_db - x_db).astype(np.float32)
+    return (samples * gain[:, np.newaxis]).astype(np.float32), drive
+
+
+def _apply_preview_biquad(samples: np.ndarray, b: np.ndarray, a: np.ndarray) -> np.ndarray:
+    if np.allclose(b, a):
+        return samples
+    return signal.lfilter(b, a, samples, axis=0).astype(np.float32)
+
+
+def _preview_shelf(
+    kind: str,
+    gain_db: float,
+    frequency: float,
+    sample_rate: int,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    if abs(gain_db) < EPSILON:
+        return None
+
+    amplitude = 10.0 ** (float(gain_db) / 40.0)
+    omega = 2.0 * np.pi * float(frequency) / sample_rate
+    sin_omega = np.sin(omega)
+    cos_omega = np.cos(omega)
+    root = np.sqrt(amplitude)
+    alpha = (sin_omega / 2.0) * np.sqrt(2.0)
+
+    if kind == "low":
+        b0 = amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha))
+        b1 = 2.0 * amplitude * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega))
+        b2 = amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha))
+        a0 = (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)
+        a1 = -2.0 * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega))
+        a2 = (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)
+    elif kind == "high":
+        b0 = amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha))
+        b1 = -2.0 * amplitude * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega))
+        b2 = amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha))
+        a0 = (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)
+        a1 = 2.0 * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega))
+        a2 = (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)
+    else:
+        raise ValueError(f"Unknown Live Preview shelf kind: {kind}")
+
+    return _normalize_biquad(b0, b1, b2, a0, a1, a2)
 
 
 def _match_lufs(samples: np.ndarray, sample_rate: int, target_lufs: float) -> tuple[np.ndarray, float]:

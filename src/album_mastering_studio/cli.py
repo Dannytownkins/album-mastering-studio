@@ -6,11 +6,11 @@ from pathlib import Path
 
 from .arc import ARC_PRESETS
 from .analysis import analyze_audio
-from .audio_io import collect_audio_files, load_audio
+from .audio_io import collect_audio_files, load_audio, write_audio
 from .constants import DEFAULT_SAMPLE_RATE
 from .dashboard import export_dashboard
 from .iteration import iterate_project
-from .mastering import PRESETS, live_preview_contract
+from .mastering import PRESETS, live_preview_contract, render_live_preview_model
 from .interludes import INTERLUDE_STYLE_CHOICES
 from .pipeline import (
     RenderOptions,
@@ -241,6 +241,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     preview_contract.add_argument("--json", action="store_true", help="Print JSON. Included for explicit script usage.")
 
+    preview_model = subparsers.add_parser(
+        "preview-model",
+        help="Render the engine-owned deterministic reference for the temporary live preview model.",
+    )
+    preview_model.add_argument("source", type=Path, help="Source audio file to model.")
+    preview_model.add_argument("--output", "-o", type=Path, required=True, help="Output WAV path for the modeled preview.")
+    preview_model.add_argument("--sample-rate", type=int, default=DEFAULT_SAMPLE_RATE, help="Model render sample rate.")
+    preview_model.add_argument("--tuning-json", default=None, help="Inline JSON object or path to a JSON file with tuning values.")
+    preview_model.add_argument("--bass-db", type=float, default=None, help="Modeled Low control in dB.")
+    preview_model.add_argument("--mid-db", type=float, default=None, help="Modeled Mid/Presence control in dB.")
+    preview_model.add_argument("--high-db", type=float, default=None, help="Modeled High/Air control in dB.")
+    preview_model.add_argument("--width", type=float, default=None, help="Modeled Width control offset.")
+    preview_model.add_argument("--intensity", type=float, default=None, help="Modeled Intensity control amount.")
+
     app = subparsers.add_parser("app", help="Launch the local Windows desktop mastering studio.")
     app.add_argument("--output", "-o", type=Path, default=None, help="Default output folder for app renders.")
 
@@ -354,6 +368,35 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(live_preview_contract(), indent=2))
         return 0
 
+    if args.command == "preview-model":
+        source = load_audio(args.source, args.sample_rate)
+        tuning = _preview_tuning_from_args(args)
+        result = render_live_preview_model(source, args.sample_rate, tuning)
+        write_audio(args.output, result.samples, args.sample_rate, bit_depth=32, dither=False)
+        contract = live_preview_contract()
+        print(
+            json.dumps(
+                {
+                    "source": str(args.source),
+                    "output": str(args.output),
+                    "sample_rate": args.sample_rate,
+                    "frame_count": int(result.samples.shape[0]),
+                    "live_preview_engine": result.model_id,
+                    "same_engine": False,
+                    "preview_parity": result.preview_parity,
+                    "export_faithful_preview_required": result.export_faithful_preview_required,
+                    "modeled_controls": list(result.modeled_controls),
+                    "modeled_width": result.modeled_width,
+                    "modeled_drive": result.modeled_drive,
+                    "tuning": result.tuning,
+                    "normalized_tuning": result.normalized_tuning,
+                    "unmodeled_export_stages": contract["unmodeledExportStages"],
+                },
+                indent=2,
+            )
+        )
+        return 0
+
     if args.command == "app":
         from .app import main as app_main
 
@@ -410,6 +453,33 @@ def _options_from_args(args) -> RenderOptions:
         album_wav=args.album_wav,
         reference_track=args.reference_track,
     )
+
+
+def _preview_tuning_from_args(args) -> dict[str, float]:
+    tuning: dict[str, float] = {}
+    if args.tuning_json:
+        raw = args.tuning_json
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            loaded = json.loads(Path(raw).read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError("--tuning-json must be a JSON object.")
+        for key, value in loaded.items():
+            if isinstance(value, bool):
+                continue
+            tuning[str(key)] = float(value)
+
+    for key, value in (
+        ("bassDb", args.bass_db),
+        ("midDb", args.mid_db),
+        ("highDb", args.high_db),
+        ("width", args.width),
+        ("intensity", args.intensity),
+    ):
+        if value is not None:
+            tuning[key] = float(value)
+    return tuning
 
 
 def _waveform(samples, bins: int = 128) -> list[float]:

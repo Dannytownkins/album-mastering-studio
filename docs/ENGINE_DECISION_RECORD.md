@@ -14,6 +14,17 @@ Current recommendation:
 - Continue the Rust native audio spike before calling Track Master release-candidate, because browser audio does not provide enough packaging, device, latency, or export-parity confidence for the final product.
 - Treat current native playback as local playback-cache transport evidence, not as the final streaming/audio-DSP engine.
 
+## Engine-Owned Deterministic Reference
+
+The Python engine now owns both the Live Preview contract and the deterministic reference render for the current temporary first-control model:
+
+- `live_preview_contract()` defines the modeled controls and unmodeled export stages.
+- `render_live_preview_model()` renders the deterministic reference WAV for `Low`, `Mid`, `High`, `Width`, and `Intensity`.
+- `album-master preview-model` exposes that renderer to smoke tests and diagnostics.
+- The shared JS comparison helper now asks the Python CLI to render the model and only computes comparison metrics in JS/Python test glue.
+
+This reduces drift in automated evidence. It does not mean the visible Web Audio Live Preview is export-engine faithful; the UI still labels it as approximate and the contract still lists render-only export stages.
+
 ## Product Requirement
 
 Track Master cannot be considered top-tier until basic ear-facing controls respond in real time or near real time.

@@ -17,7 +17,80 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Goal Coverage Audit
+## Latest Codex Pass: Engine-Owned Live Preview Model
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `src/album_mastering_studio/mastering.py`
+- `src/album_mastering_studio/cli.py`
+- `tests/test_pipeline.py`
+- `desktop/tests/live-preview-model.mjs`
+- `desktop/tests/tauri-webview-runtime-smoke.mjs`
+- `docs/GOAL_AUDIT.md`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ENGINE_DECISION_RECORD.md`
+
+What changed:
+
+- Added `render_live_preview_model()` as the Python engine-owned deterministic renderer for the current temporary Live Preview first-control model.
+- Added `album-master preview-model` to render that model to a local WAV and emit scriptable metadata.
+- Kept the model scoped to evidence/reference output; it is not wired as the real-time user-facing audio path.
+- Replaced the shared JS smoke helper's embedded DSP copy with a call to the Python CLI, then kept JS only for comparison metrics.
+- Updated the broad WebView runtime smoke to use the shared helper instead of a second embedded DSP model.
+- Added Python unit/CLI coverage for finite output, same shape, modeled controls, modeled width/drive, and CLI WAV writing.
+
+Verification already run:
+
+```powershell
+python -m album_mastering_studio.cli preview-contract --json
+python -m unittest tests.test_pipeline.PipelineTest.test_live_preview_config_matches_engine_contract tests.test_pipeline.PipelineTest.test_live_preview_model_renders_engine_owned_reference tests.test_pipeline.PipelineTest.test_cli_preview_model_writes_reference_wav
+node --check .\desktop\tests\live-preview-model.mjs
+node --check .\desktop\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\desktop\tests\tauri-webview-runtime-smoke.mjs
+node --check .\desktop\tests\tauri-real-song-performance-smoke.mjs
+python -m compileall -q src tests
+python -m unittest discover -s tests
+cd desktop
+npm run build
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+cd ..
+desktop\src-tauri\resources\engine\album-master-engine.exe preview-model --help
+cd desktop
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+npm run test:tauri-real-song-performance
+cd ..
+```
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- `test-output\tauri-real-song-performance-smoke\tauri-real-song-performance-smoke.json`
+- Relevant fields:
+  - Track Preview `modeled_width: 1.36`
+  - Track Preview `modeled_drive: 0.4`
+  - Track Preview `export_minus_live_lufs_proxy: 9.080398089816866`
+  - Track Preview `rms_difference_dbfs: -19.535890177713174`
+  - Real song `modeled_width: 1.36`
+  - Real song `modeled_drive: 0.4`
+  - Real song `export_minus_live_lufs_proxy: 0.7150013134906779`
+  - Real song `rms_difference_dbfs: -29.536255941454645`
+
+Remaining gap:
+
+- This makes the comparison reference engine-owned, but Live Preview is still approximate Web Audio in the UI. It does not close export-engine live DSP parity or human listening approval.
+
+Next useful slice:
+
+- Use the engine-owned model as the reference target for the next native/shared live DSP parity step.
+- If the user is present, run and record a real listening pass.
+
+## Previous Codex Pass: Goal Coverage Audit
 
 Date: 2026-05-12
 
