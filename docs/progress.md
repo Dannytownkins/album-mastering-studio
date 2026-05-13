@@ -2,6 +2,43 @@
 
 ## 2026-05-13
 
+### Manual Test Handoff / Unattended Loop Paused
+
+Context:
+
+- The user flagged that 33 hours of continuous unattended testing is too much without a chance to use the app and start UI polish.
+- Do not rerun broad release-readiness, installer, or full app smoke loops unless the user asks or reports a concrete failure.
+- The hardening phase should now hand over to user testing, not keep searching for incremental automated evidence.
+
+Current handoff state:
+
+- Branch state was clean and synced on `master` before this documentation update.
+- Current usable EXE: `desktop\src-tauri\target\release\album-mastering-studio.exe`.
+- Current full release trace remains `test-output\release-readiness-fe808df-live-preview-scope-decision\release-readiness.json`, with `25 passed`, `0 failed`, `0 skipped`.
+- Current ready-to-listen Track Master packet remains `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-064119-225\listening-handoff.html`.
+
+Manual test path:
+
+1. Launch the release EXE.
+2. Add one real song.
+3. Analyze.
+4. Play Original.
+5. Run Update Preview.
+6. Play Mastered.
+7. Toggle Original/Mastered and Volume Match.
+8. Export Master.
+9. Listen to the exported WAV and record concrete issues.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded.
+- Live Preview directional-only scope is recordable but not accepted.
+- Album Master should be checked after Track Master feels good.
+
+Next recommended action:
+
+- Wait for user testing results. Only resume coding from a concrete failure, a requested polish pass, or explicit acceptance/rejection of Live Preview's directional-only scope.
+
 ### Live Preview Scope Decision Field
 
 Scope:

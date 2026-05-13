@@ -21,10 +21,11 @@ Compaction rule for this rebuild:
 Operational note:
 
 - 2026-05-13: the user explicitly resumed the loop and asked for release-candidate stabilization.
+- 2026-05-13: the user later flagged that 33 hours of continuous unattended testing is too much without a chance to use the app. Treat the hardening phase as handed off for manual user testing unless the user reports a concrete failure or explicitly asks for more automation.
 - The active goal remains open. Do not mark it complete until Track Master has real listening approval and the remaining blockers are resolved or explicitly accepted.
 - Keep scope Track Master-first. Do not expand features unless a missing capability directly blocks the core flow.
 - Generated transitions must remain opt-in, not default-enabled.
-- If running disruptive UI/audio/installer tests again, make sure the user has not asked to pause.
+- Do not rerun broad release-readiness, installer, or full app smoke loops from the current state just to gain more confidence. Run targeted checks only for a specific code change or reported failure.
 
 Non-canonical visual reference:
 
@@ -38,8 +39,16 @@ Resume checklist:
 
 1. Confirm the working tree is clean.
 2. Re-read the active blockers in `docs/GOAL_AUDIT.md`.
-3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
-4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
+3. If the user has not reported a failure, keep the next step as manual user testing of `desktop\src-tauri\target\release\album-mastering-studio.exe`.
+4. If the user reports a failure, reproduce that exact failure with the smallest targeted check before changing code.
+5. Do not start broad visual redesign work from the reference image until Track Master manual testing feedback is known.
+
+Manual test handoff:
+
+- Current usable EXE: `desktop\src-tauri\target\release\album-mastering-studio.exe`.
+- Current full release trace: `test-output\release-readiness-fe808df-live-preview-scope-decision\release-readiness.json`, `25 passed`, `0 failed`, `0 skipped`.
+- Current Track Master listening packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-064119-225\listening-handoff.html`.
+- Suggested user path: launch app, add one real song, analyze, play Original, run Update Preview, play Mastered, toggle Original/Mastered and Volume Match, export Master, then listen to the WAV.
 
 ## Latest Codex Pass: Live Preview Scope Decision + Current Release Trace
 
