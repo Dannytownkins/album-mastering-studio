@@ -71,15 +71,18 @@ Verification:
 - Full trace command after commit `cba8ae7a73027dd1c8285f0fa145633b90d1c5ed`: `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-cba8ae7-playable-handoff"`.
 - Full trace result: `24 passed`, `0 failed`, `0 skipped`, with `dirty_before: []` and `dirty_after: []`.
 - Full-trace Windows Application log artifact: `test-output\release-readiness-cba8ae7-playable-handoff\windows-application-events.json`, result `[]`.
+- Browser metadata check loaded the generated handoff HTML in Chrome and verified all four local audio controls reached metadata/canplay-ready state with no media errors.
 
 Evidence:
 
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
+- Browser audio-control metadata artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
 - Full trace: `test-output\release-readiness-cba8ae7-playable-handoff\release-readiness.json`.
 - Current ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
 - Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
 - Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Values: `listeningPacketHtmlIncludesAudioControls: true`, `listeningPacketHtmlIncludesOriginalAudio: true`, `listeningPacketHtmlIncludesMasteredAudio: true`, `listeningPacketHtmlIncludesCodecAudioControls: true`, `exportStatus: "pass"`, and source MP3 size/SHA-256 unchanged.
+- Browser metadata values: 4 audio elements, all `readyState: 4`, all `error: null`, durations around `186.32s`.
 
 Decision:
 

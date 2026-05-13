@@ -26,12 +26,14 @@ Results:
 - Full trace: `test-output\release-readiness-cba8ae7-playable-handoff\release-readiness.json`.
 - Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
+- Browser audio-control metadata smoke: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
 - Current ready-to-listen HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
 - Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
 - Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Windows Application log follow-up for the focused run found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\tauri-real-song-listening-packet-smoke\windows-application-events-after-playable-handoff.json`.
 - Windows Application log follow-up for the full trace found zero matching Album Mastering Studio entries and saved `test-output\release-readiness-cba8ae7-playable-handoff\windows-application-events.json`.
 - Evidence values include `listeningPacketHtmlIncludesAudioControls: true`, `listeningPacketHtmlIncludesOriginalAudio: true`, `listeningPacketHtmlIncludesMasteredAudio: true`, `listeningPacketHtmlIncludesCodecAudioControls: true`, `exportStatus: "pass"`, and source MP3 size/SHA-256 unchanged.
+- Browser metadata evidence loaded 4 local audio elements from the handoff HTML in `106.2 ms`: original MP3 duration `186.319979`, mastered WAV duration `186.319979`, AAC preview duration `186.32`, Opus preview duration `186.326479`, all with `readyState: 4` and `error: null`.
 
 Remaining blockers:
 

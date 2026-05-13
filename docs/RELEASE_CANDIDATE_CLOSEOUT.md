@@ -14,7 +14,7 @@ This checklist is the manual closeout path for the active goal. It does not repl
 - Remaining blockers: human listening approval and Live Preview scope acceptance.
 - Native Project Save As/Open/cancel coverage is now recorded in `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
 - Ready-to-listen Track Master packet for the real MP3 is recorded in `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
-- That packet is intentionally `not-approved`; it includes local audio controls for Original, Mastered, and codec preview files, but it proves only that the handoff exists and the files are ready for review, not that the sound has been accepted.
+- That packet is intentionally `not-approved`; it includes local audio controls for Original, Mastered, and codec preview files, and Chrome metadata evidence confirms those controls load with no media errors, but it proves only that the handoff is playable and ready for review, not that the sound has been accepted.
 
 ## Track Master Listening Pass
 
@@ -29,6 +29,7 @@ Prepared evidence package:
 - Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\dashboard.html`
 - Codec previews: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\codec_previews\`
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`
+- Browser audio-control metadata artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`
 
 1. Launch the packaged desktop app.
 2. Add or drag/drop the audio file.
