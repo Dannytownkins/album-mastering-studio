@@ -42,6 +42,12 @@ try {
   assert.equal(evidence.trackVisible, true);
   assert.equal(evidence.nativeButtonEnabled, true);
   assert.equal(evidence.nativeStarted, true);
+  assert.equal(evidence.nativePlaybackEvidence?.kind, "native-ab-loop");
+  assert.equal(evidence.nativePlaybackEvidence?.active, true);
+  assert.equal(Number.isFinite(evidence.nativePlaybackEvidence?.invoke_elapsed_ms), true);
+  assert.equal(Number.isFinite(evidence.nativePlaybackEvidence?.prepare_client_elapsed_ms), true);
+  assert.equal(typeof evidence.nativePlaybackEvidence?.source_cache_hit, "boolean");
+  assert.equal(typeof evidence.nativePlaybackEvidence?.master_cache_hit, "boolean");
   assert.equal(evidence.pauseButtonEnabled, true);
   assert.equal(evidence.pausedStatus.active, true);
   assert.equal(evidence.pausedStatus.paused, true);
@@ -196,6 +202,7 @@ function realSongNativeUiExpression(title) {
   if (!nativeStarted) throw new Error('Native A/B did not start from the visible UI button');
   await new Promise((resolve) => setTimeout(resolve, 650));
   const nativeStatusTextAfterStart = text(document.querySelector('.native-audition-status'));
+  const nativePlaybackEvidence = window.__AMS_NATIVE_PLAYBACK_EVIDENCE__ || null;
   const pauseButton = buttonByText('Pause');
   const pauseButtonEnabled = !pauseButton.disabled;
   click(pauseButton);
@@ -233,6 +240,7 @@ function realSongNativeUiExpression(title) {
     trackVisible,
     nativeButtonEnabled,
     nativeStarted,
+    nativePlaybackEvidence,
     nativeStatusTextAfterStart,
     pauseButtonEnabled,
     pausedStatus,

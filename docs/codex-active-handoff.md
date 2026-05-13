@@ -17,7 +17,46 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Playback Start Evidence
+## Latest Codex Pass: Real-Song Native A/B Playback Evidence
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-real-song-native-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Extended the visible Track Master `Native A/B` path to record source/master playback-cache hit state, client-side prepare timing, and Rust native invoke timing.
+- Kept the existing native playback command path local/offline and limited to bounded Track Master A/B audition.
+- Extended the real-song Native A/B smoke to assert `window.__AMS_NATIVE_PLAYBACK_EVIDENCE__` for the `native-ab-loop` path.
+
+Verification already run:
+
+- `cd desktop; npm run build`
+- `cd desktop; node --check .\tests\tauri-real-song-native-ui-smoke.mjs`
+- `cd desktop\src-tauri; cargo check`
+- `cd desktop; npm run test:tauri-real-song-native-ui` with `AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"`
+- `cd desktop; npm run test:integration`
+
+Evidence:
+
+- `test-output\tauri-real-song-native-ui-smoke\tauri-real-song-native-ui-smoke.json`
+- Key values: `nativeStarted: true`, `nativeStatusTextAfterStart: "Native A/B playing"`, `kind: "native-ab-loop"`, `active: true`, `prepare_client_elapsed_ms: 194.1`, `invoke_elapsed_ms: 56.7`, `source_cache_hit: true`, `master_cache_hit: false`.
+
+Remaining blockers:
+
+- This makes real-song Native A/B startup measurable; it does not prove every real song has acceptable latency.
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Rerun full release readiness after any later code/package/smoke change before making a fresh release-ready claim.
+
+## Previous Codex Pass: Playback Start Evidence
 
 Date: 2026-05-12
 

@@ -291,6 +291,9 @@ type NativePlaybackEvidence = {
   kind: string;
   start_seconds: number;
   invoke_elapsed_ms: number;
+  prepare_client_elapsed_ms?: number | null;
+  source_cache_hit?: boolean | null;
+  master_cache_hit?: boolean | null;
   active: boolean;
   callback_count: number;
   queued_output_frames: number;
@@ -2445,27 +2448,47 @@ function App() {
     const masteredOriginalPath = selectedMaster ?? (await renderPreviewMaster(selectedTrack));
     if (!masteredOriginalPath) return;
     setProgressLabel("Preparing native A/B audition.");
+    const prepareStartedAtMs = performance.now();
     try {
-      const [sourcePath, masterPath] = await Promise.all([
-        invoke<string>("prepare_playback_file", { path: selectedTrack.path }),
-        invoke<string>("prepare_playback_file", { path: masteredOriginalPath }),
+      const [sourcePrepared, masterPrepared] = await Promise.all([
+        invoke<PreparedPlaybackFile>("prepare_playback_file_info", { path: selectedTrack.path }),
+        invoke<PreparedPlaybackFile>("prepare_playback_file_info", { path: masteredOriginalPath }),
       ]);
+      const prepareClientElapsedMs = performance.now() - prepareStartedAtMs;
       const sourceDuration = selectedTrack.analysis.duration_seconds ?? duration;
       const startSeconds = regionStartTime(region, sourceDuration);
       const regionMs = Math.round(
         clamp(region ? (region.end - region.start) * sourceDuration * 1000 : 600, 150, 2000),
       );
       const totalMs = Math.round(clamp(regionMs * 4, 1200, 5000));
+      const nativeStartedAtMs = performance.now();
       const status = await invoke<NativePlaybackStatus>("start_native_ab_loop_playback", {
-        sourcePath,
-        masterPath,
+        sourcePath: sourcePrepared.path,
+        masterPath: masterPrepared.path,
         startSeconds,
         regionDurationMs: regionMs,
         totalDurationMs: totalMs,
       });
+      const nativeInvokeElapsedMs = performance.now() - nativeStartedAtMs;
+      window.__AMS_NATIVE_PLAYBACK_EVIDENCE__ = {
+        label: `${selectedTrack.title} - Native A/B`,
+        path: masterPrepared.path,
+        kind: "native-ab-loop",
+        start_seconds: roundMs(startSeconds),
+        invoke_elapsed_ms: roundMs(nativeInvokeElapsedMs),
+        prepare_client_elapsed_ms: roundMs(prepareClientElapsedMs),
+        source_cache_hit: sourcePrepared.cache_hit,
+        master_cache_hit: masterPrepared.cache_hit,
+        active: status.active,
+        callback_count: status.callback_count,
+        queued_output_frames: status.queued_output_frames,
+        played_output_frames: status.played_output_frames,
+        stream_errors: status.stream_errors,
+        warnings: status.warnings,
+      };
       setNativePlaybackStatus(status);
       setProgressLabel("Native A/B audition running.");
-      pushLog(`Native A/B audition started: ${selectedTrack.title} on ${status.output_device ?? "default output"}.`);
+      pushLog(`Native A/B audition started: ${selectedTrack.title} on ${status.output_device ?? "default output"} (prep ${formatMs(prepareClientElapsedMs)}, invoke ${formatMs(nativeInvokeElapsedMs)}).`);
     } catch (error) {
       setNativePlaybackStatus(idleNativePlaybackStatus);
       pushLog(`Native A/B audition failed: ${String(error)}`);

@@ -5502,3 +5502,57 @@ Passed steps:
 | `git-diff-check` | 0.03 |
 
 This closes the current-commit final release-loop blocker for `f1c4cff`. It does not close human listening approval, does not make Live Preview export-chain faithful, and does not add native OS Open/Save-As dialog automation.
+
+### Real-Song Native A/B Playback Evidence Loop
+
+- Extended the visible Track Master `Native A/B` path so it records playback-cache evidence for both sides of the A/B loop.
+- `window.__AMS_NATIVE_PLAYBACK_EVIDENCE__` now records the `native-ab-loop` label/path/kind, selected start seconds, Rust native invoke timing, client-side prepare timing, source/master cache-hit booleans, active state, output-frame queue, stream errors, and warnings.
+- Extended `desktop/tests/tauri-real-song-native-ui-smoke.mjs` so the real-song visible UI smoke asserts the Native A/B evidence object, not only the visible playback state.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-real-song-native-ui-smoke.mjs
+cd src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
+cargo check
+cd ..
+$env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"
+npm run test:tauri-real-song-native-ui
+npm run test:integration
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Real-song native UI smoke syntax check passed.
+- Rust `cargo check` passed.
+- Real-song Native A/B UI smoke passed against `Lay the Money on the Desk (1).mp3`.
+- Desktop integration test passed.
+- Evidence JSON: `test-output\tauri-real-song-native-ui-smoke\tauri-real-song-native-ui-smoke.json`.
+
+Evidence values from the smoke:
+
+```json
+{
+  "nativeStarted": true,
+  "nativeStatusTextAfterStart": "Native A/B playing",
+  "nativePlaybackEvidence": {
+    "label": "Lay the Money on the Desk - Native A/B",
+    "kind": "native-ab-loop",
+    "start_seconds": 0,
+    "invoke_elapsed_ms": 56.7,
+    "prepare_client_elapsed_ms": 194.1,
+    "source_cache_hit": true,
+    "master_cache_hit": false,
+    "active": true,
+    "queued_output_frames": 240000
+  }
+}
+```
+
+Remaining caveat:
+
+- This makes the real-song Native A/B startup path measurable and regression-testable. It is still automated evidence for one provided MP3, not human listening approval, full-album real-song playback approval, or export-chain live DSP parity.

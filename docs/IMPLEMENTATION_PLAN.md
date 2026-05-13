@@ -434,6 +434,14 @@ Playback stabilization requirement:
 - Evidence values include `playbackStartedVisible: true`, `masteredPlaybackEvidenceHasTimings: true`, `masteredPlaybackEvidenceHasPlaying: true`, `referencePlaybackEvidenceHasTimings: true`, `abSourcePlaybackEvidenceHasPlaying: true`, `abMasterPlaybackEvidenceHasPlaying: true`, `abOriginalPlaybackEvidenceHasPlaying: true`, and `nativePlaybackEvidenceHasInvokeTiming: true`.
 - Sample measured values from that run: mastered playback `click_to_playing_ms: 316.6`, cached A/B source `click_to_playing_ms: 30.1`, and native Live Preview `invoke_elapsed_ms: 12.3`.
 
+2026-05-12 real-song Native A/B playback evidence baseline:
+
+- Extended the visible real-song Native A/B smoke to assert `window.__AMS_NATIVE_PLAYBACK_EVIDENCE__` for the `native-ab-loop` path.
+- The visible `Native A/B` action now records source/master playback-cache hits plus client-side prepare timing and Rust native invoke timing.
+- Evidence: `test-output/tauri-real-song-native-ui-smoke/tauri-real-song-native-ui-smoke.json`.
+- Evidence values from `Lay the Money on the Desk (1).mp3`: `prepare_client_elapsed_ms: 194.1`, `invoke_elapsed_ms: 56.7`, `source_cache_hit: true`, `master_cache_hit: false`, `active: true`.
+- Remaining caveat: this makes real-song Native A/B startup measurable, but it is still automated UI evidence, not human listening approval or full export-chain live DSP parity.
+
 ## Phase 5: Real-Time Audition Spike
 
 Goal: prove the app can support responsive controls by ear.
