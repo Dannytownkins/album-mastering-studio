@@ -825,21 +825,15 @@ function App() {
     Promise.allSettled([
       invoke<string>("repo_root"),
       invoke<string>("default_output_dir"),
-      invoke<AutosavedSession | null>("load_recent_session"),
       invoke<UserPreset[]>("list_user_presets"),
       invoke<LivePreviewContract>("live_preview_contract"),
-    ]).then(([rootResult, outputResult, autosaveResult, presetsResult, contractResult]) => {
+    ]).then(([rootResult, outputResult, presetsResult, contractResult]) => {
       const defaultOutput =
         outputResult.status === "fulfilled" ? outputResult.value : initialSettings.outputDir;
       if (rootResult.status === "fulfilled") {
         setRepoRoot(rootResult.value);
       }
-      if (autosaveResult.status === "fulfilled" && autosaveResult.value) {
-        restoreAutosavedSession(autosaveResult.value, defaultOutput);
-        pushLog("Restored recent session.");
-      } else {
-        setSettings((current) => ({ ...current, outputDir: defaultOutput }));
-      }
+      setSettings((current) => ({ ...current, outputDir: defaultOutput }));
       if (presetsResult.status === "fulfilled") {
         setUserPresets(presetsResult.value);
         setSelectedUserPresetId(presetsResult.value[0]?.id ?? "");
@@ -3096,7 +3090,7 @@ function App() {
           <button onClick={saveProject} title="Save project"><Save size={16} /> Save</button>
           <button onClick={saveProjectAs} title="Save project as"><Save size={16} /> Save As</button>
           <button onClick={() => openLocalPath(settings.outputDir, "output folder")} title="Open output folder"><FolderOpen size={16} /> Output</button>
-          <button onClick={() => alert("Album Mastering Studio\nLocal Tauri shell with Python engine sidecar.")} title="About"><Info size={16} /></button>
+          <button onClick={() => alert("Album Mastering Studio\nNative Rust realtime audition and mastering workspace.")} title="About"><Info size={16} /></button>
         </div>
       </header>
 
@@ -3235,7 +3229,7 @@ function App() {
             <div className="status-pills">
               <span className={allAnalyzed ? "pill ok" : "pill"}>{allAnalyzed ? "Analyzed" : "Needs analysis"}</span>
               <span className={hasStaleRender ? "pill warn" : selectedMaster ? "pill ok" : "pill"}>
-                {hasStaleRender ? "Preview stale" : selectedMaster ? "Master ready" : "No master"}
+                {hasStaleRender ? "Render outdated" : selectedMaster ? "Master ready" : "No master"}
               </span>
             </div>
           </div>
