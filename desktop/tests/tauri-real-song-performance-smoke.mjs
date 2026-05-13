@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { compareExportVsLiveModel, firstControlLivePreviewTuning } from "./live-preview-model.mjs";
 
@@ -25,6 +26,7 @@ assert.equal(existsSync(releaseExe), true, `Release executable not found: ${rele
 safeRemove(renderOutput);
 safeRemove(firstControlRenderOutput);
 mkdirSync(outputRoot, { recursive: true });
+const sourceBefore = fileSummary(sourcePath);
 
 const launchStarted = nowMs();
 const browserArguments = [
@@ -75,6 +77,8 @@ try {
     releaseExe,
     releaseExeExists: existsSync(releaseExe),
     source: fileSummary(sourcePath),
+    sourceBefore,
+    sourceAfter: fileSummary(sourcePath),
     screenshot: screenshotPath,
     screenshotExists: existsSync(screenshotPath),
     stdout: stdout.join(""),
@@ -92,9 +96,15 @@ try {
     firstControlManifestExists: existsSync(smoke.firstControlManifestPath),
     firstControlTrackOutputExists: existsSync(smoke.firstControlTrackOutputPath),
   };
+  evidence.sourceUnchanged = {
+    size: evidence.sourceAfter.size === evidence.sourceBefore.size,
+    sha256: evidence.sourceAfter.sha256 === evidence.sourceBefore.sha256,
+  };
 
   assert.equal(evidence.releaseExeExists, true);
   assert.equal(evidence.appTextIncludesBrand, true);
+  assert.equal(evidence.sourceUnchanged.size, true);
+  assert.equal(evidence.sourceUnchanged.sha256, true);
   assert.ok(evidence.launchToInvokeReadyMs < 30_000, `Release launch took ${evidence.launchToInvokeReadyMs}ms`);
   assert.equal(evidence.sourceValidationStatus, "ok");
   assert.equal(evidence.analysisCount, 1);
@@ -328,6 +338,7 @@ function fileSummary(filePath) {
   return {
     path: filePath,
     size: stats.size,
+    sha256: createHash("sha256").update(readFileSync(filePath)).digest("hex"),
     modified: stats.mtime.toISOString(),
   };
 }
