@@ -2,6 +2,29 @@
 
 ## 2026-05-13
 
+### Native Dialog Automation Recheck
+
+Scope:
+
+- Rechecked whether the native Project Open and Save As dialogs can be covered unattended from the packaged release app.
+- Prototyped, but did not keep, a packaged dialog smoke using the existing CDP harness plus Windows UI Automation.
+- Tried five trigger routes: WebView DOM activation, CDP coordinate mouse click on the visible buttons, Windows UI Automation button invocation, WScript-driven shortcuts (`Ctrl+Shift+S`, `Ctrl+O`) against the Tauri window, and direct `plugin:dialog|save` / `plugin:dialog|open` invocation from the packaged WebView.
+
+Results:
+
+- The native file picker never became visible to Windows UI Automation in this harness.
+- UI Automation saw the packaged `Album Mastering Studio` Tauri window, but not a Save/Open child dialog.
+- The Tauri WebView content is not exposed as individual UI Automation buttons; only the window controls were visible.
+- CDP coordinate clicks, UI Automation invocation, and WScript shortcuts did not surface a driveable native file picker.
+- Direct `plugin:dialog|save` stayed pending without surfacing a visible dialog in the unattended run.
+- The attempted smoke was removed rather than promoted because it did not produce reliable evidence.
+
+Current decision:
+
+- Native OS Open/Save-As dialog coverage remains a blocker requiring manual verification or explicit waiver.
+- Direct `.ams.json` path Load/Save remains covered by `test:tauri-project-persistence`, but it is still not native dialog coverage.
+- Do not rerun this same automation route unless a new Windows dialog-driving strategy is available.
+
 ### Full Release Readiness Trace at 8c6b5a0
 
 Scope:

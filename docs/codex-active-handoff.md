@@ -41,6 +41,36 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
+## Latest Codex Pass: Native Dialog Automation Recheck
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What happened:
+
+- Re-attempted unattended packaged coverage for native Project Save As and Open dialogs.
+- Prototyped a packaged smoke using the existing CDP harness plus Windows UI Automation, but removed it because it did not produce reliable evidence.
+- Tried WebView DOM button activation, CDP coordinate mouse clicks, Windows UI Automation button invocation, WScript-driven shortcuts against the Tauri window, and direct `plugin:dialog|save` / `plugin:dialog|open` invocation from the packaged WebView.
+
+Evidence from the attempt:
+
+- The packaged Tauri window was visible to Windows UI Automation.
+- The native Save/Open dialog never appeared as a visible UI Automation window in this harness.
+- WebView content was not exposed as UI Automation buttons; only the window controls were visible.
+- CDP coordinate clicks, UI Automation invocation, and WScript shortcuts did not surface a driveable native file picker.
+- Direct dialog plugin invocation stayed pending without surfacing a visible dialog.
+
+Decision:
+
+- Do not promote this automation route into release-readiness.
+- Native OS Open/Save-As remains open until manually verified or explicitly waived.
+- Direct Project path Load/Save coverage is still valid as a deterministic fallback, but it does not close native dialog coverage.
+
 ## Latest Codex Pass: Full Release Trace for Approval Scope Commit
 
 Date: 2026-05-13
