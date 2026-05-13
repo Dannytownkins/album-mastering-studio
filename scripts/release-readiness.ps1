@@ -192,6 +192,7 @@ try {
 
   if ($UseRealSongSmokes) {
     Invoke-ReadinessStep "tauri-real-song-codec-qc" $DesktopRoot { & npm.cmd run test:tauri-real-song-codec-qc }
+    Invoke-ReadinessStep "tauri-real-song-listening-packet" $DesktopRoot { & npm.cmd run test:tauri-real-song-listening-packet }
     Invoke-ReadinessStep "tauri-real-song-region-preview" $DesktopRoot { & npm.cmd run test:tauri-real-song-region-preview }
     Invoke-ReadinessStep "tauri-real-song-native-ui" $DesktopRoot { & npm.cmd run test:tauri-real-song-native-ui }
     Invoke-ReadinessStep "tauri-real-song-album-playback" $DesktopRoot { & npm.cmd run test:tauri-real-song-album-playback }
