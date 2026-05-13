@@ -2,6 +2,14 @@
 
 ## 2026-05-13
 
+### Manual Release-Candidate Closeout Checklist
+
+- Added `docs\RELEASE_CANDIDATE_CLOSEOUT.md`.
+- The checklist turns the remaining human-present blockers into concrete Track Master and Album Master listening steps.
+- It identifies the required receipt artifacts: `listening-review.json`, `listening-handoff.json`, and `listening-handoff.html`.
+- It makes the remaining product decisions explicit: accept Live Preview as approximate, waive or manually verify native Open/Save-As dialog coverage, and decide whether the reference screenshot becomes a separate polish pass.
+- No app code changed in this docs pass.
+
 ### Project Open Dialog Default Path Hardening
 
 Scope:

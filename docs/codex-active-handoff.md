@@ -16,6 +16,7 @@ Compaction rule for this rebuild:
 2. Continue one verified vertical slice at a time.
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
+5. When the user is ready to judge release-candidate completion, use `docs/RELEASE_CANDIDATE_CLOSEOUT.md` for the manual listening and waiver checklist.
 
 Operational note:
 

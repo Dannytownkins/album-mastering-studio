@@ -14,7 +14,7 @@ This audit is a handoff guard, not a completion claim. Keep it current when the 
 
 Status: active, not complete.
 
-Operating state: resumed as of 2026-05-13. The current-commit full release trace at `e619318` has passed, but the active goal remains open until the remaining listening, preview-scope, and native-dialog blockers are resolved or explicitly accepted.
+Operating state: resumed as of 2026-05-13. The current app-code full release trace at `e619318` has passed, but the active goal remains open until the remaining listening, preview-scope, and native-dialog blockers are resolved or explicitly accepted. Later commits may be documentation-only handoff updates.
 
 The current repo has strong automated evidence for the Track Master-first Tauri surface, Python engine contract, Album Master path, packaged Windows flow, and a current-commit release trace. The remaining blockers are quality gates that cannot be honestly closed by documentation alone:
 
@@ -32,7 +32,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Album Master path | Automated release evidence covers multi-source and full-source Album Master render, transitions, album WAV, dashboard, export checks, and native album playback stability. | Covered with listening caveat |
 | Docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and `docs/ENGINE_DECISION_RECORD.md` record current evidence and known gaps. | Covered |
 | Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, local render/check/report flow, and direct `.ams.json` path Load/Save remain the core path. | Covered |
-| Release package | Current-commit full release-readiness trace at `e619318` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, true headless native output probe, Native A/B UI/audio, installer, and diff gates. | Covered with listening/dialog caveats |
+| Release package | Current app-code full release-readiness trace at `e619318` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, true headless native output probe, Native A/B UI/audio, installer, and diff gates. | Covered with listening/dialog caveats |
 
 ## Prompt-To-Artifact Audit
 
@@ -44,7 +44,7 @@ This matrix maps the active goal wording to concrete repo artifacts. It is inten
 | Track Master-first Tauri desktop surface | `desktop/src/App.tsx`, `desktop/src-tauri/src/lib.rs`, `desktop/tests/tauri-track-preview-ui-smoke.mjs`, and packaged evidence under `test-output/tauri-track-preview-ui-smoke/`. | Human listening approval of the resulting sound. |
 | Preserve the Python engine contract | `src/album_mastering_studio/cli.py`, `pipeline.py`, `mastering.py`, preview-contract/model commands, `tests/test_pipeline.py`, and `desktop/tests/cli-contract.test.mjs`. | A DAW-grade real-time DSP engine. |
 | Preserve the Album Master path | `desktop/tests/tauri-release-album-state-smoke.mjs`, `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`, real-song Album Master smokes, boundary-preview coverage, and dashboard/export artifacts. | True multi-song human listening approval unless the user supplies and reviews a multi-song set. |
-| Preserve docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and this audit. | The docs are evidence pointers, not proof by themselves. |
+| Preserve docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, and this audit. | The docs are evidence pointers, not proof by themselves. |
 | Preserve local/offline workflow | Tauri sidecar packaging, bundled FFmpeg/FFprobe resources, `npm run tauri:build`, local `.ams.json` project files, and offline render/report commands. | External platform release-meter certification. |
 | Make release readiness reproducible | `scripts/release-readiness.ps1` and `cd desktop; npm run verify:release` run the current release gate sequence and write a JSON trace plus per-step logs under `test-output/`; `test-output\release-readiness-e619318-full\release-readiness.json` is the current trace. | A fresh trace is required after any later code, package, or smoke-test change. |
 
@@ -99,6 +99,10 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 1. A real human listening pass is run and recorded in the app or handoff notes, including whether Track Master and Album Master outputs are musically acceptable.
 2. Live Preview either becomes shared/export-engine faithful for the basic ear-facing controls or remains clearly scoped as an approximation with release-candidate wording explicitly accepted.
 3. Native OS Open and Save-As dialogs are automated, manually verified, or explicitly waived. Direct path-based project Load/Save is covered, but that is not native dialog coverage.
+
+Manual closeout path:
+
+- Use `docs/RELEASE_CANDIDATE_CLOSEOUT.md` for the exact Track Master and Album Master listening checklist, required receipt artifacts, and product decisions still needing user acceptance.
 
 Closed for current commit:
 
