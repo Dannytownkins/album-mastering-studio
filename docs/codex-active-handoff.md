@@ -17,7 +17,35 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Current-Commit Release Readiness Trace
+## Latest Codex Pass: Release Readiness Native A/B Gate Expansion
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `scripts/release-readiness.ps1`
+- `docs/progress.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Added `tauri-real-song-native-ui` to the `-RealSongPath` portion of the release-readiness runner.
+- This makes future full traces cover the real-song visible Track Master `Native A/B` startup evidence path.
+
+Verification already run:
+
+- PowerShell parse check for `scripts\release-readiness.ps1`
+- `git diff --check`
+
+Remaining blockers:
+
+- Rerun the full release-readiness trace from the commit that contains this runner change before making a fresh current-commit release-ready claim.
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+
+## Previous Codex Pass: Current-Commit Release Readiness Trace
 
 Date: 2026-05-12
 

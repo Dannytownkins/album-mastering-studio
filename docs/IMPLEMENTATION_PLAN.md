@@ -925,7 +925,7 @@ Required:
 - Added `cd desktop; npm run verify:release`.
 - The runner creates `test-output\release-readiness-<commit>-<timestamp>\release-readiness.json` plus per-step logs for the release gate sequence.
 - Default gates include Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, and `git diff --check`.
-- Real-song Track/Album and installer smokes are opt-in with `-RealSongPath` and `-IncludeInstallerSmokes`.
+- Real-song Track/Native A/B/Album and installer smokes are opt-in with `-RealSongPath` and `-IncludeInstallerSmokes`.
 - This runner supports the final-release blocker, but does not close it until run from the commit being evaluated.
 
 2026-05-12 current-commit release-readiness trace:
@@ -934,6 +934,11 @@ Required:
 - Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-8376e38-full"`.
 - Result: 21 passed, 0 failed, 0 skipped, with `dirty_before: []` and `dirty_after: []`.
 - Remaining release-quality blockers are human listening approval, export-chain/live-preview parity, and native OS Open/Save-As dialog automation.
+
+2026-05-12 release-readiness runner coverage expansion:
+
+- Added `tauri-real-song-native-ui` to the `-RealSongPath` gate set so future full traces cover the visible real-song Native A/B startup evidence path.
+- Rerun the full release-readiness trace from the commit that includes this runner change before treating the expanded gate as current release evidence.
 
 ## Public Release Risk Notes
 

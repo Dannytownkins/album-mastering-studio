@@ -5593,3 +5593,16 @@ Passed steps:
 | `git-diff-check` | 0.13 |
 
 This closes the current-commit release-readiness trace blocker for `8376e38`. It does not close human listening approval, does not make Live Preview export-chain faithful, and does not add native OS Open/Save-As dialog automation.
+
+### Release Readiness Native A/B Gate Expansion
+
+- Added `tauri-real-song-native-ui` to `scripts\release-readiness.ps1` when `-RealSongPath` is supplied.
+- This brings the new real-song visible Track Master `Native A/B` startup evidence into the reusable release trace instead of leaving it as a separate manual smoke.
+- The previous clean full trace remains `8376e38`; rerun the full release-readiness trace from the commit containing this runner change before making a fresh current-commit release-readiness claim.
+
+Verification:
+
+```powershell
+$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path -LiteralPath 'scripts\release-readiness.ps1').Path, [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) { $errors | Format-List *; exit 1 } ; 'release-readiness.ps1 parse ok'
+git diff --check
+```
