@@ -949,6 +949,20 @@ function trackPreviewExpression() {
   const exportEngineAuditionEngine = window.__AMS_EXPORT_ENGINE_AUDITION__?.engine || '';
   const exportEngineAuditionStartSeconds = window.__AMS_EXPORT_ENGINE_AUDITION__?.startSeconds ?? null;
   const exportEngineAuditionSourceDurationSeconds = window.__AMS_EXPORT_ENGINE_AUDITION__?.sourceDurationSeconds ?? null;
+  const exportEngineAuditionSeekReady = await waitFor(
+    () => (audio()?.currentTime || 0) >= Math.max(0, exportAuditionExpectedStartSeconds - 0.25),
+    5000,
+  );
+  if (!exportEngineAuditionSeekReady) {
+    throw new Error('Rendered preview transport did not seek to the expected cue: ' + JSON.stringify({
+      currentTime: audio()?.currentTime || 0,
+      expectedStart: exportAuditionExpectedStartSeconds,
+      readyState: audio()?.readyState ?? null,
+      networkState: audio()?.networkState ?? null,
+      audition: window.__AMS_EXPORT_ENGINE_AUDITION__ || null,
+      transportLabel: transportLabel(),
+    }));
+  }
   const exportEngineAuditionCurrentTimeSeconds = audio()?.currentTime || 0;
   const previewParityTitleAfterUpdatePreview = document.querySelector('.preview-parity-status')?.getAttribute('title') || '';
   const exportEngineAuditionTransportIncludesMastered = transportLabel().includes('Mastered');
@@ -1185,6 +1199,7 @@ function trackPreviewExpression() {
     exportEngineAuditionEngine,
     exportEngineAuditionStartSeconds,
     exportEngineAuditionSourceDurationSeconds,
+    exportEngineAuditionSeekReady,
     exportEngineAuditionCurrentTimeSeconds,
     previewParityTitleAfterUpdatePreview,
     exportEngineAuditionTransportIncludesMastered,
