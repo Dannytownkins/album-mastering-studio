@@ -34,8 +34,8 @@ What changed:
 
 - Added a root-level PowerShell release-readiness runner that records a JSON trace and per-step logs under `test-output\release-readiness-<commit>-<timestamp>\`.
 - Added `cd desktop; npm run verify:release` as the desktop entrypoint.
-- Default runner coverage includes Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, and `git diff --check`.
-- Optional runner coverage includes real-song smokes with `-RealSongPath` and installer smokes with `-IncludeInstallerSmokes`.
+- Default runner coverage includes Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, and `git diff --check`.
+- Optional runner coverage includes real-song Track/Album smokes with `-RealSongPath` and installer smokes with `-IncludeInstallerSmokes`.
 - Updated `docs/GOAL_AUDIT.md` with a prompt-to-artifact audit matrix mapping the active goal wording to concrete files and commands.
 
 Verification already run:
@@ -48,6 +48,7 @@ node -e "JSON.parse(require('fs').readFileSync('desktop/package.json','utf8')); 
 Remaining gap:
 
 - This creates the repeatable final release loop, but does not itself prove a final clean-commit release trace. Run the command below from the pushed commit before treating release readiness as current:
+- A first attempted run from `3ee09b9` failed before the product gates because `Save-Trace` was constructing dirty status directly inside the trace object. The runner has since been patched to snapshot arrays first, and the trace needs to be rerun from the patched commit.
 
 ```powershell
 cd desktop

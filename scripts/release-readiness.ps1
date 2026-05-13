@@ -27,11 +27,15 @@ $TracePath = Join-Path $OutputRoot "release-readiness.json"
 $script:Steps = New-Object System.Collections.Generic.List[object]
 
 function Get-DirtyStatus {
-  $lines = @(& git -C $RepoRoot status --porcelain)
-  return $lines
+  $lines = & git -C $RepoRoot status --porcelain
+  if ($null -eq $lines) {
+    return @()
+  }
+  return @($lines | ForEach-Object { [string]$_ })
 }
 
-$DirtyBefore = @(Get-DirtyStatus)
+$DirtyBefore = @()
+$DirtyBefore += Get-DirtyStatus
 $UseRealSongSmokes = $IncludeRealSongSmokes.IsPresent -or -not [string]::IsNullOrWhiteSpace($RealSongPath)
 $ResolvedRealSongPath = $null
 
@@ -44,6 +48,11 @@ if ($UseRealSongSmokes) {
 }
 
 function Save-Trace {
+  $dirtyAfter = @()
+  $dirtyAfter += Get-DirtyStatus
+  $stepsSnapshot = @()
+  $stepsSnapshot += $script:Steps
+
   $trace = [pscustomobject]@{
     schema_version = 1
     generated_at = (Get-Date).ToString("o")
@@ -54,7 +63,7 @@ function Save-Trace {
     commit = $Commit
     short_commit = $ShortCommit
     dirty_before = $DirtyBefore
-    dirty_after = @(Get-DirtyStatus)
+    dirty_after = $dirtyAfter
     options = [pscustomobject]@{
       include_real_song_smokes = $UseRealSongSmokes
       real_song_path = $ResolvedRealSongPath
@@ -62,7 +71,7 @@ function Save-Trace {
       skip_tauri_build = $SkipTauriBuild.IsPresent
     }
     output_root = $OutputRoot
-    steps = @($script:Steps)
+    steps = $stepsSnapshot
   }
   $trace | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $TracePath -Encoding UTF8
 }
@@ -160,10 +169,12 @@ try {
   Invoke-ReadinessStep "tauri-release-album-codec-qc" $DesktopRoot { & npm.cmd run test:tauri-release-album-codec-qc }
   Invoke-ReadinessStep "tauri-release-track-codec-qc" $DesktopRoot { & npm.cmd run test:tauri-release-track-codec-qc }
   Invoke-ReadinessStep "tauri-release-session-safety" $DesktopRoot { & npm.cmd run test:tauri-release-session-safety }
+  Invoke-ReadinessStep "tauri-project-persistence" $DesktopRoot { & npm.cmd run test:tauri-project-persistence }
 
   if ($UseRealSongSmokes) {
     Invoke-ReadinessStep "tauri-real-song-codec-qc" $DesktopRoot { & npm.cmd run test:tauri-real-song-codec-qc }
     Invoke-ReadinessStep "tauri-real-song-region-preview" $DesktopRoot { & npm.cmd run test:tauri-real-song-region-preview }
+    Invoke-ReadinessStep "tauri-real-song-album-playback" $DesktopRoot { & npm.cmd run test:tauri-real-song-album-playback }
     Invoke-ReadinessStep "tauri-real-song-album-codec-qc" $DesktopRoot { & npm.cmd run test:tauri-real-song-album-codec-qc }
   } else {
     Add-SkippedStep "tauri-real-song-smokes" "Skipped because no -RealSongPath was provided."

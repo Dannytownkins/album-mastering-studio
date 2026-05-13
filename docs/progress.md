@@ -5240,8 +5240,8 @@ Next candidate from scout:
 - Added `scripts/release-readiness.ps1`, a root-level PowerShell runner for the release gate sequence.
 - Added `cd desktop; npm run verify:release` as the npm entrypoint for that runner.
 - The runner writes per-step logs plus `release-readiness.json` under `test-output\release-readiness-<commit>-<timestamp>\`.
-- Default coverage: Python compile, Python unittest, CLI smoke, desktop build, desktop integration, Tauri release build, sidecar startup, release launch smoke, Track Preview UI smoke, Album state smoke, Album Codec QC smoke, Track Codec QC smoke, session-safety smoke, and `git diff --check`.
-- Optional coverage: pass `-RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"` for real-song smokes and `-IncludeInstallerSmokes` for NSIS/MSI smoke coverage.
+- Default coverage: Python compile, Python unittest, CLI smoke, desktop build, desktop integration, Tauri release build, sidecar startup, release launch smoke, Track Preview UI smoke, Album state smoke, Album Codec QC smoke, Track Codec QC smoke, session-safety smoke, project-persistence smoke, and `git diff --check`.
+- Optional coverage: pass `-RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"` for real-song Track/Album smokes and `-IncludeInstallerSmokes` for NSIS/MSI smoke coverage.
 - Updated `docs/GOAL_AUDIT.md` with a prompt-to-artifact audit matrix so future handoffs can map the active goal text to actual files, commands, and remaining blockers.
 
 Verification:
@@ -5255,6 +5255,7 @@ Results:
 
 - `release-readiness.ps1` parsed successfully.
 - `desktop/package.json` parsed successfully.
+- Follow-up runner patch fixed PowerShell trace-array construction before a trace file existed, added project-persistence to the default gate, and added real-song album playback to the real-song opt-in gate.
 
 Remaining caveat:
 
