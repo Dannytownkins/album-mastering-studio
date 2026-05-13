@@ -48,6 +48,32 @@ This matrix maps the active goal wording to concrete repo artifacts. It is inten
 | Preserve local/offline workflow | Tauri sidecar packaging, bundled FFmpeg/FFprobe resources, `npm run tauri:build`, local `.ams.json` project files, and offline render/report commands. | External platform release-meter certification. |
 | Make release readiness reproducible | `scripts/release-readiness.ps1` and `cd desktop; npm run verify:release` run the current release gate sequence and write a JSON trace plus per-step logs under `test-output/`; `test-output\release-readiness-8c6b5a0-full\release-readiness.json` is the current app-code full trace. | A fresh trace is required after any later code, package, or smoke-test change. |
 
+## Release-Candidate Stabilization Checklist
+
+This checklist maps the user's release-candidate hardening prompt to concrete evidence. It is stricter than "tests passed": each row records what the current evidence actually proves and what remains unclosed.
+
+| Requirement | Current evidence | Status |
+| --- | --- | --- |
+| Repo safety before editing | `git status --short --branch` is clean at current `master`; `git diff --quiet 8c6b5a0..HEAD -- ':!docs/**'` shows no non-doc change after the latest full app-code trace. | Covered |
+| Launch packaged desktop app | `tauri-release-launch`, `tauri-track-preview-ui`, and real-song release smokes launch the packaged EXE through CDP/WebView harnesses. | Covered |
+| Add/drag/drop audio and support WAV plus lossy MP3 | `tauri-track-preview-ui` uses WAV fixtures; real-song smokes use `Lay the Money on the Desk (1).mp3`; source validation uses FFprobe and PRODUCT says lossy files are processable, not second-class. | Covered |
+| Analyze populates waveform, metrics, and safe settings | `tauri-track-preview-ui` verifies mode, selected track, waveform/region UI, dashboard handoff, and enabled preview/export actions after analyze. | Covered |
+| Original/Mastered A/B playback works | `tauri-track-preview-ui` verifies Original and Mastered A/B readiness, playback `playing` events, and `abPreservesPosition`; `tauri-real-song-native-ui` verifies real-song Native A/B playback evidence. | Covered by automation; not human listening approval |
+| Play starts promptly enough to use | `tauri-track-preview-ui` verifies finite `click_to_playing_ms`, cache status, and playing events; real-song Native A/B evidence recorded `prepare_client_elapsed_ms: 194.1` and `invoke_elapsed_ms: 56.7`. | Covered for smoke paths; not a guarantee for every private file |
+| Region/loop audition does not hide basic playback failure | `tauri-track-preview-ui` verifies basic Mastered playback before region work, then verifies waveform drag region, Loop active, loop return-to-start, Render Region, and bounded Native Preview. | Covered |
+| Update Preview and Render Region use release-faithful path | `tauri-track-preview-ui` verifies `Render-faithful preview` and `Render-faithful region`; `tauri-real-song-region-preview` verifies a real MP3 bounded region render via `python-render-track-region-preview`. | Covered |
+| Volume Match is off by default and monitoring-only | `tauri-track-preview-ui` verifies default off, activation reduces playback `audio.volume`, and deactivation returns to unity; `desktop/src/App.tsx` applies Volume Match through `computePlaybackVolume()` and labels export level unchanged. | Covered for monitoring behavior |
+| Export Track Master and visible checks | `tauri-track-preview-ui`, `tauri-release-track-codec-qc`, and `tauri-real-song-codec-qc` verify Track Master export receipt, manifest outputs, export checks, and codec preview artifacts. | Covered |
+| No source audio is destructively modified | Render paths write under output folders; region preview writes `region-source.wav`; `tauri-real-song-region-preview` and `tauri-track-preview-ui` assert region source path differs from the original source. | Covered by output-path behavior; not a byte-for-byte source hash audit |
+| Generated transitions are not default-enabled | `desktop/src/App.tsx` initial settings use `transitionsEnabled: false`; Track/Album release smokes seed and verify the disabled default path, and Album state smoke explicitly toggles generated transitions. | Covered |
+| Album Master remains usable after Track Master | `tauri-release-album-state`, `tauri-release-album-codec-qc`, `tauri-real-song-album-playback`, and `tauri-real-song-album-codec-qc` cover Album state, render/history, album WAV/native playback handoff, codec previews, and dashboard/report artifacts. | Covered with listening caveat |
+| Success/failure and warnings are visible | `run_export_checks`, export receipts, `Codec QC`, `Advisory warnings`, `listening-review.json`, and `listening-handoff.html` expose pass/fail/warning state and caveats. | Covered |
+| Do not claim certification or expert replacement | `docs/PRODUCT.md` states the app is not a certified mastering lab or replacement for a skilled engineer; listening handoff HTML states automation is not human approval. | Covered |
+| Crash/hang evidence | Current `8c6b5a0` release trace recorded no matching Album Mastering Studio Application Error, Application Hang, or WER entries during the checked window. | Covered for the verified window only |
+| Native Open/Save-As file picker | Direct `.ams.json` path Load/Save is covered by `tauri-project-persistence`; native dialog automation was attempted and not promoted; manual `Native Project Dialog Check` now exists. | Open until manually verified or waived |
+| Human listening approval | Listening checklist, receipt, and handoff artifacts exist and intentionally preserve `approved: false` until a user listens and approves. | Open |
+| Live Preview scope decision | UI and handoff now state Live Preview is directional-only; rendered preview/export, codec preview, and album WAV are the approval basis. | Open until accepted or deeper parity is built |
+
 ## Latest Evidence Anchors
 
 - 2026-05-13 Current HEAD docs-only audit: `git diff --name-status 8c6b5a0..HEAD` showed only `docs/GOAL_AUDIT.md`, `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, `docs/codex-active-handoff.md`, and `docs/progress.md`; `git diff --quiet 8c6b5a0..HEAD -- ':!docs/**'` returned no non-doc diff. The `8c6b5a0` app-code release trace remains the current binary/code-path evidence unless a later code, package, or smoke-test change is made.

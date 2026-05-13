@@ -2,6 +2,18 @@
 
 ## 2026-05-13
 
+### Stabilization Prompt-To-Artifact Checklist
+
+Scope:
+
+- Added a detailed Release-Candidate Stabilization Checklist to `docs\GOAL_AUDIT.md`.
+- The checklist maps the user's hardening prompt to concrete evidence for launch, WAV/MP3 import, analyze, waveform/metrics, Original/Mastered A/B, playback timing, region/loop audition, Update Preview, Render Region, Volume Match, Track export, non-destructive source handling, generated-transition defaults, Album Master, warnings/checks, no-certification claims, crash/hang evidence, native dialogs, human listening approval, and Live Preview scope.
+
+Result:
+
+- No app code changed.
+- The checklist confirms the remaining open gates are still native Open/Save-As manual verification or waiver, human listening approval, and Live Preview scope acceptance or deeper parity.
+
 ### Current HEAD Docs-Only Audit
 
 Scope:
