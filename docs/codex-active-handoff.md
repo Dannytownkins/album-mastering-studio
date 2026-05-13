@@ -17,7 +17,60 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Preview Honesty Labels
+## Latest Codex Pass: Album Codec And History Evidence
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Extended the packaged Album Master Codec QC smoke to verify Album Export appears in Recent Renders with enabled Play and Dashboard actions.
+- The smoke now clicks the Recent Renders Play action, verifies album playback handoff, and waits for `load_recent_session().renderHistory` to persist an `album-export` entry.
+- The same smoke selects `Album WAV` and asserts visible parity label `Render-faithful album`.
+- The same smoke now asserts Album AAC playback shows `Codec preview audition`, local-QC tooltip copy, and no warning state before native playback and receipt save.
+- No app code changed in this loop; this tightened release evidence for the transport-aware parity labels added in the previous loop.
+
+Verification already run:
+
+```powershell
+cd desktop
+node --check .\tests\tauri-release-album-codec-qc-smoke.mjs
+npm run test:tauri-release-album-codec-qc
+npm run test:integration
+```
+
+Evidence:
+
+- `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`
+- Relevant fields:
+  - `albumExportHistoryVisible: true`
+  - `albumExportHistoryDashboardEnabled: true`
+  - `albumExportHistoryPlayEnabled: true`
+  - `albumExportHistoryPlaybackReady: true`
+  - `persistedAlbumExportHistory: true`
+  - `albumWavParity: "Render-faithful album"`
+  - `albumWavParityTitle: "Album playback was the rendered continuous album WAV."`
+  - `codecPreviewParity: "Codec preview audition"`
+  - `codecPreviewParityTitle: "Codec preview playback was generated from the current render for local QC."`
+  - `codecPreviewParityWarn: false`
+  - `codecTransportLabel: "Album AAC 256k"`
+
+Remaining gap:
+
+- This proves visible labels and Album Export history behavior in the packaged app. It is not listening approval.
+
+Next useful slice:
+
+- If unattended, continue with narrow evidence gaps or perform a formal completion audit before any final readiness claim. Native OS file-picker automation remains intentionally deferred unless a reliable Windows dialog route is found.
+
+## Previous Codex Pass: Preview Honesty Labels
 
 Date: 2026-05-12
 

@@ -2,6 +2,45 @@
 
 ## 2026-05-12
 
+### Album Codec And History Evidence Slice
+
+- Extended the packaged Album Master Codec QC smoke to verify visible preview parity labels for album render artifacts.
+- The smoke now verifies the completed Album Export appears in Recent Renders with enabled Play and Dashboard actions, that Play hands off to the album transport, and that `load_recent_session().renderHistory` persists an `album-export` entry.
+- The smoke now selects `Album WAV` before the codec preview and asserts `Render-faithful album` with tooltip copy for the rendered continuous album WAV.
+- The same smoke then selects `Album AAC 256k` and asserts `Codec preview audition`, local-QC tooltip copy, and a non-warning parity state before native playback and receipt save.
+
+Verification:
+
+```powershell
+cd desktop
+node --check .\tests\tauri-release-album-codec-qc-smoke.mjs
+npm run test:tauri-release-album-codec-qc
+npm run test:integration
+```
+
+Results:
+
+- Node syntax check passed for the updated packaged Album Master Codec QC smoke.
+- Packaged Album Master Codec QC smoke passed against the current release EXE.
+- Desktop CLI-contract integration passed.
+- Evidence: `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`.
+- Evidence values:
+  - `albumExportHistoryVisible: true`
+  - `albumExportHistoryDashboardEnabled: true`
+  - `albumExportHistoryPlayEnabled: true`
+  - `albumExportHistoryPlaybackReady: true`
+  - `persistedAlbumExportHistory: true`
+  - `albumWavParity: "Render-faithful album"`
+  - `albumWavParityTitle: "Album playback was the rendered continuous album WAV."`
+  - `codecPreviewParity: "Codec preview audition"`
+  - `codecPreviewParityTitle: "Codec preview playback was generated from the current render for local QC."`
+  - `codecPreviewParityWarn: false`
+  - `codecTransportLabel: "Album AAC 256k"`
+
+Honest gap:
+
+- This is visible-label and local-history evidence only. It does not replace human listening approval of the album WAV or codec previews.
+
 ### Preview Honesty Label Slice
 
 - Made the visible preview parity pill follow the active transport item when a render artifact is playing, while preserving the existing stale-render rule for approximate Live Preview after control changes.

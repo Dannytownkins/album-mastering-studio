@@ -94,8 +94,20 @@ try {
   assert.equal(evidence.albumReceiptIncludesTwoCodecPaths, true);
   assert.equal(evidence.albumCodecButtonsVisible, true);
   assert.equal(evidence.albumCodecButtonCount, 2);
+  assert.equal(evidence.albumExportHistoryVisible, true);
+  assert.equal(evidence.albumExportHistoryDashboardEnabled, true);
+  assert.equal(evidence.albumExportHistoryPlayEnabled, true);
+  assert.equal(evidence.albumExportHistoryPlaybackReady, true);
+  assert.equal(evidence.persistedAlbumExportHistory, true);
+  assert.equal(evidence.albumWavPlaybackReady, true);
+  assert.match(evidence.albumWavTransportLabel, /album_sequence\.wav/);
+  assert.equal(evidence.albumWavParity, "Render-faithful album");
+  assert.match(evidence.albumWavParityTitle, /rendered continuous album WAV/);
   assert.equal(evidence.albumAacPlaybackReady, true);
   assert.match(evidence.codecTransportLabel, /Album AAC 256k/);
+  assert.equal(evidence.codecPreviewParity, "Codec preview audition");
+  assert.match(evidence.codecPreviewParityTitle, /local QC/);
+  assert.equal(evidence.codecPreviewParityWarn, false);
   assert.equal(evidence.nativeAlbumCodecStarted, true);
   assert.equal(evidence.nativeAlbumCodecStopped, true);
   assert.equal(evidence.persistedCodecPreviewAudition, true);
@@ -266,13 +278,52 @@ function albumCodecQcExpression() {
   const artifactText = text(document.querySelector('.artifact-grid'));
   const albumCodecButtonsVisible = artifactText.includes('Album WAV') && artifactText.includes('AAC 256k') && artifactText.includes('Opus 192k');
   const albumCodecButtonCount = Array.from(document.querySelectorAll('.artifact-grid button')).filter((button) => text(button).includes('Codec')).length;
-  click(artifactButtonByText('AAC 256k'));
   const transportLabel = () => text(document.querySelector('.transport-label'));
+  const renderHistoryCards = () => Array.from(document.querySelectorAll('.render-history-card'));
+  const historyCardButton = (card, label) => Array.from(card?.querySelectorAll('button') || []).find((button) => text(button).includes(label));
+  const albumExportHistoryCard = () => renderHistoryCards()
+    .find((card) => text(card).includes('Album Export') && text(card).includes('Release Album Codec QC Album'));
+  const albumExportHistoryVisible = Boolean(albumExportHistoryCard());
+  const albumExportHistoryDashboardButton = historyCardButton(albumExportHistoryCard(), 'Dashboard');
+  const albumExportHistoryPlayButton = historyCardButton(albumExportHistoryCard(), 'Play');
+  const albumExportHistoryDashboardEnabled = Boolean(albumExportHistoryDashboardButton && !albumExportHistoryDashboardButton.disabled);
+  const albumExportHistoryPlayEnabled = Boolean(albumExportHistoryPlayButton && !albumExportHistoryPlayButton.disabled);
+  if (albumExportHistoryPlayButton) click(albumExportHistoryPlayButton);
+  const albumExportHistoryPlaybackReady = await waitFor(
+    () => (document.querySelector('.log')?.textContent || '').includes('Playback ready: Release Album Codec QC Album') && transportLabel().includes('Release Album Codec QC Album'),
+    30000,
+  );
+  const persistedAlbumHistory = await waitForPersisted(
+    (session) => (session?.renderHistory || []).some((item) =>
+      item.kind === 'album-export' &&
+      item.label === 'Release Album Codec QC Album' &&
+      item.primaryAudioKind === 'album' &&
+      Boolean(item.primaryAudioPath) &&
+      Boolean(item.dashboardPath)
+    ),
+    12000,
+  );
+  const persistedAlbumExportHistory = Boolean((persistedAlbumHistory?.renderHistory || []).find((item) => item.kind === 'album-export'));
+  const previewParity = () => text(document.querySelector('.preview-parity-status'));
+  const previewParityTitle = () => document.querySelector('.preview-parity-status')?.getAttribute('title') || '';
+  const previewParityWarn = () => document.querySelector('.preview-parity-status')?.classList.contains('warn') ?? true;
+  click(artifactButtonByText('Album WAV'));
+  const albumWavPlaybackReady = await waitFor(
+    () => (document.querySelector('.log')?.textContent || '').includes('Playback ready: album_sequence.wav') && transportLabel().includes('album_sequence.wav'),
+    30000,
+  );
+  const albumWavTransportLabel = transportLabel();
+  const albumWavParity = previewParity();
+  const albumWavParityTitle = previewParityTitle();
+  click(artifactButtonByText('AAC 256k'));
   const albumAacPlaybackReady = await waitFor(
     () => (document.querySelector('.log')?.textContent || '').includes('Playback ready: Album AAC 256k') && transportLabel().includes('Album AAC 256k'),
     30000,
   );
   const codecTransportLabel = transportLabel();
+  const codecPreviewParity = previewParity();
+  const codecPreviewParityTitle = previewParityTitle();
+  const codecPreviewParityWarn = previewParityWarn();
   click(buttonByText('Native Play'));
   const nativeAlbumCodecStarted = await waitFor(() => text(document.querySelector('.native-audition-status')).includes('Native playback playing'), 30000);
   const nativeStopVisible = await waitFor(() => Boolean(buttons().find((button) => text(button).includes('Native Stop'))), 5000);
@@ -306,8 +357,20 @@ function albumCodecQcExpression() {
     albumReceiptIncludesTwoCodecPaths,
     albumCodecButtonsVisible,
     albumCodecButtonCount,
+    albumExportHistoryVisible,
+    albumExportHistoryDashboardEnabled,
+    albumExportHistoryPlayEnabled,
+    albumExportHistoryPlaybackReady,
+    persistedAlbumExportHistory,
+    albumWavPlaybackReady,
+    albumWavTransportLabel,
+    albumWavParity,
+    albumWavParityTitle,
     albumAacPlaybackReady,
     codecTransportLabel,
+    codecPreviewParity,
+    codecPreviewParityTitle,
+    codecPreviewParityWarn,
     nativeAlbumCodecStarted,
     nativeAlbumCodecStopped,
     persistedCodecPreviewAudition: persisted?.listeningChecklist?.codecPreviewAudition,

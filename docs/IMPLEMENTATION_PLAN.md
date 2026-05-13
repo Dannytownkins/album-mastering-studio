@@ -634,6 +634,15 @@ No-victory-lap check:
 - Evidence values include `boundaryPreviewParity: "Bounded boundary preview"`, `boundaryPreviewParityWarn: false`, `regionPreviewParity: "Render-faithful region"`, `previewParityAfterControlChange: "Render required"`, `previewParityAfterUpdatePreview: "Render-faithful preview"`, and `previewParityAfterReturnToLiveSource: "Approx audition"`.
 - Remaining gap: this is copy and state clarity only; it does not make Live Preview export-chain faithful or replace human listening.
 
+2026-05-12 packaged Album Export history and codec parity baseline:
+
+- The packaged Album Master Codec QC smoke now verifies a completed Album Export appears in Recent Renders with enabled Play and Dashboard actions.
+- The smoke clicks the Recent Renders Play action, verifies album playback handoff, and waits for autosaved `renderHistory` to persist an `album-export` entry.
+- The same smoke verifies Album WAV parity copy as `Render-faithful album` and Album AAC parity copy as `Codec preview audition`.
+- Evidence: `test-output/tauri-release-album-codec-qc-smoke/tauri-release-album-codec-qc-smoke.json`.
+- Evidence values include `albumExportHistoryVisible: true`, `albumExportHistoryDashboardEnabled: true`, `albumExportHistoryPlayEnabled: true`, `albumExportHistoryPlaybackReady: true`, `persistedAlbumExportHistory: true`, `albumWavParity: "Render-faithful album"`, and `codecPreviewParity: "Codec preview audition"`.
+- Remaining gap: this proves local artifact history and labels, not human approval of the album or codec sound.
+
 ## Phase 9: Transition Primitives
 
 Goal: provide reliable album boundary tools before generated musical transitions.
