@@ -283,6 +283,11 @@ type ListeningChecklist = {
   notes: string;
 };
 
+type ListeningPacketResult = {
+  json_path: string;
+  html_path: string;
+};
+
 type UserPreset = {
   id: string;
   name: string;
@@ -564,6 +569,7 @@ function App() {
   const [listeningChecklist, setListeningChecklist] = useState<ListeningChecklist>(emptyListeningChecklist);
   const [listeningApproved, setListeningApproved] = useState(false);
   const [listeningReceiptPath, setListeningReceiptPath] = useState("");
+  const [listeningPacketPath, setListeningPacketPath] = useState("");
   const [renderHistory, setRenderHistory] = useState<RenderHistoryItem[]>([]);
   const [userPresets, setUserPresets] = useState<UserPreset[]>([]);
   const [selectedUserPresetId, setSelectedUserPresetId] = useState("");
@@ -647,7 +653,9 @@ function App() {
     ? hasStaleRender ? "Approval stale" : "Approved"
     : "Not approved";
   const listeningReceiptTarget = listeningReceiptPathForManifest(manifest);
+  const listeningPacketRoot = listeningReceiptRootForManifest(manifest);
   const canSaveListeningReceipt = Boolean(manifest && listeningReceiptTarget && !hasStaleRender && !busy);
+  const canSaveListeningPacket = Boolean(manifest && listeningPacketRoot && !hasStaleRender && !busy);
   const fallbackPreviewParityLabel = regionPreviewPlaying
     ? "Render-faithful region"
     : referencePlaying
@@ -1015,6 +1023,8 @@ function App() {
     setExportChecks(null);
     setDashboardPath("");
     setListeningReceiptPath("");
+    setListeningPacketPath("");
+    setListeningPacketPath("");
     setRenderRevision(null);
     setPreviewArtifact(null);
     setComparePair(null);
@@ -1068,6 +1078,7 @@ function App() {
     setExportChecks(null);
     setListeningApproved(false);
     setListeningReceiptPath("");
+    setListeningPacketPath("");
     setComparePair(null);
     setNativeLivePreviewAudition(null);
     setPlayItem((current) =>
@@ -1097,6 +1108,7 @@ function App() {
     setListeningChecklist(emptyListeningChecklist);
     setListeningApproved(false);
     setListeningReceiptPath("");
+    setListeningPacketPath("");
   }
 
   async function saveListeningReceipt() {
@@ -1197,6 +1209,94 @@ function App() {
     } catch (error) {
       pushLog(`Listening receipt save failed: ${String(error)}`);
       setProgressLabel("Listening receipt save failed.");
+    }
+  }
+
+  async function saveListeningPacket() {
+    if (!manifest || !listeningPacketRoot || hasStaleRender) return;
+    const receiptAuditionContext = describeReceiptAuditionContext(
+      playItem,
+      previewParityLabel,
+      previewParityTitle,
+      liveAuditionActive,
+    );
+    const packet = {
+      version: 1,
+      created_at: new Date().toISOString(),
+      mode,
+      status: listeningApproved && !hasStaleRender ? "approved" : hasStaleRender ? "stale" : "not-approved",
+      approved: listeningApproved && !hasStaleRender,
+      stale: hasStaleRender,
+      checklist: listeningChecklist,
+      completed_count: listeningCompletedCount,
+      total_count: listeningTotalCount,
+      render: {
+        output_root: listeningPacketRoot,
+        manifest_path: manifest.outputs?.manifest ?? "",
+        dashboard_path: dashboardPath || manifest.dashboard || "",
+        album_sequence: manifest.album_sequence ?? manifest.outputs?.album_sequence ?? null,
+        cue_sheet: manifest.cue_sheet ?? null,
+        track_count: manifest.track_count,
+        interlude_count: manifest.interlude_count,
+      },
+      tracks: manifestTrackItems(manifest).map((track) => ({
+        index: track.index ?? null,
+        title: track.title ?? "",
+        source: track.source ?? "",
+        output: track.output ?? "",
+        selected_preset: track.selected_preset ?? "",
+        character: track.character?.label ?? track.character?.display_name ?? "",
+        target_lufs: track.arc?.target_lufs ?? null,
+        rationale: track.mastering_moves?.rationale ?? track.rationale ?? "",
+      })),
+      transitions: manifestTransitions(manifest).map((transition) => ({
+        between: transition.between,
+        output: transition.output,
+        style: transition.style,
+        duration_seconds: transition.duration_seconds,
+        rationale: transition.rationale ?? "",
+      })),
+      codec_previews: (manifest.codec_previews ?? []).map((preview) => ({
+        codec: preview.codec ?? "codec",
+        output: preview.output ?? "",
+        lufs_shift: preview.lufs_shift ?? null,
+        true_peak_shift_db: preview.true_peak_shift_db ?? null,
+        warnings: preview.warnings ?? (preview.warning ? [preview.warning] : []),
+      })),
+      export_checks: exportChecks
+        ? {
+            status: exportChecks.status,
+            summary: exportChecks.summary,
+            checks: exportChecks.checks,
+          }
+        : null,
+      audition_context: {
+        preview_parity: receiptAuditionContext.parity,
+        preview_note: receiptAuditionContext.note,
+        transport_label: playItem?.label ?? "",
+        transport_kind: playItem?.kind ?? null,
+        transport_path: playItem?.originalPath ?? playItem?.path ?? "",
+        live_preview_contract_parity: livePreviewContract?.previewParity ?? null,
+      },
+      caveats: [
+        "This packet prepares a human listening pass; it is not human approval by itself.",
+        "Treat approved=false or status not-approved as requiring user listening before release decisions.",
+        livePreviewContract?.previewParity === "approximate"
+          ? "Live Preview is an approximate audition path; rendered previews are the release-faithful reference."
+          : "",
+      ].filter(Boolean),
+    };
+    try {
+      const saved = await invoke<ListeningPacketResult>("write_listening_packet", {
+        root: listeningPacketRoot,
+        packet,
+      });
+      setListeningPacketPath(saved.html_path);
+      pushLog(`Listening packet saved: ${saved.html_path}`);
+      setProgressLabel("Listening packet saved.");
+    } catch (error) {
+      pushLog(`Listening packet save failed: ${String(error)}`);
+      setProgressLabel("Listening packet save failed.");
     }
   }
 
@@ -1390,6 +1490,7 @@ function App() {
     setExportChecks(null);
     setDashboardPath("");
     setListeningReceiptPath("");
+    setListeningPacketPath("");
     try {
       const renderedTrackItems: ManifestTrackItem[] = [];
       const batchWarnings: string[] = [];
@@ -1468,6 +1569,7 @@ function App() {
     setExportChecks(null);
     setDashboardPath("");
     setListeningReceiptPath("");
+    setListeningPacketPath("");
     try {
       const outputDir = `${settings.outputDir}\\album-master-${timestamp()}`;
       const project = buildProject(albumWav, tracks);
@@ -1479,7 +1581,8 @@ function App() {
       setTracks((current) => attachMasterPaths(current, loaded, outputDir));
       setRenderRevision(revisionAtStart);
       setPreviewArtifact(null);
-      setListeningReceiptPath("");
+    setListeningReceiptPath("");
+    setListeningPacketPath("");
       pushLog(`Album render complete: ${loaded.track_count} masters, ${loaded.interlude_count} transitions. ${outputDir}`);
       setDashboardPath(result.dashboard_path ?? "");
       recordRenderHistory({
@@ -1908,7 +2011,8 @@ function App() {
       );
       setManifest(loaded);
       setDashboardPath(result.dashboard_path ?? "");
-      setListeningReceiptPath("");
+    setListeningReceiptPath("");
+    setListeningPacketPath("");
       await updateExportChecks(loaded);
       recordRenderHistory({
         mode: "track",
@@ -1977,6 +2081,7 @@ function App() {
     setProgress(0);
     setProgressLabel(`Rendering ${windowToRender.label} through the export engine.`);
     setListeningReceiptPath("");
+    setListeningPacketPath("");
     try {
       const outputDir = `${settings.outputDir}\\region-preview-${timestamp()}`;
       const project = buildProject(false, [track], { transitionsEnabled: false });
@@ -2239,6 +2344,7 @@ function App() {
     setProgress(0);
     setProgressLabel(`Rendering ${windowToRender.label} through the native preview model.`);
     setListeningReceiptPath("");
+    setListeningPacketPath("");
     try {
       const sourcePath = await invoke<string>("prepare_playback_file", { path: track.path });
       const outputPath = `${outputRoot}\\native-preview-${timestamp()}-${slug(track.title)}.wav`;
@@ -3095,9 +3201,17 @@ function App() {
             >
               <Save size={16} /> Save Receipt
             </button>
+            <button
+              disabled={!canSaveListeningPacket}
+              onClick={saveListeningPacket}
+              title={canSaveListeningPacket ? "Writes listening-handoff.html and .json beside the current render." : "Render or refresh audio before saving a listening packet."}
+            >
+              <FileDown size={16} /> Save Listening Packet
+            </button>
             <button className="reset" onClick={resetListeningChecklist}>Clear Listening Pass</button>
           </div>
           {listeningReceiptPath && <small className="receipt-path">Receipt: {listeningReceiptPath}</small>}
+          {listeningPacketPath && <small className="receipt-path">Packet: {listeningPacketPath}</small>}
         </div>
 
         <pre className="log">{logs.slice(-18).join("\n")}</pre>

@@ -5321,3 +5321,43 @@ Passed steps:
 | `git-diff-check` | 0.04 |
 
 This closes the current-commit final release-loop blocker for `15b5d0e`. It does not close human listening approval, does not make Live Preview export-chain faithful, and does not add native OS Open/Save-As dialog automation.
+
+### Listening Handoff Packet
+
+- Added a `Save Listening Packet` action beside `Save Receipt`.
+- The action writes `listening-handoff.json` and `listening-handoff.html` beside the current render.
+- The packet includes render root, manifest, dashboard, album WAV, cue sheet, mastered track paths, transition paths, codec preview paths, export-check status, checklist state, approval state, notes, active audition context, and explicit caveats that the packet is not human approval by itself.
+- Added Tauri command `write_listening_packet` for local/offline JSON and HTML packet creation.
+- Extended the packaged Album Master Codec QC smoke to click `Save Listening Packet` and verify both packet files exist, include codec preview paths, and preserve `approved: false`.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-codec-qc-smoke.mjs
+cd src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
+cargo check
+cd ..
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Album Codec QC smoke syntax check passed.
+- Rust `cargo check` passed.
+- Tauri release build passed and rebuilt sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Album Codec QC smoke passed and wrote `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`.
+- Packet evidence: `listeningPacketJsonExists: true`, `listeningPacketHtmlExists: true`, `listeningPacketHtmlIncludesCaveat: true`, `listeningPacketHtmlIncludesCodecPreview: true`, packet `status: "not-approved"`, packet `approved: false`, two codec previews, and export checks `pass`.
+- Python compile passed.
+- `git diff --check` passed.
+
+Remaining caveat:
+
+- This makes the eventual human listening pass easier to perform and hand off. It is still not a human listening approval, and it means the full release-readiness trace should be rerun from the next clean commit before a new current-commit release claim.

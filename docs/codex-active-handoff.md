@@ -142,6 +142,60 @@ Remaining blockers:
 - Native OS Open/Save-As dialogs are still not automated; direct path `.ams.json` load/save is covered.
 - Rerun the release-readiness trace after any code, packaging, or smoke-test change before making another current-commit release claim.
 
+## Latest Codex Pass: Listening Handoff Packet
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What changed:
+
+- Added `Save Listening Packet` beside `Save Receipt`.
+- Added Tauri command `write_listening_packet`.
+- The packet writes `listening-handoff.json` and `listening-handoff.html` next to the current render.
+- Packet contents include manifest/dashboard/album WAV/cue paths, mastered tracks, transitions, codec previews, export checks, checklist state, approval state, notes, and caveats that the packet is not human approval by itself.
+- The packaged Album Codec QC smoke now verifies both files exist, contain codec preview paths, and preserve `approved: false`.
+
+Verification already run:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-codec-qc-smoke.mjs
+cd src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
+cargo check
+cd ..
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`
+- `listeningPacketJsonExists: true`
+- `listeningPacketHtmlExists: true`
+- `listeningPacketHtmlIncludesCaveat: true`
+- `listeningPacketHtmlIncludesCodecPreview: true`
+- Packet `status: "not-approved"` and `approved: false`.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded.
+- Live Preview remains approximate.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Because this pass changes app code after the `15b5d0e` full trace, rerun the full release-readiness trace from the next clean commit before making a fresh current-commit release claim.
+
 ## Previous Codex Pass: Album Codec And History Evidence
 
 Date: 2026-05-12

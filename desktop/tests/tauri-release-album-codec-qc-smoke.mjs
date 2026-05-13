@@ -59,6 +59,8 @@ try {
   const smoke = await evaluateInWebView(cdp, albumCodecQcExpression());
   const manifest = JSON.parse(readFileSync(path.join(smoke.outputDir, "manifest.json"), "utf8"));
   const listeningReceipt = JSON.parse(readFileSync(smoke.listeningReceiptPath, "utf8"));
+  const listeningPacket = JSON.parse(readFileSync(smoke.listeningPacketJsonPath, "utf8"));
+  const listeningPacketHtml = readFileSync(smoke.listeningPacketHtmlPath, "utf8");
   const codecPreviews = manifest.codec_previews || [];
   const codecPreviewOutputs = codecPreviews.map((preview) => preview.output || "");
   const screenshot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -75,6 +77,11 @@ try {
     manifestAlbumSequence: manifest.album_sequence,
     listeningReceipt,
     listeningReceiptExists: existsSync(smoke.listeningReceiptPath),
+    listeningPacket,
+    listeningPacketJsonExists: existsSync(smoke.listeningPacketJsonPath),
+    listeningPacketHtmlExists: existsSync(smoke.listeningPacketHtmlPath),
+    listeningPacketHtmlIncludesCaveat: listeningPacketHtml.includes("not human approval"),
+    listeningPacketHtmlIncludesCodecPreview: codecPreviewOutputs.every((output) => listeningPacketHtml.includes(output)),
     codecPreviewCount: codecPreviews.length,
     codecPreviewOutputs,
     codecPreviewOutputsExist: codecPreviewOutputs.every((output) => existsSync(output)),
@@ -126,6 +133,16 @@ try {
   assert.equal(evidence.listeningReceipt.audition_context.live_preview.contract_preview_parity, "approximate");
   assert.equal(evidence.listeningReceipt.audition_context.live_preview.modeled_controls.includes("Low"), true);
   assert.equal(evidence.listeningReceipt.audition_context.native_playback.status, "ready");
+  assert.equal(evidence.listeningPacketJsonExists, true);
+  assert.equal(evidence.listeningPacketHtmlExists, true);
+  assert.equal(evidence.listeningPacket.approved, false);
+  assert.equal(evidence.listeningPacket.status, "not-approved");
+  assert.equal(evidence.listeningPacket.render.album_sequence, evidence.manifestAlbumSequence);
+  assert.equal(evidence.listeningPacket.tracks.length, 2);
+  assert.equal(evidence.listeningPacket.codec_previews.length, 2);
+  assert.equal(evidence.listeningPacket.export_checks.status, "pass");
+  assert.equal(evidence.listeningPacketHtmlIncludesCaveat, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesCodecPreview, true);
   assert.equal(evidence.manifestCodecPreviewFlag, true);
   assert.equal(evidence.codecPreviewCount, 2);
   assert.equal(evidence.codecPreviewOutputsExist, true);
@@ -348,6 +365,11 @@ function albumCodecQcExpression() {
   const listeningReceiptSaved = await waitFor(() => (document.querySelector('.log')?.textContent || '').includes('Listening receipt saved:'), 10000);
   if (!listeningReceiptSaved) throw new Error('Listening receipt was not saved');
   const listeningReceiptPath = outputDir + '\\\\listening-review.json';
+  click(buttonByText('Save Listening Packet'));
+  const listeningPacketSaved = await waitFor(() => (document.querySelector('.log')?.textContent || '').includes('Listening packet saved:'), 10000);
+  if (!listeningPacketSaved) throw new Error('Listening packet was not saved');
+  const listeningPacketJsonPath = outputDir + '\\\\listening-handoff.json';
+  const listeningPacketHtmlPath = outputDir + '\\\\listening-handoff.html';
   return JSON.stringify({
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     activeMode,
@@ -376,6 +398,9 @@ function albumCodecQcExpression() {
     persistedCodecPreviewAudition: persisted?.listeningChecklist?.codecPreviewAudition,
     listeningReceiptSaved,
     listeningReceiptPath,
+    listeningPacketSaved,
+    listeningPacketJsonPath,
+    listeningPacketHtmlPath,
     outputDir
   });
 })()

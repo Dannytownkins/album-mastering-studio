@@ -333,6 +333,22 @@ fn write_listening_receipt(path: String, receipt: Value) -> Result<String, Strin
 }
 
 #[tauri::command]
+fn write_listening_packet(root: String, packet: Value) -> Result<Value, String> {
+    let target_dir = PathBuf::from(&root);
+    fs::create_dir_all(&target_dir)
+        .map_err(|error| format!("Could not create {}: {error}", target_dir.display()))?;
+    let json_path = target_dir.join("listening-handoff.json");
+    let html_path = target_dir.join("listening-handoff.html");
+    write_json_file(&json_path, &packet)?;
+    fs::write(&html_path, render_listening_packet_html(&packet))
+        .map_err(|error| format!("Could not write {}: {error}", html_path.display()))?;
+    Ok(json!({
+        "json_path": json_path.to_string_lossy().to_string(),
+        "html_path": html_path.to_string_lossy().to_string(),
+    }))
+}
+
+#[tauri::command]
 fn analyze_tracks(
     app: AppHandle,
     state: State<'_, ProcessState>,
@@ -1718,6 +1734,134 @@ fn write_json_file(target: &Path, value: &Value) -> Result<(), String> {
         .map_err(|error| format!("Could not serialize JSON: {error}"))?;
     fs::write(&target, text)
         .map_err(|error| format!("Could not write {}: {error}", target.display()))
+}
+
+fn render_listening_packet_html(packet: &Value) -> String {
+    let status = json_str(packet.get("status"));
+    let mode = json_str(packet.get("mode"));
+    let created_at = json_str(packet.get("created_at"));
+    let approved = packet
+        .get("approved")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let notes = packet
+        .get("checklist")
+        .and_then(|value| value.get("notes"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let render = packet.get("render").unwrap_or(&Value::Null);
+    let export_checks = packet.get("export_checks").unwrap_or(&Value::Null);
+
+    let mut html = String::from(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Album Mastering Studio Listening Handoff</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; color: #161616; background: #fafafa; line-height: 1.45; }
+    main { max-width: 980px; margin: 0 auto; }
+    section { margin: 24px 0; padding: 18px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
+    h1, h2 { margin: 0 0 12px; }
+    .status { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #f0d98b; font-weight: 700; }
+    .status.approved { background: #8ad69b; }
+    .caveat { padding: 12px; border-left: 4px solid #b15c44; background: #fff2ee; }
+    code { word-break: break-all; }
+    li { margin: 6px 0; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; border-bottom: 1px solid #ddd; padding: 8px; vertical-align: top; }
+  </style>
+</head>
+<body>
+<main>
+"#,
+    );
+
+    html.push_str(&format!(
+        "<h1>Listening Handoff</h1><p><span class=\"status{}\">{}</span> {} {}</p>",
+        if approved { " approved" } else { "" },
+        escape_html(&status),
+        escape_html(&mode),
+        escape_html(&created_at)
+    ));
+    html.push_str("<p class=\"caveat\">This packet is not human approval unless the user has actually listened and marked the render approved. Automated checks only prove file generation and technical smoke coverage.</p>");
+
+    html.push_str("<section><h2>Render Files</h2><ul>");
+    html_path_item(&mut html, "Manifest", render.get("manifest_path"));
+    html_path_item(&mut html, "Dashboard", render.get("dashboard_path"));
+    html_path_item(&mut html, "Album WAV", render.get("album_sequence"));
+    html_path_item(&mut html, "Cue sheet", render.get("cue_sheet"));
+    html.push_str("</ul></section>");
+
+    html.push_str("<section><h2>Mastered Tracks</h2><ol>");
+    for track in json_array(packet.get("tracks")) {
+        let title = json_str(track.get("title"));
+        let output = json_str(track.get("output"));
+        html.push_str(&format!(
+            "<li><strong>{}</strong><br><code>{}</code></li>",
+            escape_html(&title),
+            escape_html(&output)
+        ));
+    }
+    html.push_str("</ol></section>");
+
+    html.push_str("<section><h2>Codec Previews</h2><ul>");
+    for preview in json_array(packet.get("codec_previews")) {
+        html.push_str(&format!(
+            "<li><strong>{}</strong><br><code>{}</code></li>",
+            escape_html(&json_str(preview.get("codec"))),
+            escape_html(&json_str(preview.get("output")))
+        ));
+    }
+    html.push_str("</ul></section>");
+
+    html.push_str("<section><h2>Export Checks</h2><table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>");
+    for check in json_array(export_checks.get("checks")) {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
+            escape_html(&json_str(check.get("label"))),
+            escape_html(&json_str(check.get("status"))),
+            escape_html(&json_str(check.get("detail")))
+        ));
+    }
+    html.push_str("</tbody></table></section>");
+
+    html.push_str("<section><h2>Listening Notes</h2><p>");
+    html.push_str(&escape_html(notes));
+    html.push_str("</p></section></main></body></html>\n");
+    html
+}
+
+fn html_path_item(html: &mut String, label: &str, value: Option<&Value>) {
+    let path = json_str(value);
+    if !path.is_empty() {
+        html.push_str(&format!(
+            "<li><strong>{}</strong><br><code>{}</code></li>",
+            escape_html(label),
+            escape_html(&path)
+        ));
+    }
+}
+
+fn json_array(value: Option<&Value>) -> Vec<Value> {
+    value
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn json_str(value: Option<&Value>) -> String {
+    value.and_then(Value::as_str).unwrap_or("").to_string()
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn render_project_product(
@@ -3529,6 +3673,7 @@ pub fn run() {
             read_json,
             write_project,
             write_listening_receipt,
+            write_listening_packet,
             analyze_tracks,
             live_preview_contract,
             render_live_preview_model,

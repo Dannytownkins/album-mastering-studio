@@ -30,7 +30,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Album Master path | Automated release evidence covers multi-source and full-source Album Master render, transitions, album WAV, dashboard, export checks, and native album playback stability. | Covered with listening caveat |
 | Docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and `docs/ENGINE_DECISION_RECORD.md` record current evidence and known gaps. | Covered |
 | Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, local render/check/report flow, and direct `.ams.json` path Load/Save remain the core path. | Covered |
-| Release package | Full release-readiness trace at `15b5d0e` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, installer, and diff gates. | Covered at 15b5d0e |
+| Release package | Full release-readiness trace at `15b5d0e` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, installer, and diff gates. Newer app-code commits need a fresh full trace before a current-commit release claim. | Covered at 15b5d0e baseline |
 
 ## Prompt-To-Artifact Audit
 
@@ -48,6 +48,7 @@ This matrix maps the active goal wording to concrete repo artifacts. It is inten
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Listening Handoff Packet: added `Save Listening Packet`, Tauri `write_listening_packet`, and packaged Album Codec QC evidence that `listening-handoff.json` and `.html` are written beside the render, include codec preview paths, include human-approval caveats, and preserve `approved: false`.
 - 2026-05-12 Full release readiness trace at `15b5d0e`: `test-output\release-readiness-15b5d0e-full-20260512-175810\release-readiness.json` passed all 21 gates with zero failures and zero skips, including Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, real-song Track/Region/Album smokes using `Lay the Money on the Desk (1).mp3`, NSIS installed-app smoke, MSI package smoke, and `git diff --check`.
 - 2026-05-12 Real-song Album playback gate fix: the real-song Album UI/playback smoke now self-launches the packaged release EXE by default and passes against `Lay the Money on the Desk (1).mp3`; app render revision stamps now use a synchronous session revision ref so immediate role/control edit plus render is not incorrectly marked stale.
 - 2026-05-12 Release readiness trace runner: added `scripts/release-readiness.ps1` and `desktop` script `npm run verify:release`. The runner records per-step logs and `release-readiness.json` for Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, optional real-song smokes, optional installer smokes, and `git diff --check`.
@@ -90,7 +91,7 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Closed for current commit:
 
-- Final release loop for commit `15b5d0e` passed with real-song and installer gates enabled. Rerun it after any code, packaging, or smoke-test change before making a fresh release-readiness claim.
+- Final release loop for commit `15b5d0e` passed with real-song and installer gates enabled. This is now a baseline because later app code changed; rerun it after the Listening Handoff Packet commit before making a fresh current-commit release-readiness claim.
 
 ## Next Unattended Slices
 
