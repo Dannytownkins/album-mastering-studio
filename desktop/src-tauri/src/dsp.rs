@@ -6,6 +6,13 @@ const EQ_HIGH_HZ: f64 = 10_000.0;
 const EQ_SHELF_SLOPE: f64 = 1.0;
 const EQ_MID_Q: f64 = 0.707;
 const EQ_EPSILON_DB: f32 = 0.000_001;
+const MBC_LOW_CROSSOVER_HZ: f32 = 120.0;
+const MBC_HIGH_CROSSOVER_HZ: f32 = 4_000.0;
+const BUTTERWORTH_Q: f32 = 0.707_106_8;
+const MBC_ATTACK_SECONDS: f32 = 0.015;
+const MBC_RELEASE_SECONDS: f32 = 0.180;
+const MBC_EPSILON: f32 = 0.000_000_001;
+const MBC_RMS_WINDOW_SECONDS: f32 = 0.010;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct EqSettings {
@@ -49,6 +56,34 @@ impl BiquadCoeffs {
 
     pub fn high_shelf(sample_rate: f32, frequency_hz: f32, gain_db: f32) -> Self {
         shelf(sample_rate, frequency_hz, gain_db, EQ_SHELF_SLOPE, ShelfKind::High)
+    }
+
+    pub fn butter_lowpass(sample_rate: f32, frequency_hz: f32, q: f32) -> Self {
+        let omega = 2.0 * std::f64::consts::PI * f64::from(frequency_hz) / f64::from(sample_rate);
+        let alpha = omega.sin() / (2.0 * f64::from(q).max(0.000_001));
+        let cos_omega = omega.cos();
+        normalize(
+            (1.0 - cos_omega) * 0.5,
+            1.0 - cos_omega,
+            (1.0 - cos_omega) * 0.5,
+            1.0 + alpha,
+            -2.0 * cos_omega,
+            1.0 - alpha,
+        )
+    }
+
+    pub fn butter_highpass(sample_rate: f32, frequency_hz: f32, q: f32) -> Self {
+        let omega = 2.0 * std::f64::consts::PI * f64::from(frequency_hz) / f64::from(sample_rate);
+        let alpha = omega.sin() / (2.0 * f64::from(q).max(0.000_001));
+        let cos_omega = omega.cos();
+        normalize(
+            (1.0 + cos_omega) * 0.5,
+            -(1.0 + cos_omega),
+            (1.0 + cos_omega) * 0.5,
+            1.0 + alpha,
+            -2.0 * cos_omega,
+            1.0 - alpha,
+        )
     }
 }
 
@@ -126,6 +161,275 @@ impl EqProcessor {
             process_chain(right, &mut self.right_chain),
         )
     }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MbcSettings {
+    #[serde(default, alias = "thresholdDbfs")]
+    pub threshold_dbfs: f32,
+    #[serde(default = "default_mbc_ratio")]
+    pub ratio: f32,
+    #[serde(default = "default_mbc_attack_seconds", alias = "attackSeconds")]
+    pub attack_seconds: f32,
+    #[serde(default = "default_mbc_release_seconds", alias = "releaseSeconds")]
+    pub release_seconds: f32,
+    #[serde(default, alias = "kneeDb")]
+    pub knee_db: f32,
+    #[serde(default, alias = "makeupDb")]
+    pub makeup_db: f32,
+}
+
+impl Default for MbcSettings {
+    fn default() -> Self {
+        Self {
+            threshold_dbfs: 0.0,
+            ratio: 1.0,
+            attack_seconds: MBC_ATTACK_SECONDS,
+            release_seconds: MBC_RELEASE_SECONDS,
+            knee_db: 0.0,
+            makeup_db: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MbcTraceFrame {
+    pub frame: usize,
+    pub low_gr_db: f32,
+    pub mid_gr_db: f32,
+    pub high_gr_db: f32,
+}
+
+pub fn process_mbc(samples: &mut [f32], settings: &MbcSettings, sample_rate: f32) {
+    let mut processor = MultibandCompressor::new(*settings, sample_rate);
+    for frame in samples.chunks_exact_mut(2) {
+        let (left, right, _) = processor.process_stereo(frame[0], frame[1]);
+        frame[0] = left;
+        frame[1] = right;
+    }
+}
+
+pub fn process_mbc_with_trace(
+    samples: &mut [f32],
+    settings: &MbcSettings,
+    sample_rate: f32,
+    trace_hz: f32,
+) -> Vec<MbcTraceFrame> {
+    let mut processor = MultibandCompressor::new(*settings, sample_rate);
+    let trace_interval = (sample_rate / trace_hz.max(1.0)).round().max(1.0) as usize;
+    let mut trace = Vec::new();
+    for (frame_index, frame) in samples.chunks_exact_mut(2).enumerate() {
+        let (left, right, reductions) = processor.process_stereo(frame[0], frame[1]);
+        frame[0] = left;
+        frame[1] = right;
+        if frame_index % trace_interval == 0 {
+            trace.push(MbcTraceFrame {
+                frame: frame_index,
+                low_gr_db: reductions[0],
+                mid_gr_db: reductions[1],
+                high_gr_db: reductions[2],
+            });
+        }
+    }
+    trace
+}
+
+pub struct MultibandCompressor {
+    settings: MbcSettings,
+    left_splitter: Lr4Splitter,
+    right_splitter: Lr4Splitter,
+    bands: [BandCompressor; 3],
+}
+
+impl MultibandCompressor {
+    pub fn new(settings: MbcSettings, sample_rate: f32) -> Self {
+        Self {
+            settings,
+            left_splitter: Lr4Splitter::new(sample_rate),
+            right_splitter: Lr4Splitter::new(sample_rate),
+            bands: [
+                BandCompressor::new(sample_rate),
+                BandCompressor::new(sample_rate),
+                BandCompressor::new(sample_rate),
+            ],
+        }
+    }
+
+    pub fn update(&mut self, settings: MbcSettings) {
+        self.settings = settings;
+    }
+
+    pub fn process_stereo(&mut self, left: f32, right: f32) -> (f32, f32, [f32; 3]) {
+        if !mbc_active(&self.settings) {
+            return (left, right, [0.0; 3]);
+        }
+
+        let left_bands = self.left_splitter.split(left);
+        let right_bands = self.right_splitter.split(right);
+        let mut out_left = 0.0_f32;
+        let mut out_right = 0.0_f32;
+        let mut reductions = [0.0_f32; 3];
+
+        for band in 0..3 {
+            let detector = left_bands[band].abs().max(right_bands[band].abs());
+            let (gain, gr_db) = self.bands[band].gain(detector, &self.settings);
+            out_left += left_bands[band] * gain;
+            out_right += right_bands[band] * gain;
+            reductions[band] = gr_db;
+        }
+
+        (out_left, out_right, reductions)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct BandCompressor {
+    sample_rate: f32,
+    attack_coeff: f32,
+    release_coeff: f32,
+    rms: RmsDetector,
+    envelope: f32,
+}
+
+impl BandCompressor {
+    fn new(sample_rate: f32) -> Self {
+        Self {
+            sample_rate,
+            attack_coeff: time_coeff(MBC_ATTACK_SECONDS, sample_rate),
+            release_coeff: time_coeff(MBC_RELEASE_SECONDS, sample_rate),
+            rms: RmsDetector::new(sample_rate),
+            envelope: 0.0,
+        }
+    }
+
+    fn gain(&mut self, detector: f32, settings: &MbcSettings) -> (f32, f32) {
+        self.attack_coeff = time_coeff(settings.attack_seconds, self.sample_rate);
+        self.release_coeff = time_coeff(settings.release_seconds, self.sample_rate);
+        let level = self.rms.process(detector);
+        let coeff = if level > self.envelope {
+            self.attack_coeff
+        } else {
+            self.release_coeff
+        };
+        self.envelope = (coeff * self.envelope) + ((1.0 - coeff) * level);
+        let input_db = amplitude_to_db(self.envelope);
+        let reduction_db = gain_reduction_db(input_db, settings.threshold_dbfs, settings.ratio, settings.knee_db);
+        let gain = db_to_amplitude(reduction_db + settings.makeup_db);
+        (gain, -reduction_db)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct RmsDetector {
+    squares: Vec<f32>,
+    index: usize,
+    sum: f64,
+}
+
+impl RmsDetector {
+    fn new(sample_rate: f32) -> Self {
+        let frames = (sample_rate * MBC_RMS_WINDOW_SECONDS).round().max(1.0) as usize;
+        Self {
+            squares: vec![0.0; frames],
+            index: 0,
+            sum: 0.0,
+        }
+    }
+
+    fn process(&mut self, sample: f32) -> f32 {
+        let square = sample * sample;
+        self.sum += f64::from(square - self.squares[self.index]);
+        self.squares[self.index] = square;
+        self.index = (self.index + 1) % self.squares.len();
+        (self.sum.max(0.0) / self.squares.len() as f64).sqrt() as f32
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Lr4Splitter {
+    low_lp1: Biquad,
+    low_lp2: Biquad,
+    mid_hp1: Biquad,
+    mid_hp2: Biquad,
+    mid_lp1: Biquad,
+    mid_lp2: Biquad,
+    high_hp1: Biquad,
+    high_hp2: Biquad,
+}
+
+impl Lr4Splitter {
+    fn new(sample_rate: f32) -> Self {
+        let low_lp = BiquadCoeffs::butter_lowpass(sample_rate, MBC_LOW_CROSSOVER_HZ, BUTTERWORTH_Q);
+        let mid_hp = BiquadCoeffs::butter_highpass(sample_rate, MBC_LOW_CROSSOVER_HZ, BUTTERWORTH_Q);
+        let mid_lp = BiquadCoeffs::butter_lowpass(sample_rate, MBC_HIGH_CROSSOVER_HZ, BUTTERWORTH_Q);
+        let high_hp = BiquadCoeffs::butter_highpass(sample_rate, MBC_HIGH_CROSSOVER_HZ, BUTTERWORTH_Q);
+        Self {
+            low_lp1: Biquad::new(low_lp),
+            low_lp2: Biquad::new(low_lp),
+            mid_hp1: Biquad::new(mid_hp),
+            mid_hp2: Biquad::new(mid_hp),
+            mid_lp1: Biquad::new(mid_lp),
+            mid_lp2: Biquad::new(mid_lp),
+            high_hp1: Biquad::new(high_hp),
+            high_hp2: Biquad::new(high_hp),
+        }
+    }
+
+    fn split(&mut self, sample: f32) -> [f32; 3] {
+        let low = self.low_lp2.process(self.low_lp1.process(sample));
+        let mid_high = self.mid_hp2.process(self.mid_hp1.process(sample));
+        let mid = self.mid_lp2.process(self.mid_lp1.process(mid_high));
+        let high = self.high_hp2.process(self.high_hp1.process(sample));
+        [low, mid, high]
+    }
+}
+
+fn mbc_active(settings: &MbcSettings) -> bool {
+    settings.ratio > 1.000_001 && settings.threshold_dbfs < 0.0
+}
+
+fn default_mbc_ratio() -> f32 {
+    1.0
+}
+
+fn default_mbc_attack_seconds() -> f32 {
+    MBC_ATTACK_SECONDS
+}
+
+fn default_mbc_release_seconds() -> f32 {
+    MBC_RELEASE_SECONDS
+}
+
+fn time_coeff(seconds: f32, sample_rate: f32) -> f32 {
+    (-1.0 / (seconds.max(0.000_001) * sample_rate.max(1.0))).exp()
+}
+
+fn amplitude_to_db(value: f32) -> f32 {
+    20.0 * value.max(MBC_EPSILON).log10()
+}
+
+fn db_to_amplitude(value: f32) -> f32 {
+    10.0_f32.powf(value / 20.0)
+}
+
+fn gain_reduction_db(input_db: f32, threshold_dbfs: f32, ratio: f32, knee_db: f32) -> f32 {
+    let ratio = ratio.max(1.0);
+    let knee = knee_db.max(0.0);
+    if knee <= 0.0 {
+        let over_db = (input_db - threshold_dbfs).max(0.0);
+        return -over_db * (1.0 - (1.0 / ratio));
+    }
+
+    let lower = threshold_dbfs - (knee * 0.5);
+    let upper = threshold_dbfs + (knee * 0.5);
+    let output_db = if input_db <= lower {
+        input_db
+    } else if input_db >= upper {
+        threshold_dbfs + ((input_db - threshold_dbfs) / ratio)
+    } else {
+        input_db + (((1.0 / ratio) - 1.0) * (input_db - lower).powi(2) / (2.0 * knee))
+    };
+    output_db - input_db
 }
 
 fn eq_chain(settings: &EqSettings, sample_rate: f32) -> [Biquad; 3] {

@@ -505,7 +505,7 @@ def master_track(
         ),
         high_db=preset.air_db + fine_tune.air_db_offset + (brightness * 0.82),
     )
-    processed = _linked_compressor(
+    processed = _rust_mbc(
         processed,
         sample_rate=sample_rate,
         threshold_dbfs=preset.compressor_threshold_dbfs
@@ -715,26 +715,44 @@ def _rust_eq(
     return processed.astype(np.float32)
 
 
-def _linked_compressor(
+def _rust_mbc(
     samples: np.ndarray,
     sample_rate: int,
     threshold_dbfs: float,
     ratio: float,
 ) -> np.ndarray:
     if samples.size == 0:
-        return samples
+        return samples.astype(np.float32)
 
-    detector = np.max(np.abs(samples), axis=1).astype(np.float64)
-    attack = float(np.exp(-1.0 / (COMPRESSOR_ATTACK_SECONDS * sample_rate)))
-    release = float(np.exp(-1.0 / (COMPRESSOR_RELEASE_SECONDS * sample_rate)))
-    attacked = signal.lfilter([1.0 - attack], [1.0, -attack], detector).astype(np.float64)
-    envelope = signal.lfilter([1.0 - release], [1.0, -release], attacked).astype(np.float64)
+    stereo = np.asarray(samples, dtype=np.float32)
+    if stereo.ndim == 1:
+        stereo = stereo[:, np.newaxis]
+    if stereo.shape[1] == 1:
+        stereo = np.repeat(stereo, 2, axis=1)
+    elif stereo.shape[1] > 2:
+        stereo = stereo[:, :2]
+    stereo = np.ascontiguousarray(stereo, dtype=np.float32)
 
-    envelope_db = 20.0 * np.log10(np.maximum(envelope, EPSILON))
-    over_db = np.maximum(envelope_db - threshold_dbfs, 0.0)
-    reduction_db = -over_db * (1.0 - (1.0 / ratio))
-    gain = db_to_amplitude(reduction_db).astype(np.float32)
-    return samples * gain[:, np.newaxis]
+    with tempfile.TemporaryDirectory(prefix="album-master-rust-mbc-") as tmpdir:
+        input_path = Path(tmpdir) / "input.raw"
+        output_path = Path(tmpdir) / "output.raw"
+        stereo.tofile(input_path)
+        command = _rust_mbc_command()
+        subprocess.run(
+            [
+                *command,
+                str(input_path),
+                str(output_path),
+                str(int(sample_rate)),
+                str(float(threshold_dbfs)),
+                str(float(ratio)),
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        processed = np.fromfile(output_path, dtype=np.float32).reshape((-1, 2))
+    return processed.astype(np.float32)
 
 
 def _transient_shape(samples: np.ndarray, sample_rate: int, punch: float) -> np.ndarray:
@@ -934,6 +952,30 @@ def _rust_eq_command() -> list[str]:
         ]
 
     executable = Path(sys.executable).with_name("rust-eq.exe" if os.name == "nt" else "rust-eq")
+    return [str(executable)]
+
+
+def _rust_mbc_command() -> list[str]:
+    configured = os.environ.get("ALBUM_MASTER_RUST_MBC")
+    if configured:
+        return [configured]
+
+    root = Path(__file__).resolve().parents[2]
+    manifest = root / "desktop" / "src-tauri" / "Cargo.toml"
+    if manifest.exists():
+        cargo = os.environ.get("CARGO", "cargo")
+        return [
+            cargo,
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(manifest),
+            "--bin",
+            "rust-mbc",
+            "--",
+        ]
+
+    executable = Path(sys.executable).with_name("rust-mbc.exe" if os.name == "nt" else "rust-mbc")
     return [str(executable)]
 
 

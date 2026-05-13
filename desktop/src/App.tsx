@@ -961,7 +961,7 @@ function App() {
     applyLiveAuditionChain(chain, {
       active: liveAuditionActive,
       bass: 0,
-      compression: settings.compression,
+      compression: 0,
       high: 0,
       mid: 0,
       outputGain: playbackVolume,
@@ -979,6 +979,13 @@ function App() {
       },
     }).catch((error) => pushLog(`Native EQ update failed: ${String(error)}`));
   }, [nativePlaybackStatus.active, settings.air, settings.bass, settings.presence]);
+
+  useEffect(() => {
+    if (!nativePlaybackStatus.active) return;
+    invoke("update_mbc_chain", { settings: nativeMbcSettings(settings.compression) }).catch((error) =>
+      pushLog(`Native compressor update failed: ${String(error)}`),
+    );
+  }, [nativePlaybackStatus.active, settings.compression]);
 
   useEffect(() => {
     return () => {
@@ -1099,7 +1106,7 @@ function App() {
     applyLiveAuditionChain(chain, {
       active: liveAuditionActive,
       bass: settings.bass,
-      compression: settings.compression,
+      compression: 0,
       high: settings.air,
       mid: settings.presence,
       outputGain: playbackVolume,
@@ -4464,6 +4471,18 @@ function applyLiveAuditionChain(
     currentTime: now,
     baseLatencyMs: Number.isFinite(chain.context.baseLatency) ? chain.context.baseLatency * 1000 : null,
     updatedAt: performance.now(),
+  };
+}
+
+function nativeMbcSettings(intensity: number) {
+  const drive = clamp(Math.max(0, intensity), 0, 1);
+  return {
+    thresholdDbfs: livePreviewConfig.compressor.thresholdBaseDbfs - drive * livePreviewConfig.compressor.thresholdDriveScaleDb,
+    ratio: livePreviewConfig.compressor.ratioBase + drive * livePreviewConfig.compressor.ratioDriveScale,
+    attackSeconds: livePreviewConfig.compressor.attackSeconds,
+    releaseSeconds: livePreviewConfig.compressor.releaseSeconds,
+    kneeDb: livePreviewConfig.compressor.kneeDb,
+    makeupDb: 0,
   };
 }
 
