@@ -6,16 +6,16 @@ This checklist is the manual closeout path for the active goal. It does not repl
 
 ## Current Evidence Baseline
 
-- Current release trace: `test-output\release-readiness-572c0cd-handoff-browser-audio\release-readiness.json`.
-- App-code commit covered by that trace: `572c0cdd9d10956dc68a6764e7f22401823498b2`.
+- Current release trace: `test-output\release-readiness-9f91b2d-review-decision-handoff\release-readiness.json`.
+- App-code commit covered by that trace: `9f91b2d2648f4d0e67a292af6b4c0ab3b6a612fa`.
 - The trace was run from a clean worktree and records `dirty_before: []` and `dirty_after: []`.
 - Automated result: 25 passed, 0 failed, 0 skipped.
 - Windows Application log check saved beside the trace found zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries in the checked window.
 - Listening Pass approval is now gated: the UI will not set `Approved after listening` until current rendered audio exists and Master, Native A/B, codec preview, or Album WAV listening has been checked. Live Preview-only or Original-only listening cannot create final approval.
 - Remaining blockers: human listening approval and Live Preview scope acceptance.
 - Native Project Save As/Open/cancel coverage is now recorded in `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
-- Ready-to-listen Track Master packet for the real MP3 is recorded in `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-handoff.html`.
-- That packet is intentionally `not-approved`; it includes local audio controls for Original, Mastered, and codec preview files. The current release gate opens it in Chrome and verifies all four audio controls load with finite duration and no media errors, but it proves only that the handoff is playable and ready for review, not that the sound has been accepted.
+- Ready-to-listen Track Master packet for the real MP3 is recorded in `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-handoff.html`.
+- That packet is intentionally `not-approved`; it includes local audio controls for Original, Mastered, and codec preview files, plus a standalone review-decision form that defaults to `not-approved` and can export `listening-review-decision.json`. The current release gate opens it in Chrome and verifies all four audio controls load with finite duration and no media errors, but it proves only that the handoff is playable and ready for review, not that the sound has been accepted.
 
 ## Track Master Listening Pass
 
@@ -23,12 +23,12 @@ Use `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` unless
 
 Prepared evidence package:
 
-- Handoff HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-handoff.html`
-- Handoff JSON: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-handoff.json`
-- Listening receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-review.json`
-- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`
-- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\01-lay-the-money-on-the-desk-1\dashboard.html`
-- Codec previews: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\01-lay-the-money-on-the-desk-1\codec_previews\`
+- Handoff HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-handoff.html`
+- Handoff JSON: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-handoff.json`
+- Listening receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-review.json`
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`
+- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\01-lay-the-money-on-the-desk-1\dashboard.html`
+- Codec previews: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\01-lay-the-money-on-the-desk-1\codec_previews\`
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`
 - Browser audio-control metadata artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`
 
@@ -50,6 +50,7 @@ Required evidence:
 - `listening-review.json`
 - `listening-handoff.json`
 - `listening-handoff.html`
+- `listening-review-decision.json` if the standalone handoff form is used
 - Notes stating approve/reject and any concrete sound problems.
 
 ## Album Master Listening Pass
@@ -73,6 +74,7 @@ Required evidence:
 - Album `manifest.json` and dashboard.
 - `listening-review.json`
 - `listening-handoff.json`
+- `listening-review-decision.json` if the standalone handoff form is used
 - Notes stating approve/reject and exact boundary or level issues.
 
 ## Native Project Dialog Check
