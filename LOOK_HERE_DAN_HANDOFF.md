@@ -8,6 +8,8 @@ This repo is ready for manual testing, not final release approval.
 
 The latest pass was a one-hour-bounded stabilization and handoff pass after the app felt non-responsive during clicking. It intentionally avoided broad UI redesign and avoided the full release-readiness loop.
 
+Commit for this pass: `cce08dd Stabilize playback prep handoff`.
+
 ## What Changed In This Pass
 
 - Playback prep now has its own `playbackBusy` guard in `desktop/src/App.tsx`.

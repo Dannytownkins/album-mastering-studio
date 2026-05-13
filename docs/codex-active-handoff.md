@@ -59,6 +59,8 @@ Manual test handoff:
 
 Date: 2026-05-13
 
+Commit: `cce08dd Stabilize playback prep handoff`
+
 Changed files in this pass:
 
 - `desktop/src/App.tsx`

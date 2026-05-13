@@ -8,6 +8,7 @@ Context:
 
 - User reported the app still feels non-intuitive and can show Windows "not responding" for about 15 seconds before recovering.
 - User asked for small stability wins only, no full-goal continuation and no broad UI redesign.
+- Commit for this pass: `cce08dd Stabilize playback prep handoff`.
 
 Changes:
 
