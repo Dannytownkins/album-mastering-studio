@@ -3789,3 +3789,46 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running Tauri app");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_audio_probe_reports_default_output_device_without_playback() {
+        let probe = native_audio_probe().expect("native audio probe should query default output");
+        let default_device = probe
+            .default_output_device
+            .as_deref()
+            .expect("cpal should report a default output device");
+        assert!(
+            !default_device.trim().is_empty(),
+            "default output device name should not be empty"
+        );
+        assert!(
+            probe.default_output_config.is_some(),
+            "default output config should be available"
+        );
+
+        if let Ok(expected) = std::env::var("AMS_EXPECT_OUTPUT_DEVICE") {
+            assert!(
+                default_device
+                    .to_lowercase()
+                    .contains(&expected.to_lowercase()),
+                "expected output device to include {expected}, got {default_device}"
+            );
+        }
+
+        if let Ok(output_path) = std::env::var("AMS_NATIVE_AUDIO_PROBE_OUTPUT") {
+            let output = PathBuf::from(output_path);
+            if let Some(parent) = output.parent() {
+                fs::create_dir_all(parent).expect("probe output directory should be writable");
+            }
+            fs::write(
+                &output,
+                serde_json::to_string_pretty(&probe).expect("probe should serialize"),
+            )
+            .expect("probe output should be writable");
+        }
+    }
+}

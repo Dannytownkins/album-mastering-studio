@@ -1,27 +1,56 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+const releaseExe =
+  process.env.AMS_TAURI_RELEASE_EXE ||
+  path.join(repoRoot, "desktop", "src-tauri", "target", "release", "album-mastering-studio.exe");
 const outputRoot = process.env.AMS_TAURI_REAL_SONG_OUTPUT || path.join(repoRoot, "test-output", "tauri-real-song-native-ui-smoke");
 const sourcePath = process.env.AMS_REAL_SONG_PATH;
+const expectedOutputDevice = process.env.AMS_EXPECT_OUTPUT_DEVICE || "";
 const cdpPort = process.env.TAURI_CDP_PORT || "9222";
 const cdpBase = `http://127.0.0.1:${cdpPort}`;
+const useExistingApp = process.env.AMS_TAURI_USE_EXISTING_APP === "1";
 const statePath = path.join(os.homedir(), "Documents", "Album Mastering Studio", "State", "recent-session.json");
 const stateBackup = existsSync(statePath) ? readFileSync(statePath, "utf8") : null;
 
 assert.ok(sourcePath, "Set AMS_REAL_SONG_PATH to a local audio file for this smoke.");
 assert.equal(existsSync(sourcePath), true, `Real-song fixture does not exist: ${sourcePath}`);
+if (!useExistingApp) {
+  assert.equal(existsSync(releaseExe), true, `Release executable not found: ${releaseExe}`);
+}
 mkdirSync(outputRoot, { recursive: true });
 
-const target = await findTauriPageTarget();
-const cdp = await connectCdp(target.webSocketDebuggerUrl);
-await cdp.send("Runtime.enable");
-await cdp.send("Page.enable");
-await waitForCondition(cdp, "typeof window.__TAURI_INTERNALS__?.invoke === 'function'", 15000);
+const browserArguments = [
+  process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS,
+  `--remote-debugging-port=${cdpPort}`,
+]
+  .filter(Boolean)
+  .join(" ");
+const app = useExistingApp
+  ? null
+  : spawn(releaseExe, [], {
+      cwd: path.dirname(releaseExe),
+      env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: browserArguments },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+const stdout = [];
+const stderr = [];
+app?.stdout?.on("data", (chunk) => stdout.push(chunk.toString()));
+app?.stderr?.on("data", (chunk) => stderr.push(chunk.toString()));
 
+let cdp;
 try {
+  const target = await findTauriPageTarget();
+  cdp = await connectCdp(target.webSocketDebuggerUrl);
+  await cdp.send("Runtime.enable");
+  await cdp.send("Page.enable");
+  await waitForCondition(cdp, "typeof window.__TAURI_INTERNALS__?.invoke === 'function'", 15000);
+
   const seeded = await seedRealSongSession(cdp);
   await cdp.send("Page.reload", { ignoreCache: true });
   await waitForCondition(cdp, `document.body.innerText.includes(${JSON.stringify(seeded.title)})`, 15000);
@@ -36,8 +65,16 @@ try {
     ...smoke,
     screenshot: screenshotPath,
     screenshotExists: existsSync(screenshotPath),
+    releaseExe,
+    releaseExeExists: existsSync(releaseExe),
+    launchedReleaseApp: !useExistingApp,
+    expectedOutputDevice,
+    stdout: stdout.join(""),
+    stderr: stderr.join(""),
   };
 
+  assert.equal(evidence.releaseExeExists, true);
+  assert.equal(evidence.launchedReleaseApp || useExistingApp, true);
   assert.equal(evidence.initialMode, "Track Master");
   assert.equal(evidence.trackVisible, true);
   assert.equal(evidence.nativeButtonEnabled, true);
@@ -57,6 +94,15 @@ try {
   assert.equal(evidence.resumedStatus.paused, false);
   assert.equal(evidence.runningStatus.active, true);
   assert.equal(evidence.runningStatus.paused, false);
+  assert.equal(typeof evidence.runningStatus.output_device, "string");
+  assert.notEqual(evidence.runningStatus.output_device.trim(), "");
+  if (expectedOutputDevice) {
+    assert.equal(
+      evidence.runningStatus.output_device.toLowerCase().includes(expectedOutputDevice.toLowerCase()),
+      true,
+      `Expected output device to include ${expectedOutputDevice}, got ${evidence.runningStatus.output_device}`,
+    );
+  }
   assert.ok(evidence.runningStatus.played_output_frames > 0);
   assert.equal(evidence.stoppedStatus.active, false);
   assert.equal(Array.isArray(evidence.stoppedStatus.stream_errors), true);
@@ -69,11 +115,14 @@ try {
   writeFileSync(resultPath, JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({ passed: true, output: outputRoot, result: resultPath }, null, 2));
 } finally {
-  await evaluateInWebView(cdp, "window.__TAURI_INTERNALS__.invoke('stop_native_playback').then((status) => JSON.stringify(status)).catch(() => JSON.stringify({ active: false }))")
-    .catch(() => undefined);
+  if (cdp) {
+    await evaluateInWebView(cdp, "window.__TAURI_INTERNALS__.invoke('stop_native_playback').then((status) => JSON.stringify(status)).catch(() => JSON.stringify({ active: false }))")
+      .catch(() => undefined);
+  }
   await sleep(1000);
   restoreAutosave();
-  cdp.close();
+  cdp?.close();
+  app?.kill();
 }
 
 async function seedRealSongSession(cdp) {
@@ -257,19 +306,30 @@ function realSongNativeUiExpression(title) {
 }
 
 async function findTauriPageTarget() {
-  let response;
-  try {
-    response = await fetch(`${cdpBase}/json/list`);
-  } catch (error) {
-    throw new Error(
-      `Could not reach Tauri WebView CDP at ${cdpBase}. Start Tauri dev with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${cdpPort}. ${error}`,
-    );
+  const started = Date.now();
+  let lastError;
+  while (Date.now() - started < 20_000) {
+    try {
+      const response = await fetch(`${cdpBase}/json/list`);
+      if (response.ok) {
+        const targets = await response.json();
+        const target = targets.find(
+          (item) => item.type === "page" && item.webSocketDebuggerUrl && !item.url.startsWith("devtools://"),
+        );
+        if (target) return target;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(250);
   }
-  assert.equal(response.ok, true, `CDP target list failed with HTTP ${response.status}`);
-  const targets = await response.json();
-  const target = targets.find((item) => item.type === "page" && item.url.includes("127.0.0.1:1420"));
-  assert.ok(target, `No Tauri page target found on ${cdpBase}`);
-  return target;
+  throw new Error(
+    `Could not reach Tauri WebView CDP at ${cdpBase}. ${
+      useExistingApp
+        ? `Start Tauri dev with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${cdpPort}.`
+        : `Release app was launched with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${cdpPort}.`
+    } ${lastError || "timed out"}`,
+  );
 }
 
 async function connectCdp(webSocketUrl) {

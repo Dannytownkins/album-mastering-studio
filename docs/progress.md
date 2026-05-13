@@ -5627,3 +5627,53 @@ Result:
 - Syntax check passed.
 - Packaged Track Preview UI smoke passed and wrote `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`.
 - Follow-up required: rerun the full release-readiness trace from the commit that includes this fix.
+
+### Real-Song Native A/B Release Self-Launch
+
+- The expanded trace then reached `tauri-real-song-native-ui` and exposed that this smoke still assumed an already-running dev WebView on CDP port `9222`.
+- Converted `desktop/tests/tauri-real-song-native-ui-smoke.mjs` to self-launch the packaged release EXE by default, matching the other release-readiness smokes.
+- Preserved `AMS_TAURI_USE_EXISTING_APP=1` for the old dev-WebView path when explicitly needed.
+- Added optional `AMS_EXPECT_OUTPUT_DEVICE` so local/headless runs can assert the Windows output endpoint name, while the release runner remains device-agnostic.
+- Important correction: this smoke is automated but not headless. It launches the Tauri app and plays a short Native A/B segment through the default output device.
+
+Verification:
+
+```powershell
+cd desktop
+node --check .\tests\tauri-real-song-native-ui-smoke.mjs
+$env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"
+$env:AMS_EXPECT_OUTPUT_DEVICE="Headphones"
+$env:TAURI_CDP_PORT="9363"
+npm run test:tauri-real-song-native-ui
+```
+
+Result:
+
+- Syntax check passed.
+- Packaged real-song Native A/B UI smoke self-launched the release EXE and passed.
+- Evidence JSON: `test-output\tauri-real-song-native-ui-smoke\tauri-real-song-native-ui-smoke.json`.
+- Evidence values: `launchedReleaseApp: true`, `expectedOutputDevice: "Headphones"`, `output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, `played_output_frames: 60480`, `callback_count: 178`, `avg_callback_interval_ms: 9.9997`, `p95_callback_interval_ms: 10.621`, zero stream errors, and zero warnings.
+- Follow-up required: rerun the full release-readiness trace from the commit that includes this fix.
+
+### True Headless Native Output Probe
+
+- Added a Rust unit test around `native_audio_probe()` that runs without launching Tauri and without starting a playback stream.
+- The test queries CPAL/WASAPI for the default output device, default config, supported configs, and warnings.
+- Added `native-audio-headless-probe` to `scripts\release-readiness.ps1`; it writes `native-audio-headless-probe.json` under the release trace output root.
+- The optional `AMS_EXPECT_OUTPUT_DEVICE` assertion can be used locally to verify a specific endpoint name such as `Headphones`.
+
+Verification:
+
+```powershell
+cd desktop\src-tauri
+$env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
+$env:AMS_EXPECT_OUTPUT_DEVICE="Headphones"
+$env:AMS_NATIVE_AUDIO_PROBE_OUTPUT="C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\native-audio-headless-probe\native-audio-probe.json"
+cargo test native_audio_probe_reports_default_output_device_without_playback --lib -- --nocapture
+```
+
+Result:
+
+- Rust headless native output probe passed.
+- Evidence JSON: `test-output\native-audio-headless-probe\native-audio-probe.json`.
+- Evidence values: `host: "Wasapi"`, `default_output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, default output config `2ch / 48000 Hz / F32 / default`, and one expected warning that exact buffer latency requires playback measurement because the default buffer size is not fixed.

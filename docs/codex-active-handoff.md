@@ -17,7 +17,74 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Track Preview Playback Evidence Wait Fix
+## Latest Codex Pass: True Headless Native Output Probe
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src-tauri/src/lib.rs`
+- `scripts/release-readiness.ps1`
+- `docs/progress.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Added a Rust unit test around `native_audio_probe()` that queries the CPAL/WASAPI default output device and config without launching Tauri and without starting playback.
+- Added `native-audio-headless-probe` to the release-readiness runner so this silent check is distinct from UI/audio smokes.
+- The packaged Native A/B UI smoke remains automated but not headless because it launches the Tauri app and plays audio.
+
+Verification already run:
+
+- `cd desktop\src-tauri; $env:AMS_EXPECT_OUTPUT_DEVICE="Headphones"; $env:AMS_NATIVE_AUDIO_PROBE_OUTPUT="C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\native-audio-headless-probe\native-audio-probe.json"; cargo test native_audio_probe_reports_default_output_device_without_playback --lib -- --nocapture`
+
+Evidence:
+
+- `test-output\native-audio-headless-probe\native-audio-probe.json`
+- Key values: `host: "Wasapi"`, `default_output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, default output config `2ch / 48000 Hz / F32 / default`.
+
+Remaining blockers:
+
+- Rerun the full release-readiness trace from the commit that contains this headless probe, self-launch fix, and Native A/B gate expansion.
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+
+## Previous Codex Pass: Real-Song Native A/B Release Self-Launch
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-real-song-native-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Converted the real-song Native A/B UI smoke from dev-WebView-only to packaged release self-launch by default.
+- Preserved `AMS_TAURI_USE_EXISTING_APP=1` for dev-WebView reuse when needed.
+- Added optional `AMS_EXPECT_OUTPUT_DEVICE` assertion so a local run can verify the Windows output endpoint name without making release CI depend on one device.
+
+Verification already run:
+
+- `cd desktop; node --check .\tests\tauri-real-song-native-ui-smoke.mjs`
+- `cd desktop; $env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"; $env:AMS_EXPECT_OUTPUT_DEVICE="Headphones"; $env:TAURI_CDP_PORT="9363"; npm run test:tauri-real-song-native-ui`
+
+Evidence:
+
+- `test-output\tauri-real-song-native-ui-smoke\tauri-real-song-native-ui-smoke.json`
+- Key values: `launchedReleaseApp: true`, `expectedOutputDevice: "Headphones"`, `output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, `played_output_frames: 60480`, `callback_count: 178`, `avg_callback_interval_ms: 9.9997`, `p95_callback_interval_ms: 10.621`, zero stream errors, zero warnings.
+
+Remaining blockers:
+
+- Rerun the full release-readiness trace from the commit that contains this self-launch fix and the Native A/B gate expansion.
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+
+## Previous Codex Pass: Track Preview Playback Evidence Wait Fix
 
 Date: 2026-05-12
 

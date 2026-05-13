@@ -165,6 +165,11 @@ try {
   Invoke-ReadinessStep "python-cli-smoke" $RepoRoot { & python -m album_mastering_studio.cli smoke --output (Join-Path $OutputRoot "cli-smoke") }
   Invoke-ReadinessStep "desktop-build" $DesktopRoot { & npm.cmd run build }
   Invoke-ReadinessStep "desktop-integration" $DesktopRoot { & npm.cmd run test:integration }
+  Invoke-ReadinessStep "native-audio-headless-probe" (Join-Path $DesktopRoot "src-tauri") {
+    $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+    $env:AMS_NATIVE_AUDIO_PROBE_OUTPUT = Join-Path $OutputRoot "native-audio-headless-probe.json"
+    & cargo test native_audio_probe_reports_default_output_device_without_playback --lib -- --nocapture
+  }
 
   if ($SkipTauriBuild.IsPresent) {
     Add-SkippedStep "desktop-tauri-build" "Skipped by -SkipTauriBuild."
