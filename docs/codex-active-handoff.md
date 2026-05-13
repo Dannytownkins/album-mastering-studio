@@ -41,7 +41,55 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Playable Listening Handoff + Current Release Trace
+## Latest Codex Pass: Listening Approval Gate + Current Release Trace
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/tests/tauri-release-session-safety-smoke.mjs`
+- `desktop/tests/tauri-webview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- The Listening Pass approval checkbox is disabled until the app has current rendered audio and a release-faithful listening basis: Master, Native A/B, codec preview, or Album WAV.
+- Live Preview-only, Original-only, Dashboard-only, or transitions-only activity cannot mark the pass approved.
+- `Update Preview` now records a render revision, so render-affecting edits stale/clear approval instead of leaving old preview evidence looking current.
+- The packaged session-safety smoke now proves approval is blocked before render, becomes available after Update Preview, persists after valid checks, and clears after a render-affecting Low control change.
+
+Verification:
+
+- `cd desktop; npm run build`
+- `cd desktop; node --check tests/tauri-release-session-safety-smoke.mjs`
+- `cd desktop; node --check tests/tauri-webview-ui-smoke.mjs`
+- `git diff --check`
+- Full trace command after commit `48adeb5b268ef5f9a624b5643126c15ec2ac65d7`: `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-48adeb5-approval-gate"`.
+- Full trace result: `24 passed`, `0 failed`, `0 skipped`, with `dirty_before: []` and `dirty_after: []`.
+- Full-trace Windows Application log artifact: `test-output\release-readiness-48adeb5-approval-gate\windows-application-events.json`, result `[]`.
+
+Evidence:
+
+- Full trace: `test-output\release-readiness-48adeb5-approval-gate\release-readiness.json`.
+- Session-safety evidence: `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`.
+- Session-safety values: `listeningApprovalBlockedNoRender: true`, `listeningApprovalAfterBlockedAttempt: "Not approved"`, `previewReadyForApproval: true`, `listeningApprovalEnabledAfterPreview: true`, `listeningApprovalAfterChecks: "Approved"`, and `persistedListeningApprovedAfterDirtyChange: false`.
+- Current ready-to-listen packet from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html`.
+- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-review.json`.
+- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+
+Decision:
+
+- The app now prevents a misleading release-approved state from Live Preview-only or Original-only listening.
+- The human listening package remains intentionally `not-approved`.
+- The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
+- The latest full release trace covers the app-code commit `48adeb5`; any later app code, package, or smoke-test change needs a fresh trace before being treated as current release-gate evidence.
+
+## Prior Codex Pass: Playable Listening Handoff
 
 Date: 2026-05-13
 
@@ -78,9 +126,9 @@ Evidence:
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
 - Browser audio-control metadata artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
 - Full trace: `test-output\release-readiness-cba8ae7-playable-handoff\release-readiness.json`.
-- Current ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
-- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
-- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Ready-to-listen packet from that pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
+- Receipt from that pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
+- Mastered WAV from that pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Values: `listeningPacketHtmlIncludesAudioControls: true`, `listeningPacketHtmlIncludesOriginalAudio: true`, `listeningPacketHtmlIncludesMasteredAudio: true`, `listeningPacketHtmlIncludesCodecAudioControls: true`, `exportStatus: "pass"`, and source MP3 size/SHA-256 unchanged.
 - Browser metadata values: 4 audio elements, all `readyState: 4`, all `error: null`, durations around `186.32s`.
 
@@ -88,7 +136,7 @@ Decision:
 
 - The human listening package is now directly playable from the generated HTML, but it remains intentionally `not-approved`.
 - The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
-- The latest full release trace covers the app-code commit `cba8ae7`; any later app code, package, or smoke-test change needs a fresh trace before being treated as current release-gate evidence.
+- The full release trace covered app-code commit `cba8ae7`; it is superseded by the current `48adeb5` trace above.
 
 ## Prior Codex Pass: Release Gate Includes Listening Packet
 

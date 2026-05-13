@@ -2,6 +2,58 @@
 
 ## 2026-05-13
 
+### Listening Approval Gate Hardening
+
+Scope:
+
+- Hardened the Listening Pass panel so `Approved after listening` cannot be set from Live Preview-only, Original-only, Dashboard-only, or transitions-only activity.
+- Approval now requires current rendered audio plus at least one release-faithful listening basis: Master, Native A/B, codec preview, or Album WAV.
+- `Update Preview` now records the render revision, so later render-affecting edits stale/clear approval instead of leaving old preview evidence looking current.
+- Updated packaged/UI smoke coverage to prove the blocked-before-render and enabled-after-preview behavior.
+
+Verification:
+
+- `cd desktop; npm run build`
+- `cd desktop; node --check tests/tauri-release-session-safety-smoke.mjs`
+- `cd desktop; node --check tests/tauri-webview-ui-smoke.mjs`
+- `git diff --check`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-48adeb5-approval-gate"`
+- Windows Application log query for the full trace window, saved to `test-output\release-readiness-48adeb5-approval-gate\windows-application-events.json`.
+
+Results:
+
+- Code commit covered by the full trace: `48adeb5b268ef5f9a624b5643126c15ec2ac65d7`.
+- Full release-readiness trace passed: `24 passed`, `0 failed`, `0 skipped`.
+- Full trace: `test-output\release-readiness-48adeb5-approval-gate\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log artifact for Album Mastering Studio errors/hangs/WER in the checked window: `[]`.
+- Packaged session-safety artifact: `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`.
+- Session-safety values include `listeningApprovalBlockedNoRender: true`, `listeningApprovalAfterBlockedAttempt: "Not approved"`, `previewReadyForApproval: true`, `listeningApprovalEnabledAfterPreview: true`, `listeningApprovalAfterChecks: "Approved"`, and `persistedListeningApprovedAfterDirtyChange: false`.
+- Current ready-to-listen HTML from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html`.
+- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-review.json`.
+- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+
+What passed:
+
+- The packaged app launches and completes the current full release gate.
+- Track Master automated coverage still passes for preview, A/B playback, region/loop, Volume Match, export, codec QC, real-song packet creation, and source hash preservation.
+- Album Master automated coverage still passes for state, render/history, album WAV/native playback, codec QC, dashboard/report artifacts, and generated-transition opt-in behavior.
+- The new approval guard blocks premature approval, permits approval after rendered preview plus release-faithful checks, and clears approval after a render-affecting edit.
+
+What failed:
+
+- No automated failure was observed in this pass.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded; the current real-song packet remains intentionally `not-approved`.
+- Live Preview remains a directional approximation unless the user explicitly accepts that scope or we build deeper parity.
+- Live OS drag/drop is still not proven by unattended automation, though Add/import and the Tauri drag/drop listener path are covered by current evidence.
+
+Next recommended action:
+
+- Use the current ready-to-listen Track Master packet for the human listening pass, record approve/reject notes, then decide whether Live Preview's directional-only scope is acceptable before taking on broad UI polish.
+
 ### Playable Listening Handoff HTML
 
 Scope:
@@ -27,9 +79,9 @@ Results:
 - Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
 - Browser audio-control metadata smoke: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
-- Current ready-to-listen HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
-- Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
-- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Ready-to-listen HTML from that pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
+- Receipt from that pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
+- Mastered WAV from that pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Windows Application log follow-up for the focused run found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\tauri-real-song-listening-packet-smoke\windows-application-events-after-playable-handoff.json`.
 - Windows Application log follow-up for the full trace found zero matching Album Mastering Studio entries and saved `test-output\release-readiness-cba8ae7-playable-handoff\windows-application-events.json`.
 - Evidence values include `listeningPacketHtmlIncludesAudioControls: true`, `listeningPacketHtmlIncludesOriginalAudio: true`, `listeningPacketHtmlIncludesMasteredAudio: true`, `listeningPacketHtmlIncludesCodecAudioControls: true`, `exportStatus: "pass"`, and source MP3 size/SHA-256 unchanged.
@@ -39,7 +91,7 @@ Remaining blockers:
 
 - Human listening approval is still not recorded.
 - Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
-- The latest full release trace covers app-code commit `cba8ae7`; rerun the full trace after any later app code, package, or smoke-test change.
+- That full release trace covered app-code commit `cba8ae7`; it is superseded by the current `48adeb5` trace above.
 
 ### Prior Full Trace With Listening Packet Gate
 
@@ -58,7 +110,7 @@ Results:
 - The new runner step `tauri-real-song-listening-packet` passed in `50.714` seconds.
 - Windows Application log check found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\release-readiness-dbfaad7-listening-packet-gate\windows-application-events.json`.
 
-Current ready-to-listen package:
+Ready-to-listen package from that pass:
 
 - Handoff HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\listening-handoff.html`.
 - Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\listening-review.json`.
