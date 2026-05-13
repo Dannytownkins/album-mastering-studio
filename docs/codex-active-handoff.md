@@ -68,6 +68,8 @@ Verification:
 - `python -m compileall -q src tests`
 - `cd desktop; npm run tauri:build`
 - `cd desktop; npm run test:tauri-release` (rebuilt packaged EXE)
+- `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-9fe379b-20260513-import-hardening"`
+- Windows Application log query for Application Error, Application Hang, and Windows Error Reporting entries involving Album Mastering Studio.
 
 Evidence:
 
@@ -76,14 +78,18 @@ Evidence:
 - Frontend build passed after import hardening.
 - Desktop CLI contract still passed: `desktop CLI contract can analyze dropped files and render a manifest`.
 - Python compile passed.
+- Current app-code full release trace: `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
+- Trace result: 23 passed, 0 failed, 0 skipped from clean commit `9fe379bac5093df0dcc0769027a74d70cf4fc362`.
+- Trace dirty proof: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log artifact: `test-output\release-readiness-9fe379b-20260513-import-hardening\windows-application-events.json`, result `[]`.
 
 Decision:
 
 - This improves the user-visible import/drop failure surface and fixes a stale-state risk in the Tauri drag/drop listener.
 - This does not close native OS file-picker automation. Native Open/Save-As and true OS drag/drop remain manual/waiver coverage items unless a reliable unattended route is found.
-- A fresh full release-readiness trace is still recommended before calling a new commit release-current, because the last full trace predates this App.tsx change.
+- This is the current app-code full release trace. The active goal remains open only on human listening approval, Live Preview scope acceptance or deeper parity, and native dialog/true OS drag-drop manual verification or waiver.
 
-## Prior Codex Pass: Source Integrity Smoke and Current Full Trace
+## Prior Codex Pass: Source Integrity Smoke and Prior Full Trace
 
 Date: 2026-05-13
 
@@ -112,7 +118,7 @@ Verification:
 
 Evidence:
 
-- Current commit: `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`.
+- Prior app-code/test commit: `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`.
 - Full trace: `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
 - Result: 23 passed, 0 failed, 0 skipped.
 - Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
@@ -122,7 +128,7 @@ Evidence:
 
 Decision:
 
-- This is the current app-code/test release trace.
+- This was the app-code/test release trace for the source-integrity pass and is superseded by the `9fe379b` trace above.
 - The source non-destructive requirement now has real-song byte-for-byte hash evidence in addition to output-path behavior.
 - The active goal remains open because human listening approval, Live Preview scope acceptance or deeper parity, and native Open/Save-As verification or waiver are still unresolved.
 
@@ -162,7 +168,7 @@ Evidence:
 
 Decision:
 
-- This was the current app-code release trace at the time; it is superseded by the `1a7c870` trace above.
+- This was the current app-code release trace at the time; it is superseded by the `9fe379b` trace above.
 - Native OS Open/Save-As dialog coverage remains open until manually verified or explicitly waived. This pass hardens failure/cancel behavior but does not prove the native dialogs can be driven unattended.
 - Human listening approval and Live Preview scope acceptance remain open.
 
@@ -234,7 +240,7 @@ Changed files in this pass:
 What changed:
 
 - Recorded the full release-readiness trace for clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
-- This was the current app-code full trace for the Listening Approval Scope hardening at the time; it is superseded by the `1a7c870` trace above.
+- This was the current app-code full trace for the Listening Approval Scope hardening at the time; it is superseded by the `9fe379b` trace above.
 
 Verification run:
 
@@ -301,7 +307,7 @@ Remaining blockers:
 - Human listening approval has not been recorded.
 - Live Preview remains approximate; it is now more explicitly scoped as directional-only, but this still needs user acceptance or a deeper parity change before goal completion.
 - Native OS Open/Save-As dialogs remain unautomated/unwaived.
-- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`, then superseded by the current `1a7c870` trace above.
+- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`, then superseded by the current `9fe379b` trace above.
 
 ## Latest Codex Pass: Project Open Dialog Default Path Hardening
 

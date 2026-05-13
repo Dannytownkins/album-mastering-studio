@@ -2,7 +2,29 @@
 
 ## 2026-05-13
 
-### Source Integrity Smoke and Current Full Trace
+### Current Full Trace After Import Path Hardening
+
+Scope:
+
+- Hardened Add/Drop/Reference import feedback in `desktop\src\App.tsx`.
+- Rebuilt the packaged Tauri app, including sidecar, EXE, MSI, and NSIS bundles.
+- Reran the full release-readiness trace with real-song and installer gates.
+
+Results:
+
+- Current app-code commit: `9fe379bac5093df0dcc0769027a74d70cf4fc362`.
+- Full release readiness passed: `23 passed`, `0 failed`, `0 skipped`.
+- Trace: `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log check found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\release-readiness-9fe379b-20260513-import-hardening\windows-application-events.json`.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded.
+- Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
+- Native OS Open/Save-As dialogs and true OS drag/drop still need manual verification, better unattended automation, or explicit waiver.
+
+### Source Integrity Smoke and Prior Full Trace
 
 Scope:
 
@@ -23,7 +45,7 @@ npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay t
 
 Results:
 
-- Current app-code/test commit: `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`.
+- Prior app-code/test commit: `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`.
 - Full release readiness passed: `23 passed`, `0 failed`, `0 skipped`.
 - Trace: `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
 - Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
@@ -33,7 +55,7 @@ Results:
 
 Note:
 
-- The first full release rerun for `1c4aad1` failed in `tauri-track-preview-ui` because the smoke sampled `audio.currentTime` before the rendered-preview media seek settled. The app handoff metadata already had the expected start; the smoke now waits for the seek and the current `1a7c870` full trace passes.
+- The first full release rerun for `1c4aad1` failed in `tauri-track-preview-ui` because the smoke sampled `audio.currentTime` before the rendered-preview media seek settled. The app handoff metadata already had the expected start; the smoke now waits for the seek and the later `1a7c870` full trace passed.
 
 Remaining blockers:
 
@@ -107,7 +129,7 @@ Results:
 - Pre-commit `HEAD` for this audit was `28594a0`; the audit update itself is docs-only.
 - Files changed since `8c6b5a0`: `docs/GOAL_AUDIT.md`, `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, `docs/codex-active-handoff.md`, and `docs/progress.md`.
 - No non-doc diff exists since `8c6b5a0`.
-- This audit was superseded by app-code commit `1a36415`, then by the current full trace at `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
+- This audit was superseded by app-code commit `1a36415`, then by the current full trace at `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
 
 ### Native Dialog Automation Recheck
 
@@ -6188,4 +6210,10 @@ Date: 2026-05-13
   - `python -m compileall -q src tests`
   - `cd desktop; npm run tauri:build`
   - `cd desktop; npm run test:tauri-release` (rebuilt packaged EXE)
-- Remaining blocker: this does not automate native OS file pickers or true OS drag/drop. A fresh full release-readiness trace is still recommended before this App.tsx change becomes the current full release trace.
+- Full release trace passed after commit `9fe379b`:
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-9fe379b-20260513-import-hardening"`
+  - Trace: `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`
+  - Result: 23 passed, 0 failed, 0 skipped.
+  - Dirty proof: `dirty_before: []`, `dirty_after: []`.
+  - Windows Application log artifact: `test-output\release-readiness-9fe379b-20260513-import-hardening\windows-application-events.json`, result `[]`.
+- Remaining blocker: this does not automate native OS file pickers or true OS drag/drop. Native dialog/drop coverage still needs manual verification, a better unattended route, or an explicit waiver.

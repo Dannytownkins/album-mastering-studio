@@ -6,8 +6,8 @@ This checklist is the manual closeout path for the active goal. It does not repl
 
 ## Current Evidence Baseline
 
-- Current app-code release trace: `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
-- App-code commit covered by that trace: `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`.
+- Current app-code release trace: `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
+- App-code commit covered by that trace: `9fe379bac5093df0dcc0769027a74d70cf4fc362`.
 - The trace was run from a clean worktree and records `dirty_before: []` and `dirty_after: []`.
 - Automated result: 23 passed, 0 failed, 0 skipped.
 - Windows Application log check saved beside the trace found zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries in the checked window.
