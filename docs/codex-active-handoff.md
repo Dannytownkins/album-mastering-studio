@@ -41,7 +41,49 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Source Integrity Smoke and Current Full Trace
+## Latest Codex Pass: Import Path Hardening
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What changed:
+
+- Hardened the first-step audio import surface without adding new workflow features.
+- `Add` and `Reference` native dialog failures are now caught and reported in the app log/status instead of surfacing as unhandled async failures.
+- Drag/drop import now reads current tracks, selected track, and default artist metadata through refs, avoiding stale first-render state in the long-lived Tauri drag/drop listener.
+- Add/drop now reports visible success/failure details: added audio files, unsupported files, duplicates, and files skipped by the 8-track limit.
+- A direct WebView-emitted `tauri://drag-drop` automation route was re-attempted before this pass and was not promoted because it did not reliably simulate OS drag/drop in the packaged app.
+
+Verification:
+
+- `cd desktop; npm run test:tauri-release` (post-cleanup sanity before import hardening)
+- `cd desktop; npm run build`
+- `cd desktop; npm run test:integration`
+- `python -m compileall -q src tests`
+- `cd desktop; npm run tauri:build`
+- `cd desktop; npm run test:tauri-release` (rebuilt packaged EXE)
+
+Evidence:
+
+- Release Tauri build succeeded and produced a fresh EXE plus MSI/NSIS bundles with the import hardening included.
+- Packaged launch smoke passed against the rebuilt EXE: `test-output\tauri-release-launch-smoke\tauri-release-launch-smoke.json`.
+- Frontend build passed after import hardening.
+- Desktop CLI contract still passed: `desktop CLI contract can analyze dropped files and render a manifest`.
+- Python compile passed.
+
+Decision:
+
+- This improves the user-visible import/drop failure surface and fixes a stale-state risk in the Tauri drag/drop listener.
+- This does not close native OS file-picker automation. Native Open/Save-As and true OS drag/drop remain manual/waiver coverage items unless a reliable unattended route is found.
+- A fresh full release-readiness trace is still recommended before calling a new commit release-current, because the last full trace predates this App.tsx change.
+
+## Prior Codex Pass: Source Integrity Smoke and Current Full Trace
 
 Date: 2026-05-13
 

@@ -14,7 +14,7 @@ This audit is a handoff guard, not a completion claim. Keep it current when the 
 
 Status: active, not complete.
 
-Operating state: resumed as of 2026-05-13. Current app-code full release trace is `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json` for commit `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`. The active goal remains open until the remaining listening, preview-scope, and native-dialog blockers are resolved or explicitly accepted.
+Operating state: resumed as of 2026-05-13. Current full release trace is `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json` for commit `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`. A later import-path hardening slice changed `desktop/src/App.tsx`; it has passed targeted build/contract checks plus `npm run tauri:build` and a rebuilt packaged launch smoke, but it has not yet replaced the `1a7c870` full release trace. The active goal remains open until the remaining listening, preview-scope, and native-dialog blockers are resolved or explicitly accepted.
 
 The current repo has strong automated evidence for the Track Master-first Tauri surface, Python engine contract, Album Master path, packaged Windows flow, and a current-commit release trace. The remaining blockers are quality gates that cannot be honestly closed by documentation alone:
 

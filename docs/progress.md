@@ -6170,3 +6170,22 @@ Next action after the user gives the green light:
 2. Re-read the top of `docs\codex-active-handoff.md` and `docs\GOAL_AUDIT.md`.
 3. Continue with one narrow stability slice, not broad UI polish.
 4. Ask before running any Tauri/WebView/audio/installer/release-readiness workflow.
+
+### Import Path Hardening
+
+Date: 2026-05-13
+
+- User resumed the release-candidate stabilization loop and asked to keep hardening Track Master first.
+- Repo safety check started clean on `master` at `c03583b` with `origin/master` matched. Recent commits were inspected before editing.
+- The temporary WebView-emitted `tauri://drag-drop` experiment was removed and not promoted because it did not reliably simulate OS drag/drop in the packaged app.
+- `desktop/src/App.tsx` now catches Add and Reference dialog failures and reports them in the visible app log/status.
+- Add/drop now reports user-visible import outcomes: added audio files, unsupported files, duplicate files, and files skipped by the 8-track limit.
+- The long-lived Tauri drag/drop listener now reads current track/default metadata through refs instead of stale first-render state.
+- Verification passed:
+  - `cd desktop; npm run test:tauri-release` (post-cleanup sanity before import hardening)
+  - `cd desktop; npm run build`
+  - `cd desktop; npm run test:integration`
+  - `python -m compileall -q src tests`
+  - `cd desktop; npm run tauri:build`
+  - `cd desktop; npm run test:tauri-release` (rebuilt packaged EXE)
+- Remaining blocker: this does not automate native OS file pickers or true OS drag/drop. A fresh full release-readiness trace is still recommended before this App.tsx change becomes the current full release trace.

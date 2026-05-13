@@ -347,6 +347,14 @@ type ListeningPacketResult = {
   html_path: string;
 };
 
+type AddPathsResult = {
+  requested: number;
+  added: number;
+  unsupported: number;
+  duplicates: number;
+  overLimit: number;
+};
+
 type UserPreset = {
   id: string;
   name: string;
@@ -648,6 +656,9 @@ function App() {
   const lastAutosaveKeyRef = useRef("");
   const sessionRevisionRef = useRef(0);
   const playbackEvidenceRef = useRef<PlaybackEvidence | null>(null);
+  const tracksRef = useRef<Track[]>(tracks);
+  const selectedTrackIdRef = useRef<string | null>(selectedTrackId);
+  const importDefaultsRef = useRef({ artist: settings.artist });
 
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? tracks[0] ?? null;
   const selectedIndex = selectedTrack ? tracks.findIndex((track) => track.id === selectedTrack.id) : -1;
@@ -783,6 +794,12 @@ function App() {
   );
 
   useEffect(() => {
+    tracksRef.current = tracks;
+    selectedTrackIdRef.current = selectedTrackId;
+    importDefaultsRef.current = { artist: settings.artist };
+  }, [tracks, selectedTrackId, settings.artist]);
+
+  useEffect(() => {
     Promise.allSettled([
       invoke<string>("repo_root"),
       invoke<string>("default_output_dir"),
@@ -845,7 +862,7 @@ function App() {
     });
     const unlistenDrop = appWindow.onDragDropEvent((event) => {
       if (event.payload.type === "drop") {
-        addPaths(event.payload.paths);
+        addPaths(event.payload.paths, "File drop");
       }
     });
     return () => {
@@ -1470,50 +1487,96 @@ function App() {
     setProgressLabel("User preset applied.");
   }
 
-  function addPaths(paths: string[]) {
-    const audioPaths = paths.filter((path) => /\.(wav|flac|mp3|m4a|aac|aif|aiff|ogg|opus)$/i.test(path));
-    if (!audioPaths.length) return;
+  function addPaths(paths: string[], actionLabel = "Audio import"): AddPathsResult {
+    const result: AddPathsResult = {
+      requested: paths.length,
+      added: 0,
+      unsupported: 0,
+      duplicates: 0,
+      overLimit: 0,
+    };
+    if (!paths.length) return result;
+    const currentTracks = tracksRef.current;
+    const nextTracks = [...currentTracks];
+    const seen = new Set(currentTracks.map((track) => track.path.toLowerCase()));
+    for (const rawPath of paths) {
+      const path = rawPath.trim();
+      if (!/\.(wav|flac|mp3|m4a|aac|aif|aiff|ogg|opus)$/i.test(path)) {
+        result.unsupported += 1;
+        continue;
+      }
+      const key = path.toLowerCase();
+      if (seen.has(key)) {
+        result.duplicates += 1;
+        continue;
+      }
+      if (nextTracks.length >= MAX_TRACKS) {
+        result.overLimit += 1;
+        continue;
+      }
+      nextTracks.push({
+        id: crypto.randomUUID(),
+        path,
+        title: fileStem(path),
+        artist: importDefaultsRef.current.artist,
+        isrc: "",
+        character: "auto",
+        preset: "auto",
+      });
+      seen.add(key);
+      result.added += 1;
+    }
+    if (!result.added) {
+      reportAddPathsResult(result, actionLabel);
+      return result;
+    }
     markDirty();
     setManifest(null);
     setExportChecks(null);
     setDashboardPath("");
     setRenderRevision(null);
-    setTracks((current) => {
-      const seen = new Set(current.map((track) => track.path.toLowerCase()));
-      const next = [...current];
-      for (const path of audioPaths) {
-        if (next.length >= MAX_TRACKS) break;
-        if (seen.has(path.toLowerCase())) continue;
-        next.push({
-          id: crypto.randomUUID(),
-          path,
-          title: fileStem(path),
-          artist: settings.artist,
-          isrc: "",
-          character: "auto",
-          preset: "auto",
-        });
-      }
-      if (!selectedTrackId && next.length) setSelectedTrackId(next[0].id);
-      return next;
-    });
+    setTracks(nextTracks);
+    tracksRef.current = nextTracks;
+    if (!selectedTrackIdRef.current && nextTracks.length) {
+      selectedTrackIdRef.current = nextTracks[0].id;
+      setSelectedTrackId(nextTracks[0].id);
+    }
+    reportAddPathsResult(result, actionLabel);
+    return result;
+  }
+
+  function reportAddPathsResult(result: AddPathsResult, actionLabel: string) {
+    const summary = summarizeAddPathsResult(result);
+    if (!summary) return;
+    pushLog(`${actionLabel}: ${summary}`);
+    setProgressLabel(summary);
   }
 
   async function addFiles() {
-    const selected = await open({
-      multiple: true,
-      filters: [{ name: "Audio", extensions: ["wav", "flac", "mp3", "m4a", "aac", "aif", "aiff", "ogg", "opus"] }],
-    });
-    if (Array.isArray(selected)) addPaths(selected);
-    else if (typeof selected === "string") addPaths([selected]);
+    try {
+      const selected = await open({
+        multiple: true,
+        filters: [{ name: "Audio", extensions: ["wav", "flac", "mp3", "m4a", "aac", "aif", "aiff", "ogg", "opus"] }],
+      });
+      if (Array.isArray(selected)) addPaths(selected, "Audio import");
+      else if (typeof selected === "string") addPaths([selected], "Audio import");
+    } catch (error) {
+      pushLog(`Audio import dialog failed: ${String(error)}`);
+      setProgressLabel("Audio import dialog failed.");
+    }
   }
 
   async function chooseReference() {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "Audio", extensions: ["wav", "flac", "mp3", "m4a", "aac", "aif", "aiff", "ogg", "opus"] }],
-    });
-    if (typeof selected === "string") updateSettings({ referenceTrack: selected });
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "Audio", extensions: ["wav", "flac", "mp3", "m4a", "aac", "aif", "aiff", "ogg", "opus"] }],
+      });
+      if (typeof selected === "string") updateSettings({ referenceTrack: selected });
+    } catch (error) {
+      pushLog(`Reference dialog failed: ${String(error)}`);
+      setProgressLabel("Reference dialog failed.");
+    }
   }
 
   async function reviewAlbumPlan(targetTracks: Track[] = tracks, options: { manageBusy?: boolean } = {}) {
@@ -4458,6 +4521,23 @@ function sourceStatusChip(status?: SourceValidation) {
 
 function fileStem(path: string) {
   return path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "Untitled";
+}
+
+function summarizeAddPathsResult(result: AddPathsResult) {
+  const skipped: string[] = [];
+  if (result.unsupported) skipped.push(countLabel(result.unsupported, "unsupported file", "unsupported files"));
+  if (result.duplicates) skipped.push(countLabel(result.duplicates, "duplicate file", "duplicate files"));
+  if (result.overLimit) skipped.push(countLabel(result.overLimit, "file over the 8-track limit", "files over the 8-track limit"));
+  if (result.added) {
+    return `Added ${countLabel(result.added, "audio file", "audio files")}${skipped.length ? `; skipped ${skipped.join(", ")}.` : "."}`;
+  }
+  if (skipped.length) return `No new audio files added; skipped ${skipped.join(", ")}.`;
+  if (result.requested) return "No new audio files added.";
+  return "";
+}
+
+function countLabel(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function samePath(a: string, b: string) {
