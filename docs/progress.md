@@ -2,6 +2,38 @@
 
 ## 2026-05-13
 
+### Playable Listening Handoff HTML
+
+Scope:
+
+- Updated `listening-handoff.html` generation so the prepared packet includes local `<audio controls>` for Original, Mastered, codec previews, and album WAV when present.
+- Kept the packet explicitly `not-approved`; the change makes the human listening pass easier to execute but does not replace it.
+- Hardened the real-song listening-packet smoke so it verifies playable file URLs and writes its evidence JSON before assertions.
+
+Verification:
+
+- `cargo test listening_packet_html_includes_playable_local_audio_controls --lib`
+- `node --check desktop\tests\tauri-real-song-listening-packet-smoke.mjs`
+- `git diff --check`
+- `cd desktop; npm run tauri:build`
+- `cd desktop; $env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"; npm run test:tauri-real-song-listening-packet`
+
+Results:
+
+- Packaged real-song listening-packet smoke passed after rebuilding the release EXE, sidecar, MSI, and NSIS bundles.
+- Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
+- Current ready-to-listen HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-handoff.html`.
+- Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-review.json`.
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Windows Application log follow-up for the focused run found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\tauri-real-song-listening-packet-smoke\windows-application-events-after-playable-handoff.json`.
+- Evidence values include `listeningPacketHtmlIncludesAudioControls: true`, `listeningPacketHtmlIncludesOriginalAudio: true`, `listeningPacketHtmlIncludesMasteredAudio: true`, `listeningPacketHtmlIncludesCodecAudioControls: true`, `exportStatus: "pass"`, and source MP3 size/SHA-256 unchanged.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded.
+- Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
+- The most recent full release-readiness trace is still `test-output\release-readiness-dbfaad7-listening-packet-gate\release-readiness.json`; rerun the full trace after this focused code/smoke change before claiming a new current-commit full release gate.
+
 ### Current Full Trace With Listening Packet Gate
 
 Scope:

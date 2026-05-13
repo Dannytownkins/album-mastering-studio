@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const releaseExe =
@@ -92,7 +93,11 @@ try {
     listeningPacketHtmlIncludesAuditionScope: listeningPacketHtml.includes("Audition Scope"),
     listeningPacketHtmlIncludesApprovalBasis: listeningPacketHtml.includes("rendered preview/export, codec preview, or album WAV listening"),
     listeningPacketHtmlIncludesLivePreviewScope: listeningPacketHtml.includes("directional-only"),
+    listeningPacketHtmlIncludesAudioControls: listeningPacketHtml.includes("<audio controls"),
+    listeningPacketHtmlIncludesOriginalAudio: listeningPacketHtml.includes(pathToFileURL(sourcePath).href),
+    listeningPacketHtmlIncludesMasteredAudio: listeningPacketHtml.includes(pathToFileURL(listeningPacket.tracks[0]?.output || "").href),
     listeningPacketHtmlIncludesCodecPreview: codecPreviewOutputs.every((output) => listeningPacketHtml.includes(output)),
+    listeningPacketHtmlIncludesCodecAudioControls: codecPreviewOutputs.every((output) => listeningPacketHtml.includes(pathToFileURL(output).href)),
     codecPreviewOutputs,
     codecPreviewOutputsExist: codecPreviewOutputs.every((output) => existsSync(output)),
     trackManifestPaths,
@@ -106,6 +111,9 @@ try {
     targetUrl: target.url,
     cdpPort,
   };
+
+  const resultPath = path.join(outputRoot, "tauri-real-song-listening-packet-smoke.json");
+  writeFileSync(resultPath, JSON.stringify(evidence, null, 2));
 
   assert.equal(evidence.releaseExeExists, true);
   assert.equal(evidence.appTextIncludesBrand, true);
@@ -154,7 +162,11 @@ try {
   assert.equal(evidence.listeningPacketHtmlIncludesAuditionScope, true);
   assert.equal(evidence.listeningPacketHtmlIncludesApprovalBasis, true);
   assert.equal(evidence.listeningPacketHtmlIncludesLivePreviewScope, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesAudioControls, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesOriginalAudio, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesMasteredAudio, true);
   assert.equal(evidence.listeningPacketHtmlIncludesCodecPreview, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesCodecAudioControls, true);
   assert.equal(evidence.codecPreviewOutputsExist, true);
   assert.equal(evidence.trackManifestCount, 1);
   assert.deepEqual(evidence.trackManifestCodecPreviewFlags, [true]);
@@ -163,8 +175,6 @@ try {
   assert.equal(evidence.sourceUnchanged.sha256, true);
   assert.equal(evidence.screenshotExists, true);
 
-  const resultPath = path.join(outputRoot, "tauri-real-song-listening-packet-smoke.json");
-  writeFileSync(resultPath, JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({ passed: true, output: outputRoot, result: resultPath }, null, 2));
 } finally {
   cdp?.close();

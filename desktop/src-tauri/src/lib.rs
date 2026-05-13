@@ -382,10 +382,7 @@ fn analyze_tracks(
 }
 
 #[tauri::command]
-fn live_preview_contract(
-    app: AppHandle,
-    state: State<'_, ProcessState>,
-) -> Result<Value, String> {
+fn live_preview_contract(app: AppHandle, state: State<'_, ProcessState>) -> Result<Value, String> {
     let result = run_engine_command(
         &app,
         state.inner(),
@@ -508,7 +505,12 @@ fn render_native_live_preview_model(
     apply_native_live_preview_biquad(
         &mut modeled,
         channels,
-        native_preview_peaking(tuning.mid_db, LIVE_PREVIEW_MID_HZ, LIVE_PREVIEW_MID_Q, sample_rate)?,
+        native_preview_peaking(
+            tuning.mid_db,
+            LIVE_PREVIEW_MID_HZ,
+            LIVE_PREVIEW_MID_Q,
+            sample_rate,
+        )?,
     );
     apply_native_live_preview_biquad(
         &mut modeled,
@@ -516,7 +518,8 @@ fn render_native_live_preview_model(
         native_preview_shelf("high", tuning.high_db, LIVE_PREVIEW_HIGH_HZ, sample_rate)?,
     );
     let modeled_width = apply_native_live_preview_width(&mut modeled, channels, tuning.width);
-    let modeled_drive = apply_native_live_preview_compressor(&mut modeled, channels, tuning.intensity);
+    let modeled_drive =
+        apply_native_live_preview_compressor(&mut modeled, channels, tuning.intensity);
     for sample in &mut modeled {
         *sample = sample.clamp(-1.0, 1.0);
     }
@@ -1823,6 +1826,10 @@ fn render_listening_packet_html(packet: &Value) -> String {
     .caveat { padding: 12px; border-left: 4px solid #b15c44; background: #fff2ee; }
     code { word-break: break-all; }
     li { margin: 6px 0; }
+    audio { display: block; width: 100%; margin: 8px 0; }
+    .audition { margin: 10px 0 14px; }
+    .audition strong { display: block; }
+    .audition a { color: #76531b; }
     table { border-collapse: collapse; width: 100%; }
     th, td { text-align: left; border-bottom: 1px solid #ddd; padding: 8px; vertical-align: top; }
   </style>
@@ -1866,26 +1873,35 @@ fn render_listening_packet_html(packet: &Value) -> String {
     html_path_item(&mut html, "Album WAV", render.get("album_sequence"));
     html_path_item(&mut html, "Cue sheet", render.get("cue_sheet"));
     html.push_str("</ul></section>");
+    let album_sequence = json_str(render.get("album_sequence"));
+    if !album_sequence.is_empty() {
+        html.push_str("<section><h2>Album Audition</h2>");
+        html_audio_item(&mut html, "Album WAV", &album_sequence);
+        html.push_str("</section>");
+    }
 
     html.push_str("<section><h2>Mastered Tracks</h2><ol>");
     for track in json_array(packet.get("tracks")) {
         let title = json_str(track.get("title"));
+        let source = json_str(track.get("source"));
         let output = json_str(track.get("output"));
-        html.push_str(&format!(
-            "<li><strong>{}</strong><br><code>{}</code></li>",
-            escape_html(&title),
-            escape_html(&output)
-        ));
+        html.push_str("<li>");
+        html.push_str(&format!("<strong>{}</strong>", escape_html(&title)));
+        html_audio_item(&mut html, "Original", &source);
+        html_audio_item(&mut html, "Mastered", &output);
+        html.push_str("</li>");
     }
     html.push_str("</ol></section>");
 
     html.push_str("<section><h2>Codec Previews</h2><ul>");
     for preview in json_array(packet.get("codec_previews")) {
-        html.push_str(&format!(
-            "<li><strong>{}</strong><br><code>{}</code></li>",
-            escape_html(&json_str(preview.get("codec"))),
-            escape_html(&json_str(preview.get("output")))
-        ));
+        html.push_str("<li>");
+        html_audio_item(
+            &mut html,
+            &json_str(preview.get("codec")),
+            &json_str(preview.get("output")),
+        );
+        html.push_str("</li>");
     }
     html.push_str("</ul></section>");
 
@@ -1929,11 +1945,67 @@ fn html_path_item(html: &mut String, label: &str, value: Option<&Value>) {
     }
 }
 
+fn html_audio_item(html: &mut String, label: &str, path: &str) {
+    if path.is_empty() {
+        return;
+    }
+    let href = local_file_url(path);
+    html.push_str(&format!(
+        "<div class=\"audition\"><strong>{}</strong><audio controls preload=\"metadata\" src=\"{}\"></audio><a href=\"{}\">Open file</a><br><code>{}</code></div>",
+        escape_html(label),
+        escape_html(&href),
+        escape_html(&href),
+        escape_html(path)
+    ));
+}
+
+fn local_file_url(path: &str) -> String {
+    if path.starts_with("file://") || path.starts_with("http://") || path.starts_with("https://") {
+        return path.to_string();
+    }
+    let normalized = path.replace('\\', "/");
+    if normalized.starts_with("//") {
+        return format!("file:{}", percent_encode_file_url_path(&normalized));
+    }
+    format!("file:///{}", percent_encode_file_url_path(&normalized))
+}
+
+fn percent_encode_file_url_path(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.as_bytes() {
+        let character = *byte as char;
+        if character.is_ascii_alphanumeric()
+            || matches!(
+                character,
+                '/' | ':'
+                    | '.'
+                    | '_'
+                    | '-'
+                    | '~'
+                    | '!'
+                    | '$'
+                    | '&'
+                    | '\''
+                    | '('
+                    | ')'
+                    | '*'
+                    | '+'
+                    | ','
+                    | ';'
+                    | '='
+                    | '@'
+            )
+        {
+            encoded.push(character);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
+}
+
 fn json_array(value: Option<&Value>) -> Vec<Value> {
-    value
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
+    value.and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
 fn json_str(value: Option<&Value>) -> String {
@@ -2404,7 +2476,13 @@ fn native_live_preview_tuning(value: &Value) -> Result<NativeLivePreviewTuning, 
     Ok(NativeLivePreviewTuning {
         bass_db: native_tuning_value(
             object,
-            &["bassDb", "lowDb", "lowEndDb", "low_end_db", "tweak_low_end_db"],
+            &[
+                "bassDb",
+                "lowDb",
+                "lowEndDb",
+                "low_end_db",
+                "tweak_low_end_db",
+            ],
         )?,
         mid_db: native_tuning_value(
             object,
@@ -2414,7 +2492,12 @@ fn native_live_preview_tuning(value: &Value) -> Result<NativeLivePreviewTuning, 
         width: native_tuning_value(object, &["width", "widthOffset", "tweak_width"])?,
         intensity: native_tuning_value(
             object,
-            &["intensity", "compression", "compressionOffset", "tweak_intensity"],
+            &[
+                "intensity",
+                "compression",
+                "compressionOffset",
+                "tweak_intensity",
+            ],
         )?,
     })
 }
@@ -2425,9 +2508,9 @@ fn native_tuning_value(
 ) -> Result<f64, String> {
     for key in keys {
         if let Some(value) = object.get(*key) {
-            return value
-                .as_f64()
-                .ok_or_else(|| format!("Native Live Preview tuning value '{key}' must be numeric."));
+            return value.as_f64().ok_or_else(|| {
+                format!("Native Live Preview tuning value '{key}' must be numeric.")
+            });
         }
     }
     Ok(0.0)
@@ -2489,8 +2572,8 @@ fn apply_native_live_preview_compressor(
     }
     let threshold = LIVE_PREVIEW_COMPRESSOR_THRESHOLD_DBFS
         - (drive * LIVE_PREVIEW_COMPRESSOR_THRESHOLD_DRIVE_SCALE_DB);
-    let ratio = LIVE_PREVIEW_COMPRESSOR_RATIO_BASE
-        + (drive * LIVE_PREVIEW_COMPRESSOR_RATIO_DRIVE_SCALE);
+    let ratio =
+        LIVE_PREVIEW_COMPRESSOR_RATIO_BASE + (drive * LIVE_PREVIEW_COMPRESSOR_RATIO_DRIVE_SCALE);
     for frame in samples.chunks_exact_mut(channels) {
         let level = frame
             .iter()
@@ -2549,17 +2632,21 @@ fn native_preview_shelf(
     let alpha = (sin_omega / 2.0) * 2.0_f64.sqrt();
     let (b0, b1, b2, a0, a1, a2) = match kind {
         "low" => (
-            amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)),
+            amplitude
+                * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)),
             2.0 * amplitude * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega)),
-            amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)),
+            amplitude
+                * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)),
             (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha),
             -2.0 * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega)),
             (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha),
         ),
         "high" => (
-            amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)),
+            amplitude
+                * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)),
             -2.0 * amplitude * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega)),
-            amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)),
+            amplitude
+                * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)),
             (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha),
             2.0 * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega)),
             (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha),
@@ -2606,8 +2693,8 @@ fn write_pcm16_wav(
         .len()
         .checked_mul(2)
         .ok_or_else(|| "Native Live Preview WAV is too large.".to_string())?;
-    let data_bytes_u32 =
-        u32::try_from(data_bytes).map_err(|_| "Native Live Preview WAV is too large.".to_string())?;
+    let data_bytes_u32 = u32::try_from(data_bytes)
+        .map_err(|_| "Native Live Preview WAV is too large.".to_string())?;
     let byte_rate = sample_rate
         .checked_mul(u32::from(channels))
         .and_then(|value| value.checked_mul(2))
@@ -3209,11 +3296,17 @@ fn prepare_playback_file(app: AppHandle, path: String) -> Result<String, String>
 }
 
 #[tauri::command]
-fn prepare_playback_file_info(app: AppHandle, path: String) -> Result<PreparedPlaybackFile, String> {
+fn prepare_playback_file_info(
+    app: AppHandle,
+    path: String,
+) -> Result<PreparedPlaybackFile, String> {
     prepare_playback_file_inner(&app, path)
 }
 
-fn prepare_playback_file_inner(app: &AppHandle, path: String) -> Result<PreparedPlaybackFile, String> {
+fn prepare_playback_file_inner(
+    app: &AppHandle,
+    path: String,
+) -> Result<PreparedPlaybackFile, String> {
     let started = Instant::now();
     let source = PathBuf::from(&path);
     if !source.exists() {
@@ -3232,7 +3325,9 @@ fn prepare_playback_file_inner(app: &AppHandle, path: String) -> Result<Prepared
     let cache_key = playback_cache_key(&source)?;
     let output = cache_dir.join(format!("{cache_key}.wav"));
     if output.exists() {
-        let bytes = fs::metadata(&output).map(|metadata| metadata.len()).unwrap_or(0);
+        let bytes = fs::metadata(&output)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
         return Ok(PreparedPlaybackFile {
             path: output.to_string_lossy().to_string(),
             source: source.to_string_lossy().to_string(),
@@ -3268,7 +3363,9 @@ fn prepare_playback_file_inner(app: &AppHandle, path: String) -> Result<Prepared
         return Err(format!("FFmpeg playback conversion failed: {stderr}"));
     }
 
-    let bytes = fs::metadata(&output).map(|metadata| metadata.len()).unwrap_or(0);
+    let bytes = fs::metadata(&output)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
     Ok(PreparedPlaybackFile {
         path: output.to_string_lossy().to_string(),
         source: source.to_string_lossy().to_string(),
@@ -3826,6 +3923,69 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn listening_packet_html_includes_playable_local_audio_controls() {
+        let packet = json!({
+            "status": "not-approved",
+            "mode": "track",
+            "created_at": "2026-05-13T11:28:57Z",
+            "approved": false,
+            "checklist": {
+                "notes": "Human sound approval still required."
+            },
+            "render": {
+                "dashboard_path": "C:\\Audio\\Dashboard.html",
+                "album_sequence": null,
+                "cue_sheet": null,
+                "track_count": 1,
+                "interlude_count": 0
+            },
+            "tracks": [
+                {
+                    "title": "Original Mix",
+                    "source": "C:\\Audio\\Original Mix (Raw).mp3",
+                    "output": "C:\\Audio\\Master Mix.wav"
+                }
+            ],
+            "codec_previews": [
+                {
+                    "codec": "AAC 256k",
+                    "output": "C:\\Audio\\Master Mix_m4a.m4a"
+                }
+            ],
+            "export_checks": {
+                "checks": [
+                    {
+                        "label": "Codec QC",
+                        "status": "pass",
+                        "detail": "1 codec preview path exists"
+                    }
+                ]
+            },
+            "audition_context": {
+                "preview_parity": "Codec preview audition",
+                "preview_note": "Codec preview playback was generated from the current render."
+            },
+            "approval_scope": {
+                "basis": "rendered preview/export, codec preview, or album WAV listening",
+                "live_preview": "directional-only"
+            },
+            "caveats": [
+                "This packet prepares a human listening pass; it is not human approval by itself."
+            ]
+        });
+
+        let html = render_listening_packet_html(&packet);
+
+        assert!(html.contains("<audio controls preload=\"metadata\""));
+        assert!(html.contains("file:///C:/Audio/Original%20Mix%20(Raw).mp3"));
+        assert!(html.contains("file:///C:/Audio/Master%20Mix.wav"));
+        assert!(html.contains("file:///C:/Audio/Master%20Mix_m4a.m4a"));
+        assert!(html.contains("Open file"));
+        assert!(html.contains("directional-only"));
+        assert!(html.contains("not human approval"));
+    }
 
     #[test]
     fn native_audio_probe_reports_default_output_device_without_playback() {
