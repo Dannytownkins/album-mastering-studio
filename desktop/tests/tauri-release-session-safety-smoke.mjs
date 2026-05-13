@@ -94,6 +94,10 @@ try {
   assert.ok(evidence.userPresetListCount >= 1);
   assert.equal(evidence.persistedPresetName, "Session Safety Chain");
   assert.equal(evidence.listeningInitial, "Not approved");
+  assert.equal(evidence.listeningApprovalBlockedNoRender, true);
+  assert.equal(evidence.listeningApprovalAfterBlockedAttempt, "Not approved");
+  assert.equal(evidence.previewReadyForApproval, true);
+  assert.equal(evidence.listeningApprovalEnabledAfterPreview, true);
   assert.equal(evidence.listeningApprovalAfterChecks, "Approved");
   assert.equal(evidence.persistedListeningApprovedAfterChecks, true);
   assert.equal(evidence.persistedListeningAfterChecks?.trackOriginal, true);
@@ -311,9 +315,23 @@ function sessionSafetyExpression() {
 
   const listeningInitial = text(document.querySelector('.listening-panel .approval-pill'));
   click(listeningLabel('Original checked'));
+  const approvalInputBeforeRender = listeningLabel('Approved after listening').querySelector('input');
+  const listeningApprovalBlockedNoRender = approvalInputBeforeRender?.disabled === true;
+  click(listeningLabel('Approved after listening'));
+  await nextFrame();
+  const listeningApprovalAfterBlockedAttempt = text(document.querySelector('.listening-panel .approval-pill'));
+
+  click(buttonByText('Update Preview'));
+  const previewReadyForApproval = await waitFor(
+    () => Array.from(document.querySelectorAll('.pill')).some((item) => text(item) === 'Master ready'),
+    30000,
+  );
+  if (!previewReadyForApproval) throw new Error('Preview did not become ready for listening approval');
   click(listeningLabel('Master checked'));
   click(listeningLabel('Native A/B checked'));
   click(listeningLabel('Codec preview checked'));
+  await nextFrame();
+  const listeningApprovalEnabledAfterPreview = listeningLabel('Approved after listening').querySelector('input')?.disabled === false;
   click(listeningLabel('Approved after listening'));
   await setTextareaValue(
     document.querySelector('textarea[aria-label="Listening notes"]'),
@@ -357,8 +375,11 @@ function sessionSafetyExpression() {
     afterUndoPreset,
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     initialPreset,
+    listeningApprovalAfterBlockedAttempt,
     listeningApprovalAfterChecks,
     listeningApprovalAfterDirtyChange,
+    listeningApprovalBlockedNoRender,
+    listeningApprovalEnabledAfterPreview,
     listeningInitial,
     lowControlReadoutAfterChange,
     persistedBassAfterDirtyChange: persistedAfterDirtyChange?.settings?.bass,
@@ -366,6 +387,7 @@ function sessionSafetyExpression() {
     persistedListeningApprovedAfterChecks: persistedAfterChecks?.listeningApproved,
     persistedListeningApprovedAfterDirtyChange: persistedAfterDirtyChange?.listeningApproved,
     persistedPresetName: persistedPreset?.name || '',
+    previewReadyForApproval,
     redoEnabledAfterUndo,
     restoredSelectedHeading,
     restoredSessionTitle,

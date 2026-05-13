@@ -750,6 +750,22 @@ function App() {
   const listeningPacketRoot = listeningReceiptRootForManifest(manifest);
   const canSaveListeningReceipt = Boolean(manifest && listeningReceiptTarget && !hasStaleRender && !busy);
   const canSaveListeningPacket = Boolean(manifest && listeningPacketRoot && !hasStaleRender && !busy);
+  const hasReleaseFaithfulListeningBasis = Boolean(
+    listeningChecklist.trackMaster ||
+      listeningChecklist.trackNativeAb ||
+      listeningChecklist.codecPreviewAudition ||
+      listeningChecklist.albumSequence,
+  );
+  const listeningApprovalBlockReason = busy
+    ? "Wait for the current operation to finish before approving."
+    : !manifest
+      ? "Render audio before approving; Live Preview is directional only."
+      : hasStaleRender
+        ? "Approval is stale until audio is rendered again."
+        : !hasReleaseFaithfulListeningBasis
+          ? "Listen to Master, Native A/B, codec preview, or Album WAV before approving."
+          : "";
+  const canMarkListeningApproved = !listeningApprovalBlockReason;
   const fallbackPreviewParityLabel = regionPreviewPlaying
     ? "Render-faithful region"
     : referencePlaying
@@ -778,11 +794,7 @@ function App() {
   const previewParityTitle = transportAuditionContext.note;
   const previewParityWarn = previewParityLabel === "Approx audition" || previewParityLabel === "Render required";
   const renderedApprovalBasis = "Approval covers rendered preview/export, codec preview, or album WAV listening. Live Preview is directional only.";
-  const listeningApprovalHint = hasStaleRender
-    ? "Approval is stale until audio is rendered again. Live Preview is directional only."
-    : manifest
-      ? renderedApprovalBasis
-      : "Render audio before saving approval. Live Preview is directional only.";
+  const listeningApprovalHint = listeningApprovalBlockReason || renderedApprovalBasis;
   const livePreviewContractModeledText = livePreviewContract?.modeledControls?.join(", ") ?? "Contract loading";
   const livePreviewContractRenderOnlyText = summarizePreviewStages(livePreviewContract?.unmodeledExportStages ?? []);
   const livePreviewContractTitle = livePreviewContract
@@ -1217,6 +1229,12 @@ function App() {
 
   function updateListeningApproval(approved: boolean) {
     rememberUndo();
+    if (approved && !canMarkListeningApproved) {
+      setListeningApproved(false);
+      pushLog(`Listening approval blocked: ${listeningApprovalBlockReason}`);
+      setProgressLabel(listeningApprovalBlockReason);
+      return;
+    }
     setListeningApproved(approved);
   }
 
@@ -2337,10 +2355,11 @@ function App() {
             : item,
         ),
       );
+      setRenderRevision(revisionAtStart);
       setManifest(loaded);
       setDashboardPath(result.dashboard_path ?? "");
-    setListeningReceiptPath("");
-    setListeningPacketPath("");
+      setListeningReceiptPath("");
+      setListeningPacketPath("");
       await updateExportChecks(loaded);
       recordRenderHistory({
         mode: "track",
@@ -3579,8 +3598,14 @@ function App() {
             <ChecklistToggle label="Transitions checked" checked={listeningChecklist.albumTransitions} onChange={(albumTransitions) => updateListeningChecklist({ albumTransitions })} />
             <ChecklistToggle label="Dashboard checked" checked={listeningChecklist.dashboardReviewed} onChange={(dashboardReviewed) => updateListeningChecklist({ dashboardReviewed })} />
           </div>
-          <ChecklistToggle label="Approved after listening" checked={listeningApproved} onChange={updateListeningApproval} />
-          <p className={`listening-approval-note ${previewParityWarn ? "warn" : ""}`} title={previewParityTitle}>
+          <ChecklistToggle
+            label="Approved after listening"
+            checked={listeningApproved}
+            onChange={updateListeningApproval}
+            disabled={!canMarkListeningApproved && !listeningApproved}
+            title={listeningApprovalBlockReason || renderedApprovalBasis}
+          />
+          <p className={`listening-approval-note ${previewParityWarn || listeningApprovalBlockReason ? "warn" : ""}`} title={listeningApprovalBlockReason || previewParityTitle}>
             {listeningApprovalHint}
           </p>
           <textarea
@@ -3700,10 +3725,22 @@ function AlbumStoryReview({
   );
 }
 
-function ChecklistToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+function ChecklistToggle({
+  label,
+  checked,
+  disabled = false,
+  title,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  title?: string;
+  onChange: (checked: boolean) => void;
+}) {
   return (
-    <label className="check-toggle">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <label className={`check-toggle${disabled ? " disabled" : ""}`} title={title}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
   );

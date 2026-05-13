@@ -1221,6 +1221,12 @@ label {
   accent-color: var(--gold);
 }
 
+.check-toggle.disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+  opacity: 0.62;
+}
+
 .listening-approval-note {
   margin: -2px 0 0;
   border: 1px solid var(--line-soft);

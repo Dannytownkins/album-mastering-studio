@@ -82,12 +82,13 @@ try {
   assert.equal(evidence.nativeAbStatus, "Native transport ready");
   assert.equal(evidence.listeningInitial, true);
   assert.equal(evidence.listeningApprovalInitial, "Not approved");
+  assert.equal(evidence.listeningApprovalBlockedNoRender, true);
   assert.equal(evidence.listeningProgressAfterChecks.includes("3/6"), true);
-  assert.equal(evidence.listeningApprovalAfterChecks, "Approved");
+  assert.equal(evidence.listeningApprovalAfterChecks, "Not approved");
   assert.equal(evidence.persistedListening?.trackOriginal, true);
   assert.equal(evidence.persistedListening?.trackNativeAb, true);
   assert.equal(evidence.persistedListening?.dashboardReviewed, true);
-  assert.equal(evidence.persistedListeningApproved, true);
+  assert.equal(evidence.persistedListeningApproved, false);
   assert.equal(evidence.persistedListening?.notes, "Checked track and dashboard in UI smoke.");
   assert.equal(evidence.persistedRoleOverride, "heavy_djent");
   assert.equal(evidence.volumeMatchActive, true);
@@ -404,6 +405,7 @@ function uiSmokeExpression() {
     if (!item) throw new Error('Listening checkbox not found: ' + label);
     return item;
   };
+  const listeningApprovalBlockedNoRender = listeningLabel('Approved after listening').querySelector('input')?.disabled === true;
   click(listeningLabel('Original checked'));
   click(listeningLabel('Native A/B checked'));
   click(listeningLabel('Dashboard checked'));
@@ -482,6 +484,7 @@ function uiSmokeExpression() {
     livePreviewRenderOnlyIncludesLufs,
     livePreviewRenderOnlyIncludesLimiter,
     listeningInitial,
+    listeningApprovalBlockedNoRender,
     listeningApprovalInitial,
     listeningProgressAfterChecks,
     listeningApprovalAfterChecks,
