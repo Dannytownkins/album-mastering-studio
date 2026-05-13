@@ -425,6 +425,15 @@ Playback stabilization requirement:
 - Capture `audio.readyState`, `networkState`, `duration`, `currentTime`, file URL, source path, playback cache path, and any `audio.play()` promise rejection.
 - A smoke test is insufficient if manual playback feels frozen or delayed.
 
+2026-05-12 packaged playback start evidence baseline:
+
+- Added playback-cache hit/miss and prepare timing through `prepare_playback_file_info` without changing the existing `prepare_playback_file` string contract.
+- Added `window.__AMS_PLAYBACK_EVIDENCE__` for browser transport starts and `window.__AMS_NATIVE_PLAYBACK_EVIDENCE__` for native playback starts.
+- The Track Preview UI smoke now asserts timing/event evidence for Mastered, Reference, Original/Mastered A/B switches, and native Live Preview start.
+- Evidence: `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`.
+- Evidence values include `playbackStartedVisible: true`, `masteredPlaybackEvidenceHasTimings: true`, `masteredPlaybackEvidenceHasPlaying: true`, `referencePlaybackEvidenceHasTimings: true`, `abSourcePlaybackEvidenceHasPlaying: true`, `abMasterPlaybackEvidenceHasPlaying: true`, `abOriginalPlaybackEvidenceHasPlaying: true`, and `nativePlaybackEvidenceHasInvokeTiming: true`.
+- Sample measured values from that run: mastered playback `click_to_playing_ms: 316.6`, cached A/B source `click_to_playing_ms: 30.1`, and native Live Preview `invoke_elapsed_ms: 12.3`.
+
 ## Phase 5: Real-Time Audition Spike
 
 Goal: prove the app can support responsive controls by ear.

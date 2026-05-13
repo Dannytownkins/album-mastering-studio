@@ -150,9 +150,17 @@ try {
   assert.equal(evidence.referencePreviewParity, "Reference playback");
   assert.match(evidence.referencePreviewParityTitle, /unprocessed comparison audio/);
   assert.equal(evidence.playbackReadyVisible, true);
+  assert.equal(evidence.playbackStartedVisible, true);
+  assert.equal(evidence.masteredPlaybackEvidenceHasTimings, true);
+  assert.equal(evidence.masteredPlaybackEvidenceHasPlaying, true);
+  assert.equal(evidence.masteredPlaybackEvidenceHasCacheStatus, true);
+  assert.equal(evidence.referencePlaybackEvidenceHasTimings, true);
   assert.equal(evidence.abSourceReadyVisible, true);
   assert.equal(evidence.abMasterReadyVisible, true);
   assert.equal(evidence.abOriginalReadyVisible, true);
+  assert.equal(evidence.abSourcePlaybackEvidenceHasPlaying, true);
+  assert.equal(evidence.abMasterPlaybackEvidenceHasPlaying, true);
+  assert.equal(evidence.abOriginalPlaybackEvidenceHasPlaying, true);
   assert.equal(evidence.abPreservesPosition, true);
   assert.equal(evidence.transportSeekInputVisible, true);
   assert.equal(evidence.transportSeeked, true);
@@ -303,6 +311,8 @@ try {
   assert.equal(evidence.liveSnapshotAfterReturnToSource.active, true);
   assert.equal(evidence.nativeLivePreviewStarted, true);
   assert.equal(evidence.nativeLivePreviewStopped, true);
+  assert.equal(evidence.nativePlaybackEvidenceActive, true);
+  assert.equal(evidence.nativePlaybackEvidenceHasInvokeTiming, true);
   assert.equal(evidence.nativeLivePreviewSourceExists, true);
   assert.equal(evidence.nativeLivePreviewOutputExists, true);
   assert.equal(evidence.nativeLivePreviewAudition.live_preview_engine, "web-audio-first-control-model");
@@ -570,10 +580,23 @@ function trackPreviewExpression() {
       dashboardIframeSrcAfterPreview,
     }));
   }
+  const transportSeekInput = () => document.querySelector('input[aria-label="Playback position"]');
+  const audio = () => document.querySelector('audio');
+  const playbackEvidence = () => window.__AMS_PLAYBACK_EVIDENCE__ || null;
+  const playbackHasTiming = (evidence, name) => Number.isFinite(evidence?.timings?.[name]);
+  const playbackHasEvent = (evidence, name) => Array.isArray(evidence?.events) && evidence.events.some((event) => event.name === name);
   const masteredButtonEnabledAfterPreview = masteredActionButton()?.disabled === false;
   masteredActionButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const playbackReadyVisible = await waitFor(() => logText().includes('Playback ready: Preview Fixture 2 - Mastered'), 30000);
+  const playbackStartedVisible = await waitFor(() => logText().includes('Playback started: Preview Fixture 2 - Mastered'), 30000);
   const playbackMatch = /Playback ready: Preview Fixture 2 - Mastered/.exec(logText());
+  const masteredPlaybackEvidence = playbackEvidence();
+  const masteredPlaybackEvidenceHasTimings =
+    playbackHasTiming(masteredPlaybackEvidence, 'prepared') &&
+    playbackHasTiming(masteredPlaybackEvidence, 'loadedmetadata') &&
+    Number.isFinite(masteredPlaybackEvidence?.click_to_playing_ms);
+  const masteredPlaybackEvidenceHasPlaying = playbackHasEvent(masteredPlaybackEvidence, 'playing');
+  const masteredPlaybackEvidenceHasCacheStatus = typeof masteredPlaybackEvidence?.cache_hit === 'boolean';
   const playbackCachePath = await invoke('prepare_playback_file', { path: previewMasterPath });
   const abButton = (label) => Array.from(document.querySelectorAll('.ab-switch button')).find((item) => text(item) === label);
   const transportLabel = () => text(document.querySelector('.transport-label'));
@@ -587,8 +610,11 @@ function trackPreviewExpression() {
   const referenceTransportLabel = transportLabel();
   const referencePreviewParity = text(document.querySelector('.preview-parity-status'));
   const referencePreviewParityTitle = document.querySelector('.preview-parity-status')?.getAttribute('title') || '';
-  const transportSeekInput = () => document.querySelector('input[aria-label="Playback position"]');
-  const audio = () => document.querySelector('audio');
+  const referencePlaybackEvidence = playbackEvidence();
+  const referencePlaybackEvidenceHasTimings =
+    playbackHasTiming(referencePlaybackEvidence, 'prepared') &&
+    playbackHasTiming(referencePlaybackEvidence, 'loadedmetadata') &&
+    playbackHasEvent(referencePlaybackEvidence, 'playing');
   const setRangeValue = (input, value) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, String(value));
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -599,6 +625,8 @@ function trackPreviewExpression() {
   const abSourceReadyVisible = await waitFor(() => logText().includes('A/B ready: Preview Fixture 2') && transportLabel().includes('Original'), 30000);
   if (!abSourceReadyVisible) throw new Error('A/B source side did not become ready');
   await waitFor(() => audio()?.duration > 0 && !Number.isNaN(audio()?.duration), 10000);
+  const abSourcePlaybackEvidence = playbackEvidence();
+  const abSourcePlaybackEvidenceHasPlaying = playbackHasEvent(abSourcePlaybackEvidence, 'playing');
   audio()?.pause();
   await new Promise((resolve) => setTimeout(resolve, 100));
   const abDuration = audio()?.duration || 0;
@@ -623,11 +651,17 @@ function trackPreviewExpression() {
   const abSourceTimeBeforeSwitch = audio()?.currentTime || 0;
   abButton('Mastered').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const abMasterReadyVisible = await waitFor(() => transportLabel().includes('Mastered') && audio()?.duration > 0, 10000);
+  await waitFor(() => playbackHasEvent(playbackEvidence(), 'playing'), 10000);
+  const abMasterPlaybackEvidence = playbackEvidence();
+  const abMasterPlaybackEvidenceHasPlaying = playbackHasEvent(abMasterPlaybackEvidence, 'playing');
   audio()?.pause();
   if (!abMasterReadyVisible) throw new Error('A/B master side did not preserve source position');
   const abMasterTimeAfterSwitch = audio()?.currentTime || 0;
   abButton('Original').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const abOriginalReadyVisible = await waitFor(() => transportLabel().includes('Original') && audio()?.duration > 0, 10000);
+  await waitFor(() => playbackHasEvent(playbackEvidence(), 'playing'), 10000);
+  const abOriginalPlaybackEvidence = playbackEvidence();
+  const abOriginalPlaybackEvidenceHasPlaying = playbackHasEvent(abOriginalPlaybackEvidence, 'playing');
   audio()?.pause();
   if (!abOriginalReadyVisible) throw new Error('A/B original side did not preserve master position');
   const abSourceTimeAfterReturn = audio()?.currentTime || 0;
@@ -946,6 +980,9 @@ function trackPreviewExpression() {
   }
   const nativeLivePreviewActivationMs = performance.now() - nativeLivePreviewStart;
   const nativeLivePreviewAudition = window.__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ || {};
+  const nativePlaybackEvidence = window.__AMS_NATIVE_PLAYBACK_EVIDENCE__ || {};
+  const nativePlaybackEvidenceActive = nativePlaybackEvidence.active === true;
+  const nativePlaybackEvidenceHasInvokeTiming = Number.isFinite(nativePlaybackEvidence.invoke_elapsed_ms);
   const nativeLivePreviewStatusWhilePlaying = text(document.querySelector('.native-audition-status'));
   const nativeLivePreviewModelStatus = Array.from(document.querySelectorAll('.native-audition-status'))
     .map((item) => text(item))
@@ -1027,11 +1064,24 @@ function trackPreviewExpression() {
     referenceTransportLabel,
     referencePreviewParity,
     referencePreviewParityTitle,
+    referencePlaybackEvidence,
+    referencePlaybackEvidenceHasTimings,
     playbackReadyVisible: playbackReadyVisible && Boolean(playbackMatch),
+    playbackStartedVisible,
+    masteredPlaybackEvidence,
+    masteredPlaybackEvidenceHasTimings,
+    masteredPlaybackEvidenceHasPlaying,
+    masteredPlaybackEvidenceHasCacheStatus,
     playbackCachePath,
     abSourceReadyVisible,
     abMasterReadyVisible,
     abOriginalReadyVisible,
+    abSourcePlaybackEvidence,
+    abSourcePlaybackEvidenceHasPlaying,
+    abMasterPlaybackEvidence,
+    abMasterPlaybackEvidenceHasPlaying,
+    abOriginalPlaybackEvidence,
+    abOriginalPlaybackEvidenceHasPlaying,
     abSeekTargetSeconds,
     transportSeekInputVisible: Boolean(seekInput),
     transportSeeked: sourceSeeked,
@@ -1136,6 +1186,9 @@ function trackPreviewExpression() {
     nativeLivePreviewStopped,
     nativeLivePreviewActivationMs,
     nativeLivePreviewAudition,
+    nativePlaybackEvidence,
+    nativePlaybackEvidenceActive,
+    nativePlaybackEvidenceHasInvokeTiming,
     nativeLivePreviewStatusWhilePlaying,
     nativeLivePreviewModelStatus,
     nativeLivePreviewStatusLabel,

@@ -96,6 +96,15 @@ struct ProductRenderResult {
     manifest: Value,
 }
 
+#[derive(Serialize)]
+struct PreparedPlaybackFile {
+    path: String,
+    source: String,
+    cache_hit: bool,
+    elapsed_ms: f64,
+    bytes: u64,
+}
+
 #[derive(Clone, Copy)]
 struct RenderProjectOptions {
     score: bool,
@@ -3163,6 +3172,16 @@ fn open_path(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn prepare_playback_file(app: AppHandle, path: String) -> Result<String, String> {
+    Ok(prepare_playback_file_inner(&app, path)?.path)
+}
+
+#[tauri::command]
+fn prepare_playback_file_info(app: AppHandle, path: String) -> Result<PreparedPlaybackFile, String> {
+    prepare_playback_file_inner(&app, path)
+}
+
+fn prepare_playback_file_inner(app: &AppHandle, path: String) -> Result<PreparedPlaybackFile, String> {
+    let started = Instant::now();
     let source = PathBuf::from(&path);
     if !source.exists() {
         return Err(format!(
@@ -3180,10 +3199,17 @@ fn prepare_playback_file(app: AppHandle, path: String) -> Result<String, String>
     let cache_key = playback_cache_key(&source)?;
     let output = cache_dir.join(format!("{cache_key}.wav"));
     if output.exists() {
-        return Ok(output.to_string_lossy().to_string());
+        let bytes = fs::metadata(&output).map(|metadata| metadata.len()).unwrap_or(0);
+        return Ok(PreparedPlaybackFile {
+            path: output.to_string_lossy().to_string(),
+            source: source.to_string_lossy().to_string(),
+            cache_hit: true,
+            elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+            bytes,
+        });
     }
 
-    let ffmpeg = tool_path(&app, "ffmpeg.exe", "ffmpeg");
+    let ffmpeg = tool_path(app, "ffmpeg.exe", "ffmpeg");
     let output_result = Command::new(&ffmpeg)
         .arg("-hide_banner")
         .arg("-loglevel")
@@ -3209,7 +3235,14 @@ fn prepare_playback_file(app: AppHandle, path: String) -> Result<String, String>
         return Err(format!("FFmpeg playback conversion failed: {stderr}"));
     }
 
-    Ok(output.to_string_lossy().to_string())
+    let bytes = fs::metadata(&output).map(|metadata| metadata.len()).unwrap_or(0);
+    Ok(PreparedPlaybackFile {
+        path: output.to_string_lossy().to_string(),
+        source: source.to_string_lossy().to_string(),
+        cache_hit: false,
+        elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+        bytes,
+    })
 }
 
 #[tauri::command]
@@ -3743,6 +3776,7 @@ pub fn run() {
             save_user_preset,
             open_path,
             prepare_playback_file,
+            prepare_playback_file_info,
             cancel_cli,
             run_cli
         ])

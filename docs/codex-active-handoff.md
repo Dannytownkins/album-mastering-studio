@@ -17,7 +17,51 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Engine-Backed Album Plan Review
+## Latest Codex Pass: Playback Start Evidence
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Added Tauri `prepare_playback_file_info` while preserving the existing `prepare_playback_file` string contract.
+- Added compact transport evidence for cache hit/miss, prepare duration, audio event timing, and `click_to_playing_ms`.
+- Exposed test-readable `window.__AMS_PLAYBACK_EVIDENCE__` and `window.__AMS_NATIVE_PLAYBACK_EVIDENCE__`.
+- Extended packaged Track Preview UI smoke evidence for Mastered, Reference, Original/Mastered A/B switches, and native Live Preview start.
+
+Verification already run:
+
+- `cd desktop; npm run build`
+- `cd desktop; node --check .\tests\tauri-track-preview-ui-smoke.mjs`
+- `cd desktop\src-tauri; cargo check`
+- `cd desktop; npm run test:integration`
+- `cd desktop; npm run tauri:build` through the Visual Studio Build Tools command, rebuilding sidecar, EXE, MSI, and NSIS bundles.
+- `cd desktop; npm run test:tauri-track-preview-ui`
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Key values: `playbackStartedVisible: true`, `masteredPlaybackEvidenceHasTimings: true`, `masteredPlaybackEvidenceHasPlaying: true`, `masteredPlaybackEvidenceHasCacheStatus: true`, `referencePlaybackEvidenceHasTimings: true`, `abSourcePlaybackEvidenceHasPlaying: true`, `abMasterPlaybackEvidenceHasPlaying: true`, `abOriginalPlaybackEvidenceHasPlaying: true`, `nativePlaybackEvidenceActive: true`, `nativePlaybackEvidenceHasInvokeTiming: true`.
+- Sample timings: mastered playback `click_to_playing_ms: 316.6`, cached A/B source `click_to_playing_ms: 30.1`, native Live Preview `invoke_elapsed_ms: 12.3`.
+
+Remaining blockers:
+
+- This makes playback start delays diagnosable; it does not guarantee fixed latency for every real song.
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Rerun full release readiness after any later code/package/smoke change before making a fresh release-ready claim.
+
+## Previous Codex Pass: Engine-Backed Album Plan Review
 
 Date: 2026-05-12
 

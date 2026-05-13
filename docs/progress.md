@@ -2,6 +2,45 @@
 
 ## 2026-05-12
 
+### Playback Start Evidence
+
+- Added `prepare_playback_file_info` beside the existing string-returning `prepare_playback_file` Tauri command so the UI can preserve current callers while also recording playback-cache hit/miss, engine prepare duration, prepared path, source path, and output bytes.
+- Added browser transport evidence in the React app via `window.__AMS_PLAYBACK_EVIDENCE__`.
+- The evidence records `prepared`, `loadstart`, `loadedmetadata`, `canplay`, `play`, `play-attempt`, `playing`, `pause`, `waiting`, `stalled`, and `error` events when available, plus `click_to_playing_ms`.
+- Added a compact transport status line showing start/prep timing and cache hit/miss.
+- Added `window.__AMS_NATIVE_PLAYBACK_EVIDENCE__` for native file/Live Preview starts with invoke duration and returned native status fields.
+- Extended the packaged Track Preview UI smoke to assert playback evidence for Mastered, Reference, Original/Mastered A/B switches, and native Live Preview start.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-track-preview-ui-smoke.mjs
+cd src-tauri
+cargo check
+cd ..
+npm run test:integration
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Track Preview UI smoke syntax check passed.
+- Rust `cargo check` passed.
+- Desktop CLI-contract integration passed.
+- Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Preview UI smoke passed against the rebuilt release EXE.
+- Evidence: `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`.
+- Evidence values include `playbackStartedVisible: true`, `masteredPlaybackEvidenceHasTimings: true`, `masteredPlaybackEvidenceHasPlaying: true`, `masteredPlaybackEvidenceHasCacheStatus: true`, `referencePlaybackEvidenceHasTimings: true`, `abSourcePlaybackEvidenceHasPlaying: true`, `abMasterPlaybackEvidenceHasPlaying: true`, `abOriginalPlaybackEvidenceHasPlaying: true`, `nativePlaybackEvidenceActive: true`, and `nativePlaybackEvidenceHasInvokeTiming: true`.
+- Sample measured values from this run: mastered playback `prepare_client_elapsed_ms: 126.1`, mastered `click_to_playing_ms: 316.6`, cached A/B source `prepare_client_elapsed_ms: 3.9`, cached A/B source `click_to_playing_ms: 30.1`, and native Live Preview `invoke_elapsed_ms: 12.3`.
+
+Remaining gap:
+
+- This records startup evidence and makes delayed starts diagnosable. It does not by itself guarantee every real audio file starts under a fixed latency budget; the next useful pass is real-song native/playback evidence with the same fields.
+
 ### Engine-Backed Album Plan Review
 
 - Added Python `plan-project` support so an editable `.ams.json` project can be analyzed into the same album arc, character, transition, boundary, album story, and decision-log structures used by the render path without writing mastered audio.

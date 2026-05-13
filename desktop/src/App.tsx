@@ -250,6 +250,62 @@ type AnalysisRow = {
   waveform: number[];
 };
 
+type PreparedPlaybackFile = {
+  path: string;
+  source: string;
+  cache_hit: boolean;
+  elapsed_ms: number;
+  bytes: number;
+};
+
+type PlaybackEvidenceEvent = {
+  name: string;
+  at_ms: number;
+  current_time: number | null;
+  duration: number | null;
+  ready_state: number | null;
+  network_state: number | null;
+  detail?: string;
+};
+
+type PlaybackEvidence = {
+  id: string;
+  label: string;
+  kind: PlayItem["kind"];
+  source_path: string;
+  prepared_path: string;
+  cache_hit: boolean | null;
+  prepare_engine_elapsed_ms: number | null;
+  prepare_client_elapsed_ms: number | null;
+  bytes: number | null;
+  requested_at_ms: number;
+  status: string;
+  click_to_playing_ms?: number;
+  timings: Record<string, number>;
+  events: PlaybackEvidenceEvent[];
+};
+
+type NativePlaybackEvidence = {
+  label: string;
+  path: string;
+  kind: string;
+  start_seconds: number;
+  invoke_elapsed_ms: number;
+  active: boolean;
+  callback_count: number;
+  queued_output_frames: number;
+  played_output_frames: number;
+  stream_errors: string[];
+  warnings: string[];
+};
+
+declare global {
+  interface Window {
+    __AMS_PLAYBACK_EVIDENCE__?: PlaybackEvidence | null;
+    __AMS_NATIVE_PLAYBACK_EVIDENCE__?: NativePlaybackEvidence | null;
+  }
+}
+
 type SessionSnapshot = {
   version: 2;
   mode: StudioMode;
@@ -551,6 +607,7 @@ function App() {
   const [sessionRevision, setSessionRevision] = useState(0);
   const [renderRevision, setRenderRevision] = useState<number | null>(null);
   const [albumPlanRevision, setAlbumPlanRevision] = useState<number | null>(null);
+  const [playbackEvidence, setPlaybackEvidence] = useState<PlaybackEvidence | null>(null);
   const [previewArtifact, setPreviewArtifact] = useState<PreviewArtifact | null>(null);
   const [regionPreviewArtifact, setRegionPreviewArtifact] = useState<RegionPreviewArtifact | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -587,6 +644,7 @@ function App() {
   const pendingSeekRef = useRef<number | null>(null);
   const lastAutosaveKeyRef = useRef("");
   const sessionRevisionRef = useRef(0);
+  const playbackEvidenceRef = useRef<PlaybackEvidence | null>(null);
 
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? tracks[0] ?? null;
   const selectedIndex = selectedTrack ? tracks.findIndex((track) => track.id === selectedTrack.id) : -1;
@@ -824,6 +882,7 @@ function App() {
     const audio = audioRef.current;
     if (!audio || !playItem) return;
     audio.load();
+    recordAudioEvent("load");
     const playWhenReady = () => {
       if (pendingSeekRef.current != null) {
         audio.currentTime = Math.max(0, Math.min(pendingSeekRef.current, Math.max((audio.duration || 0) - 0.1, 0)));
@@ -833,7 +892,9 @@ function App() {
         prepareLiveAuditionChain();
         liveAuditionRef.current?.context.resume().catch(() => undefined);
       }
-      audio.play().catch((error) => {
+      recordAudioEvent("play-attempt");
+      audio.play().then(() => recordAudioEvent("play-resolved")).catch((error) => {
+        recordAudioEvent("play-rejected", String(error));
         pushLog(`Playback failed: ${String(error)}`);
         setProgressLabel("Playback failed.");
       });
@@ -2016,9 +2077,84 @@ function App() {
     setSelectedTrackId(id);
   }
 
+  function publishPlaybackEvidence(next: PlaybackEvidence | null) {
+    playbackEvidenceRef.current = next;
+    setPlaybackEvidence(next);
+    window.__AMS_PLAYBACK_EVIDENCE__ = next;
+  }
+
+  function playbackEvent(name: string, requestedAtMs: number, detail?: string): PlaybackEvidenceEvent {
+    const audio = audioRef.current;
+    return {
+      name,
+      at_ms: roundMs(performance.now() - requestedAtMs),
+      current_time: audio && Number.isFinite(audio.currentTime) ? roundMs(audio.currentTime) : null,
+      duration: audio && Number.isFinite(audio.duration) ? roundMs(audio.duration) : null,
+      ready_state: audio?.readyState ?? null,
+      network_state: audio?.networkState ?? null,
+      detail,
+    };
+  }
+
+  function createPlaybackEvidence(
+    item: PlayItem,
+    prepared: PreparedPlaybackFile | null,
+    requestedAtMs: number,
+    prepareClientElapsedMs: number | null,
+    status = "prepared",
+  ): PlaybackEvidence {
+    const requested = playbackEvent("requested", requestedAtMs);
+    const events = [requested];
+    const timings: Record<string, number> = { requested: requested.at_ms };
+    if (prepared || status === "prepared") {
+      const preparedEvent = playbackEvent("prepared", requestedAtMs);
+      events.push(preparedEvent);
+      timings.prepared = preparedEvent.at_ms;
+    }
+    return {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      label: item.label,
+      kind: item.kind,
+      source_path: item.originalPath,
+      prepared_path: item.path,
+      cache_hit: prepared?.cache_hit ?? null,
+      prepare_engine_elapsed_ms: prepared ? roundMs(prepared.elapsed_ms) : null,
+      prepare_client_elapsed_ms: prepareClientElapsedMs == null ? null : roundMs(prepareClientElapsedMs),
+      bytes: prepared?.bytes ?? null,
+      requested_at_ms: requestedAtMs,
+      status,
+      timings,
+      events,
+    };
+  }
+
+  function recordAudioEvent(name: string, detail?: string) {
+    const current = playbackEvidenceRef.current;
+    if (!current) return;
+    const event = playbackEvent(name, current.requested_at_ms, detail);
+    const firstEvent = current.timings[name] == null;
+    const next: PlaybackEvidence = {
+      ...current,
+      status: name,
+      click_to_playing_ms: name === "playing" && current.click_to_playing_ms == null ? event.at_ms : current.click_to_playing_ms,
+      timings: {
+        ...current.timings,
+        ...(firstEvent ? { [name]: event.at_ms } : {}),
+      },
+      events: [...current.events, event].slice(-28),
+    };
+    publishPlaybackEvidence(next);
+    if (name === "playing" && firstEvent) {
+      const cacheLabel = current.cache_hit == null ? "prepared" : current.cache_hit ? "cache hit" : "cache miss";
+      setProgressLabel(`Playback started in ${formatMs(event.at_ms)} (${cacheLabel}).`);
+      pushLog(`Playback started: ${current.label} in ${formatMs(event.at_ms)} (${cacheLabel}).`);
+    }
+  }
+
   async function setAudio(item: Omit<PlayItem, "originalPath">) {
     setComparePair(null);
     setProgressLabel(`Preparing ${item.kind} playback.`);
+    const requestedAtMs = performance.now();
     const explicitSeek = pendingSeekRef.current != null;
     if (!explicitSeek) {
       pendingSeekRef.current = 0;
@@ -2026,9 +2162,11 @@ function App() {
     }
     setDuration(0);
     try {
-      const playbackPath = await invoke<string>("prepare_playback_file", { path: item.path });
-      setPlayItem({ ...item, originalPath: item.path, path: playbackPath });
-      pushLog(`Playback ready: ${item.label}`);
+      const prepared = await invoke<PreparedPlaybackFile>("prepare_playback_file_info", { path: item.path });
+      const preparedItem = { ...item, originalPath: item.path, path: prepared.path };
+      publishPlaybackEvidence(createPlaybackEvidence(preparedItem, prepared, requestedAtMs, performance.now() - requestedAtMs));
+      setPlayItem(preparedItem);
+      pushLog(`Playback ready: ${item.label} (${prepared.cache_hit ? "cache hit" : "cache miss"}, prep ${formatMs(prepared.elapsed_ms)}).`);
     } catch (error) {
       pushLog(`Playback prep failed for ${item.label}: ${String(error)}`);
       setProgressLabel("Playback prep failed.");
@@ -2243,34 +2381,38 @@ function App() {
     const masteredOriginalPath = selectedMaster ?? (await renderPreviewMaster(selectedTrack));
     if (!masteredOriginalPath) return;
     setProgressLabel("Preparing A/B compare.");
+    const requestedAtMs = performance.now();
     try {
-      const [sourcePath, masteredPlaybackPath] = await Promise.all([
-        invoke<string>("prepare_playback_file", { path: selectedTrack.path }),
-        invoke<string>("prepare_playback_file", { path: masteredOriginalPath }),
+      const [sourcePrepared, masterPrepared] = await Promise.all([
+        invoke<PreparedPlaybackFile>("prepare_playback_file_info", { path: selectedTrack.path }),
+        invoke<PreparedPlaybackFile>("prepare_playback_file_info", { path: masteredOriginalPath }),
       ]);
       const pair: ComparePair = {
         label: selectedTrack.title,
         trackId: selectedTrack.id,
         source: {
           label: `${selectedTrack.title} - Original`,
-          path: sourcePath,
+          path: sourcePrepared.path,
           originalPath: selectedTrack.path,
           kind: "source",
           trackId: selectedTrack.id,
         },
         master: {
           label: `${selectedTrack.title} - Mastered`,
-          path: masteredPlaybackPath,
+          path: masterPrepared.path,
           originalPath: masteredOriginalPath,
           kind: "master",
           trackId: selectedTrack.id,
         },
       };
+      const selectedPrepared = side === "source" ? sourcePrepared : masterPrepared;
+      const selectedItem = side === "source" ? pair.source : pair.master;
+      publishPlaybackEvidence(createPlaybackEvidence(selectedItem, selectedPrepared, requestedAtMs, performance.now() - requestedAtMs));
       setComparePair(pair);
       setCompareSide(side);
       pendingSeekRef.current = Math.min(audioRef.current?.currentTime ?? regionStartTime(region, duration), Math.max(duration - 0.1, 0));
-      setPlayItem(side === "source" ? pair.source : pair.master);
-      pushLog(`A/B ready: ${selectedTrack.title}`);
+      setPlayItem(selectedItem);
+      pushLog(`A/B ready: ${selectedTrack.title} (${sourcePrepared.cache_hit && masterPrepared.cache_hit ? "cache hit" : "cache prepared"}).`);
     } catch (error) {
       pushLog(`A/B prep failed: ${String(error)}`);
       setProgressLabel("A/B prep failed.");
@@ -2284,7 +2426,9 @@ function App() {
     }
     pendingSeekRef.current = audioRef.current?.currentTime ?? 0;
     setCompareSide(side);
-    setPlayItem(side === "source" ? comparePair.source : comparePair.master);
+    const nextItem = side === "source" ? comparePair.source : comparePair.master;
+    publishPlaybackEvidence(createPlaybackEvidence(nextItem, null, performance.now(), null));
+    setPlayItem(nextItem);
   }
 
   function toggleCompareSide() {
@@ -2355,12 +2499,27 @@ function App() {
         playbackPath = outputPath;
         playbackLabel = `${playItem.label} - Native Live Preview`;
       }
+      const nativeStartedAtMs = performance.now();
       const status = await invoke<NativePlaybackStatus>("start_native_file_playback", {
         path: playbackPath,
         label: playbackLabel,
         startSeconds,
         maxDurationMs: 60 * 60 * 1000,
       });
+      const nativeInvokeElapsedMs = performance.now() - nativeStartedAtMs;
+      window.__AMS_NATIVE_PLAYBACK_EVIDENCE__ = {
+        label: playbackLabel,
+        path: playbackPath,
+        kind: shouldRenderNativeLivePreview ? "native-live-preview" : "native-file",
+        start_seconds: roundMs(startSeconds),
+        invoke_elapsed_ms: roundMs(nativeInvokeElapsedMs),
+        active: status.active,
+        callback_count: status.callback_count,
+        queued_output_frames: status.queued_output_frames,
+        played_output_frames: status.played_output_frames,
+        stream_errors: status.stream_errors,
+        warnings: status.warnings,
+      };
       setNativePlaybackStatus(status);
       if (livePreviewAudition) {
         const snapshot = {
@@ -2373,11 +2532,11 @@ function App() {
         setNativeLivePreviewAudition(snapshot);
         (window as typeof window & { __AMS_NATIVE_LIVE_PREVIEW_AUDITION__?: NativeLivePreviewAudition }).__AMS_NATIVE_LIVE_PREVIEW_AUDITION__ = snapshot;
         setProgressLabel("Native Live Preview running.");
-        pushLog(`Native Live Preview started: ${playItem.label} through ${livePreviewAudition.native_engine} on ${status.output_device ?? "default output"}.`);
+        pushLog(`Native Live Preview started: ${playItem.label} through ${livePreviewAudition.native_engine} on ${status.output_device ?? "default output"} (${formatMs(nativeInvokeElapsedMs)} invoke).`);
       } else {
         setNativeLivePreviewAudition(null);
         setProgressLabel("Native playback running.");
-        pushLog(`Native playback started: ${playItem.label} on ${status.output_device ?? "default output"}.`);
+        pushLog(`Native playback started: ${playItem.label} on ${status.output_device ?? "default output"} (${formatMs(nativeInvokeElapsedMs)} invoke).`);
       }
     } catch (error) {
       setNativePlaybackStatus(idleNativePlaybackStatus);
@@ -2826,6 +2985,11 @@ function App() {
             <button className="play" onClick={togglePlay} disabled={!playItem}>{isPlaying ? <Pause /> : <Play />}</button>
             <div className="transport-main">
               <div className="transport-label">{playItem ? `${playItem.label}` : "Player idle"}</div>
+              {playbackEvidence && (
+                <div className="playback-evidence" title={playbackEvidenceTitle(playbackEvidence)}>
+                  {playbackEvidenceSummary(playbackEvidence)}
+                </div>
+              )}
               <input
                 aria-label="Playback position"
                 className="seek"
@@ -2851,11 +3015,27 @@ function App() {
             <audio
               ref={audioRef}
               src={playItem ? convertFileSrc(playItem.path) : undefined}
-              onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+              onLoadStart={() => recordAudioEvent("loadstart")}
+              onLoadedMetadata={(event) => {
+                setDuration(event.currentTarget.duration || 0);
+                recordAudioEvent("loadedmetadata");
+              }}
+              onCanPlay={() => recordAudioEvent("canplay")}
+              onCanPlayThrough={() => recordAudioEvent("canplaythrough")}
+              onPlaying={() => recordAudioEvent("playing")}
+              onWaiting={() => recordAudioEvent("waiting")}
+              onStalled={() => recordAudioEvent("stalled")}
               onTimeUpdate={handleTimeUpdate}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onError={() => {
+              onPlay={() => {
+                setIsPlaying(true);
+                recordAudioEvent("play");
+              }}
+              onPause={() => {
+                setIsPlaying(false);
+                recordAudioEvent("pause");
+              }}
+              onError={(event) => {
+                recordAudioEvent("error", mediaErrorDetail(event.currentTarget.error));
                 pushLog(playItem ? `Playback failed: ${playItem.originalPath}` : "Playback failed.");
                 setProgressLabel("Playback failed.");
               }}
@@ -4243,6 +4423,43 @@ function formatTime(seconds: number) {
   const total = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(total / 60);
   return `${String(minutes).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function roundMs(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
+function formatMs(value: number | null | undefined) {
+  if (!Number.isFinite(value)) return "-- ms";
+  return `${Math.round(value as number)} ms`;
+}
+
+function playbackEvidenceSummary(evidence: PlaybackEvidence) {
+  const cache = evidence.cache_hit == null ? "prepared" : evidence.cache_hit ? "cache hit" : "cache miss";
+  const started = evidence.click_to_playing_ms != null ? `start ${formatMs(evidence.click_to_playing_ms)}` : evidence.status;
+  const prep = evidence.prepare_client_elapsed_ms ?? evidence.prepare_engine_elapsed_ms;
+  return `${started} | ${cache} | prep ${formatMs(prep)}`;
+}
+
+function playbackEvidenceTitle(evidence: PlaybackEvidence) {
+  const events = evidence.events.map((event) => `${event.name}@${formatMs(event.at_ms)}`).join(" -> ");
+  return [
+    evidence.label,
+    `source: ${evidence.source_path}`,
+    `prepared: ${evidence.prepared_path}`,
+    `events: ${events}`,
+  ].join("\n");
+}
+
+function mediaErrorDetail(error: MediaError | null) {
+  if (!error) return "unknown media error";
+  const names: Record<number, string> = {
+    1: "aborted",
+    2: "network",
+    3: "decode",
+    4: "unsupported-source",
+  };
+  return names[error.code] ?? `media-error-${error.code}`;
 }
 
 function formatDb(value: number | undefined, suffix: string) {
