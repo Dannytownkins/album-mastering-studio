@@ -6,14 +6,14 @@ This checklist is the manual closeout path for the active goal. It does not repl
 
 ## Current Evidence Baseline
 
-- Current release trace: `test-output\release-readiness-dbfaad7-listening-packet-gate\release-readiness.json`.
-- Commit covered by that trace: `dbfaad7fba44d16deea5813a23ae183aedd5ab47`.
+- Current release trace: `test-output\release-readiness-cba8ae7-playable-handoff\release-readiness.json`.
+- App-code commit covered by that trace: `cba8ae7a73027dd1c8285f0fa145633b90d1c5ed`.
 - The trace was run from a clean worktree and records `dirty_before: []` and `dirty_after: []`.
 - Automated result: 24 passed, 0 failed, 0 skipped.
 - Windows Application log check saved beside the trace found zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries in the checked window.
 - Remaining blockers: human listening approval and Live Preview scope acceptance.
 - Native Project Save As/Open/cancel coverage is now recorded in `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
-- Ready-to-listen Track Master packet for the real MP3 is recorded in `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-handoff.html`.
+- Ready-to-listen Track Master packet for the real MP3 is recorded in `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
 - That packet is intentionally `not-approved`; it includes local audio controls for Original, Mastered, and codec preview files, but it proves only that the handoff exists and the files are ready for review, not that the sound has been accepted.
 
 ## Track Master Listening Pass
@@ -22,12 +22,12 @@ Use `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` unless
 
 Prepared evidence package:
 
-- Handoff HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-handoff.html`
-- Handoff JSON: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-handoff.json`
-- Listening receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-review.json`
-- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`
-- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\01-lay-the-money-on-the-desk-1\dashboard.html`
-- Codec previews: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\01-lay-the-money-on-the-desk-1\codec_previews\`
+- Handoff HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`
+- Handoff JSON: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.json`
+- Listening receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`
+- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\dashboard.html`
+- Codec previews: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\codec_previews\`
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`
 
 1. Launch the packaged desktop app.

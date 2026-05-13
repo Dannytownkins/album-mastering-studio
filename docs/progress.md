@@ -17,24 +17,29 @@ Verification:
 - `git diff --check`
 - `cd desktop; npm run tauri:build`
 - `cd desktop; $env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"; npm run test:tauri-real-song-listening-packet`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-cba8ae7-playable-handoff"`
 
 Results:
 
 - Packaged real-song listening-packet smoke passed after rebuilding the release EXE, sidecar, MSI, and NSIS bundles.
+- Full release-readiness trace for app-code commit `cba8ae7a73027dd1c8285f0fa145633b90d1c5ed` passed: `24 passed`, `0 failed`, `0 skipped`.
+- Full trace: `test-output\release-readiness-cba8ae7-playable-handoff\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
-- Current ready-to-listen HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-handoff.html`.
-- Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-review.json`.
-- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Current ready-to-listen HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
+- Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Windows Application log follow-up for the focused run found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\tauri-real-song-listening-packet-smoke\windows-application-events-after-playable-handoff.json`.
+- Windows Application log follow-up for the full trace found zero matching Album Mastering Studio entries and saved `test-output\release-readiness-cba8ae7-playable-handoff\windows-application-events.json`.
 - Evidence values include `listeningPacketHtmlIncludesAudioControls: true`, `listeningPacketHtmlIncludesOriginalAudio: true`, `listeningPacketHtmlIncludesMasteredAudio: true`, `listeningPacketHtmlIncludesCodecAudioControls: true`, `exportStatus: "pass"`, and source MP3 size/SHA-256 unchanged.
 
 Remaining blockers:
 
 - Human listening approval is still not recorded.
 - Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
-- The most recent full release-readiness trace is still `test-output\release-readiness-dbfaad7-listening-packet-gate\release-readiness.json`; rerun the full trace after this focused code/smoke change before claiming a new current-commit full release gate.
+- The latest full release trace covers app-code commit `cba8ae7`; rerun the full trace after any later app code, package, or smoke-test change.
 
-### Current Full Trace With Listening Packet Gate
+### Prior Full Trace With Listening Packet Gate
 
 Scope:
 

@@ -41,7 +41,7 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Playable Listening Handoff HTML
+## Latest Codex Pass: Playable Listening Handoff + Current Release Trace
 
 Date: 2026-05-13
 
@@ -68,20 +68,24 @@ Verification:
 - `cd desktop; npm run tauri:build`
 - `cd desktop; $env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"; npm run test:tauri-real-song-listening-packet`
 - Windows Application log follow-up saved `test-output\tauri-real-song-listening-packet-smoke\windows-application-events-after-playable-handoff.json`, result `[]`.
+- Full trace command after commit `cba8ae7a73027dd1c8285f0fa145633b90d1c5ed`: `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-cba8ae7-playable-handoff"`.
+- Full trace result: `24 passed`, `0 failed`, `0 skipped`, with `dirty_before: []` and `dirty_after: []`.
+- Full-trace Windows Application log artifact: `test-output\release-readiness-cba8ae7-playable-handoff\windows-application-events.json`, result `[]`.
 
 Evidence:
 
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
-- Current ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-handoff.html`.
-- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\listening-review.json`.
-- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-045508-752\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Full trace: `test-output\release-readiness-cba8ae7-playable-handoff\release-readiness.json`.
+- Current ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-handoff.html`.
+- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\listening-review.json`.
+- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-050813-945\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Values: `listeningPacketHtmlIncludesAudioControls: true`, `listeningPacketHtmlIncludesOriginalAudio: true`, `listeningPacketHtmlIncludesMasteredAudio: true`, `listeningPacketHtmlIncludesCodecAudioControls: true`, `exportStatus: "pass"`, and source MP3 size/SHA-256 unchanged.
 
 Decision:
 
 - The human listening package is now directly playable from the generated HTML, but it remains intentionally `not-approved`.
 - The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
-- The most recent full release-readiness trace is still the prior `dbfaad7` trace; rerun the full release gate after this focused code/smoke change before claiming a new current-commit full release trace.
+- The latest full release trace covers the app-code commit `cba8ae7`; any later app code, package, or smoke-test change needs a fresh trace before being treated as current release-gate evidence.
 
 ## Prior Codex Pass: Release Gate Includes Listening Packet
 
