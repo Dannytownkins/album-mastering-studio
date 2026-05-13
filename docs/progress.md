@@ -5360,4 +5360,41 @@ Results:
 
 Remaining caveat:
 
-- This makes the eventual human listening pass easier to perform and hand off. It is still not a human listening approval, and it means the full release-readiness trace should be rerun from the next clean commit before a new current-commit release claim.
+- This makes the eventual human listening pass easier to perform and hand off. It is still not a human listening approval. The required follow-up full release-readiness trace is recorded below at `f1c4cff`.
+
+### Full Release Readiness Trace at f1c4cff
+
+- Ran the release-readiness runner from clean `master` commit `f1c4cff6a769e052c57b63c6400dd6feffa410e0`.
+- Trace path: `test-output\release-readiness-f1c4cff-full-20260512-182456\release-readiness.json`.
+- Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-f1c4cff-full-20260512-182456"`.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Result: 21 passed, 0 failed, 0 skipped.
+
+Passed steps:
+
+| Step | Seconds |
+| --- | ---: |
+| `python-compile` | 0.07 |
+| `python-unittest` | 46.47 |
+| `python-cli-smoke` | 8.72 |
+| `desktop-build` | 3.15 |
+| `desktop-integration` | 2.91 |
+| `desktop-tauri-build` | 215.53 |
+| `tauri-sidecar-startup` | 7.99 |
+| `tauri-release-launch` | 16.55 |
+| `tauri-track-preview-ui` | 55.61 |
+| `tauri-release-album-state` | 7.23 |
+| `tauri-release-album-codec-qc` | 19.12 |
+| `tauri-release-track-codec-qc` | 22.59 |
+| `tauri-release-session-safety` | 5.07 |
+| `tauri-project-persistence` | 13.95 |
+| `tauri-real-song-codec-qc` | 79.56 |
+| `tauri-real-song-region-preview` | 20.29 |
+| `tauri-real-song-album-playback` | 47.54 |
+| `tauri-real-song-album-codec-qc` | 24.42 |
+| `tauri-nsis-installed-app` | 30.41 |
+| `tauri-msi-package` | 19.93 |
+| `git-diff-check` | 0.03 |
+
+This closes the current-commit final release-loop blocker for `f1c4cff`. It does not close human listening approval, does not make Live Preview export-chain faithful, and does not add native OS Open/Save-As dialog automation.

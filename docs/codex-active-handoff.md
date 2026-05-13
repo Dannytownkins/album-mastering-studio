@@ -17,6 +17,54 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
+## Latest Codex Pass: Current-Commit Release Readiness Trace
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What changed:
+
+- Recorded the passed full release-readiness trace from clean `master` commit `f1c4cff6a769e052c57b63c6400dd6feffa410e0`.
+- The trace used `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` and included installer smokes.
+- Trace artifact: `test-output\release-readiness-f1c4cff-full-20260512-182456\release-readiness.json`.
+- Result: 21 passed, 0 failed, 0 skipped; `dirty_before` and `dirty_after` were empty.
+
+Passed gates:
+
+- `python-compile`
+- `python-unittest`
+- `python-cli-smoke`
+- `desktop-build`
+- `desktop-integration`
+- `desktop-tauri-build`
+- `tauri-sidecar-startup`
+- `tauri-release-launch`
+- `tauri-track-preview-ui`
+- `tauri-release-album-state`
+- `tauri-release-album-codec-qc`
+- `tauri-release-track-codec-qc`
+- `tauri-release-session-safety`
+- `tauri-project-persistence`
+- `tauri-real-song-codec-qc`
+- `tauri-real-song-region-preview`
+- `tauri-real-song-album-playback`
+- `tauri-real-song-album-codec-qc`
+- `tauri-nsis-installed-app`
+- `tauri-msi-package`
+- `git-diff-check`
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains an explicit approximation, though rendered preview/export paths remain the release-faithful paths.
+- Native OS Open/Save-As dialogs are still not automated; direct path `.ams.json` load/save is covered.
+- Rerun the release-readiness trace after any later code, packaging, or smoke-test change before making another current-commit release claim.
+
 ## Previous Codex Pass: Release Readiness Trace Runner
 
 Date: 2026-05-12
@@ -194,7 +242,7 @@ Remaining blockers:
 - Human listening approval is still not recorded.
 - Live Preview remains approximate.
 - Native OS Open/Save-As dialogs remain unautomated.
-- Because this pass changes app code after the `15b5d0e` full trace, rerun the full release-readiness trace from the next clean commit before making a fresh current-commit release claim.
+- The required follow-up full release-readiness trace is recorded above at `f1c4cff`.
 
 ## Previous Codex Pass: Album Codec And History Evidence
 
