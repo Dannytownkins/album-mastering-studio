@@ -17,7 +17,41 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Real-Song Native A/B Playback Evidence
+## Latest Codex Pass: Current-Commit Release Readiness Trace
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Ran the full release-readiness trace from clean `master` commit `8376e38750494e23eddf2d7dcab91998ca6fb65b` after the real-song Native A/B playback-evidence commit.
+- Recorded the trace path, options, dirty-state proof, passed steps, and remaining non-automated blockers.
+
+Verification already run:
+
+- `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-8376e38-full"`
+
+Evidence:
+
+- `test-output\release-readiness-8376e38-full\release-readiness.json`
+- Result: 21 passed, 0 failed, 0 skipped.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+
+Remaining blockers:
+
+- This closes the current-commit release-readiness trace blocker for `8376e38`.
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Rerun full release readiness after any later code/package/smoke change before making a fresh release-ready claim.
+
+## Previous Codex Pass: Real-Song Native A/B Playback Evidence
 
 Date: 2026-05-12
 
@@ -415,7 +449,7 @@ Remaining blockers:
 - Human listening approval is still not recorded.
 - Live Preview remains approximate.
 - Native OS Open/Save-As dialogs remain unautomated.
-- The required follow-up full release-readiness trace is recorded above at `f1c4cff`.
+- Later full release-readiness traces are recorded above; the current-commit trace is `8376e38`.
 
 ## Previous Codex Pass: Album Codec And History Evidence
 

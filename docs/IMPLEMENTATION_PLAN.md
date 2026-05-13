@@ -928,6 +928,13 @@ Required:
 - Real-song Track/Album and installer smokes are opt-in with `-RealSongPath` and `-IncludeInstallerSmokes`.
 - This runner supports the final-release blocker, but does not close it until run from the commit being evaluated.
 
+2026-05-12 current-commit release-readiness trace:
+
+- Latest full trace for commit `8376e38` is `test-output\release-readiness-8376e38-full\release-readiness.json`.
+- Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-8376e38-full"`.
+- Result: 21 passed, 0 failed, 0 skipped, with `dirty_before: []` and `dirty_after: []`.
+- Remaining release-quality blockers are human listening approval, export-chain/live-preview parity, and native OS Open/Save-As dialog automation.
+
 ## Public Release Risk Notes
 
 The app is private for now. Do not slow private development with public-product anxiety.

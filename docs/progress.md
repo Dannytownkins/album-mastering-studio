@@ -5556,3 +5556,40 @@ Evidence values from the smoke:
 Remaining caveat:
 
 - This makes the real-song Native A/B startup path measurable and regression-testable. It is still automated evidence for one provided MP3, not human listening approval, full-album real-song playback approval, or export-chain live DSP parity.
+
+### Full Release Readiness Trace at 8376e38
+
+- Ran the release-readiness runner from clean `master` commit `8376e38750494e23eddf2d7dcab91998ca6fb65b`.
+- Trace path: `test-output\release-readiness-8376e38-full\release-readiness.json`.
+- Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-8376e38-full"`.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Result: 21 passed, 0 failed, 0 skipped.
+
+Passed steps:
+
+| Step | Seconds |
+| --- | ---: |
+| `python-compile` | 0.13 |
+| `python-unittest` | 60.66 |
+| `python-cli-smoke` | 11.76 |
+| `desktop-build` | 4.03 |
+| `desktop-integration` | 4.21 |
+| `desktop-tauri-build` | 294.68 |
+| `tauri-sidecar-startup` | 9.15 |
+| `tauri-release-launch` | 18.69 |
+| `tauri-track-preview-ui` | 62.37 |
+| `tauri-release-album-state` | 15.42 |
+| `tauri-release-album-codec-qc` | 23.58 |
+| `tauri-release-track-codec-qc` | 27.64 |
+| `tauri-release-session-safety` | 9.03 |
+| `tauri-project-persistence` | 17.12 |
+| `tauri-real-song-codec-qc` | 123.34 |
+| `tauri-real-song-region-preview` | 25.87 |
+| `tauri-real-song-album-playback` | 59.69 |
+| `tauri-real-song-album-codec-qc` | 33.83 |
+| `tauri-nsis-installed-app` | 40.62 |
+| `tauri-msi-package` | 23.39 |
+| `git-diff-check` | 0.13 |
+
+This closes the current-commit release-readiness trace blocker for `8376e38`. It does not close human listening approval, does not make Live Preview export-chain faithful, and does not add native OS Open/Save-As dialog automation.
