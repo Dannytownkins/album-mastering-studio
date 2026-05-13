@@ -647,14 +647,14 @@ function App() {
     : "Not approved";
   const listeningReceiptTarget = listeningReceiptPathForManifest(manifest);
   const canSaveListeningReceipt = Boolean(manifest && listeningReceiptTarget && !hasStaleRender && !busy);
-  const previewParityLabel = regionPreviewPlaying
+  const fallbackPreviewParityLabel = regionPreviewPlaying
     ? "Render-faithful region"
     : referencePlaying
     ? "Reference playback"
     : selectedMaster
     ? liveAuditionActive ? "Approx audition" : "Render-faithful preview"
     : "Render required";
-  const previewParityTitle = regionPreviewPlaying
+  const fallbackPreviewParityTitle = regionPreviewPlaying
     ? "Render Region used the same Python export engine on a bounded source window."
     : referencePlaying
     ? "Reference playback is unprocessed comparison audio. It does not change export level or mastering settings."
@@ -665,6 +665,15 @@ function App() {
         ? `Rendered preview used the Python export engine and was cued at ${formatTime(selectedPreviewArtifact.auditionStartSeconds)}.`
         : "Update Preview renders the current settings through the export engine."
     : "Update Preview renders the current settings through the export engine.";
+  const transportAuditionContext = describeReceiptAuditionContext(
+    playItem,
+    fallbackPreviewParityLabel,
+    fallbackPreviewParityTitle,
+    liveAuditionActive,
+  );
+  const previewParityLabel = transportAuditionContext.parity;
+  const previewParityTitle = transportAuditionContext.note;
+  const previewParityWarn = previewParityLabel === "Approx audition" || previewParityLabel === "Render required";
   const livePreviewContractModeledText = livePreviewContract?.modeledControls?.join(", ") ?? "Contract loading";
   const livePreviewContractRenderOnlyText = summarizePreviewStages(livePreviewContract?.unmodeledExportStages ?? []);
   const livePreviewContractTitle = livePreviewContract
@@ -2746,7 +2755,7 @@ function App() {
                 : "Offline preview"}
             </span>
             <span
-              className={`preview-parity-status ${!referencePlaying && (liveAuditionActive || (!selectedMaster && !regionPreviewPlaying)) ? "warn" : ""}`}
+              className={`preview-parity-status ${previewParityWarn ? "warn" : ""}`}
               title={previewParityTitle}
             >
               {previewParityLabel}
@@ -3580,6 +3589,12 @@ function describeReceiptAuditionContext(
 ) {
   if (!playItem) return { parity: fallbackParity, note: fallbackNote };
   if (playItem.kind === "source") {
+    if (liveAuditionActive && fallbackParity === "Render required") {
+      return {
+        parity: "Render required",
+        note: "Live Preview is an approximation of unsaved settings. Update Preview renders the current settings through the export engine.",
+      };
+    }
     return liveAuditionActive
       ? {
           parity: "Approx audition",
@@ -3591,9 +3606,15 @@ function describeReceiptAuditionContext(
         };
   }
   if (playItem.kind === "master") {
+    if (isRegionPreviewPlayItem(playItem)) {
+      return {
+        parity: "Render-faithful region",
+        note: "Render Region used the same Python export engine on a bounded source window.",
+      };
+    }
     return {
       parity: "Render-faithful preview",
-      note: "Master playback was rendered through the Python export engine.",
+      note: fallbackParity === "Render-faithful preview" ? fallbackNote : "Master playback was rendered through the Python export engine.",
     };
   }
   if (playItem.kind === "album") {
@@ -3603,6 +3624,12 @@ function describeReceiptAuditionContext(
     };
   }
   if (playItem.kind === "transition") {
+    if (isBoundaryPreviewPlayItem(playItem)) {
+      return {
+        parity: "Bounded boundary preview",
+        note: "Boundary preview playback was rendered by the Python album engine from adjacent track tails and heads. It is not full-album approval.",
+      };
+    }
     return {
       parity: "Render-faithful transition",
       note: "Transition playback was rendered by the Python album engine.",
@@ -3621,6 +3648,16 @@ function describeReceiptAuditionContext(
     };
   }
   return { parity: fallbackParity, note: fallbackNote };
+}
+
+function isBoundaryPreviewPlayItem(playItem: PlayItem) {
+  const haystack = `${playItem.label} ${playItem.originalPath ?? ""} ${playItem.path}`.toLowerCase();
+  return haystack.includes("boundary") && haystack.includes("preview");
+}
+
+function isRegionPreviewPlayItem(playItem: PlayItem) {
+  const haystack = `${playItem.label} ${playItem.originalPath ?? ""} ${playItem.path}`.toLowerCase();
+  return haystack.includes("region-preview") || haystack.includes("engine region");
 }
 
 function listeningReceiptPathForManifest(manifest: RenderManifest | null) {

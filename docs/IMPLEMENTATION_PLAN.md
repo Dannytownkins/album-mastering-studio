@@ -624,6 +624,16 @@ No-victory-lap check:
 - Evidence values include `boundaryPreviewButtonEnabledBefore: true`, `boundaryPreviewReadyVisible: true`, `boundaryPreviewPathExists: true`, `boundaryPreviewProjectExists: true`, `boundaryPreviewTransportLabel: "Boundary 1 to 2 Preview"`, and `boundaryPreviewHistoryVisible: true`.
 - Remaining gap: this is bounded adjacent-boundary audition, not a full album render or human listening approval.
 
+2026-05-12 packaged preview-honesty baseline:
+
+- The visible preview parity pill now follows active transport context for render artifacts, so boundary previews are not mislabeled as generic transitions or render-required state.
+- Boundary preview playback shows `Bounded boundary preview`, with tooltip copy that it is Python-rendered from adjacent track tails/heads and is not full-album approval.
+- Evidence:
+  - `test-output/tauri-release-album-state-smoke/tauri-release-album-state-smoke.json`
+  - `test-output/tauri-track-preview-ui-smoke/tauri-track-preview-ui-smoke.json`
+- Evidence values include `boundaryPreviewParity: "Bounded boundary preview"`, `boundaryPreviewParityWarn: false`, `regionPreviewParity: "Render-faithful region"`, `previewParityAfterControlChange: "Render required"`, `previewParityAfterUpdatePreview: "Render-faithful preview"`, and `previewParityAfterReturnToLiveSource: "Approx audition"`.
+- Remaining gap: this is copy and state clarity only; it does not make Live Preview export-chain faithful or replace human listening.
+
 ## Phase 9: Transition Primitives
 
 Goal: provide reliable album boundary tools before generated musical transitions.

@@ -17,7 +17,63 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Album Master Boundary Preview
+## Latest Codex Pass: Preview Honesty Labels
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-release-album-state-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- The visible preview parity pill now uses active transport context for render artifacts instead of only selected render state.
+- Album Master boundary preview playback now shows `Bounded boundary preview` with tooltip copy saying it is Python-rendered from adjacent tails/heads and is not full-album approval.
+- Region preview, Python Track Preview, stale Live Preview, returned source Live Preview, album, transition, codec, source, and reference paths keep distinct copy.
+- The packaged Album Master state smoke now verifies the boundary preview parity label, tooltip, and non-warning state.
+
+Verification already run:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-state-smoke.mjs
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-state
+npm run test:tauri-track-preview-ui
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Evidence:
+
+- `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Relevant fields:
+  - `boundaryPreviewParity: "Bounded boundary preview"`
+  - `boundaryPreviewParityTitle` includes adjacent track tails/heads and not full-album approval.
+  - `boundaryPreviewParityWarn: false`
+  - `regionPreviewParity: "Render-faithful region"`
+  - `previewParityAfterControlChange: "Render required"`
+  - `previewParityAfterUpdatePreview: "Render-faithful preview"`
+  - `previewParityAfterReturnToLiveSource: "Approx audition"`
+
+Remaining gap:
+
+- This closes one preview-copy honesty gap only. Live Preview remains approximate, and human listening approval is still not recorded.
+
+Next useful slice:
+
+- If unattended, continue with narrow, evidence-backed workflow risks. Avoid OS file-picker automation unless a reliable route is proven first.
+
+## Previous Codex Pass: Album Master Boundary Preview
 
 Date: 2026-05-12
 

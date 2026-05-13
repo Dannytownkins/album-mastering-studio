@@ -106,6 +106,10 @@ try {
   assert.equal(evidence.boundaryPreviewPathExists, true);
   assert.equal(evidence.boundaryPreviewProjectExists, true);
   assert.match(evidence.boundaryPreviewTransportLabel, /Boundary 1 to 2 Preview/);
+  assert.equal(evidence.boundaryPreviewParity, "Bounded boundary preview");
+  assert.match(evidence.boundaryPreviewParityTitle, /adjacent track tails and heads/);
+  assert.match(evidence.boundaryPreviewParityTitle, /not full-album approval/);
+  assert.equal(evidence.boundaryPreviewParityWarn, false);
   assert.equal(evidence.boundaryPreviewHistoryVisible, true);
   assert.equal(evidence.screenshotExists, true);
 
@@ -368,6 +372,10 @@ function albumStateExpression() {
   const boundaryPreviewPath = boundaryPreviewMatch[1].trim();
   const boundaryPreviewProjectPath = boundaryPreviewPath.replace(/boundary-01-to-02\\.wav$/, 'album-boundary-preview.ams.json');
   const boundaryPreviewTransportLabel = text(document.querySelector('.transport-label'));
+  const boundaryPreviewParityElement = document.querySelector('.preview-parity-status');
+  const boundaryPreviewParity = text(boundaryPreviewParityElement);
+  const boundaryPreviewParityTitle = boundaryPreviewParityElement?.getAttribute('title') || '';
+  const boundaryPreviewParityWarn = boundaryPreviewParityElement?.classList.contains('warn') ?? true;
   const boundaryPreviewHistoryVisible = Array.from(document.querySelectorAll('.render-history-card'))
     .some((item) => text(item).includes('Boundary Preview') && text(item).includes('Boundary 1 to 2 Preview'));
 
@@ -384,6 +392,9 @@ function albumStateExpression() {
     persistedTrack,
     boundaryPreviewButtonEnabledBefore,
     boundaryPreviewHistoryVisible,
+    boundaryPreviewParity,
+    boundaryPreviewParityTitle,
+    boundaryPreviewParityWarn,
     boundaryPreviewPath,
     boundaryPreviewProjectPath,
     boundaryPreviewReadyVisible,

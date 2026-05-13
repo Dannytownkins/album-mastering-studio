@@ -2,6 +2,54 @@
 
 ## 2026-05-12
 
+### Preview Honesty Label Slice
+
+- Made the visible preview parity pill follow the active transport item when a render artifact is playing, while preserving the existing stale-render rule for approximate Live Preview after control changes.
+- Added explicit `Bounded boundary preview` copy for Album Master boundary preview playback, with a tooltip stating it was rendered by the Python album engine from adjacent track tails/heads and is not full-album approval.
+- Preserved distinct labels for engine-rendered region playback, Python-rendered Track Preview, original/reference playback, album playback, transition playback, and codec preview audition.
+- Extended the packaged Album Master state smoke to assert the boundary preview label, tooltip, and non-warning state.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+node --check .\tests\tauri-release-album-state-smoke.mjs
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-state
+npm run test:tauri-track-preview-ui
+npm run test:integration
+cd ..
+python -m compileall -q src tests
+git diff --check
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Node syntax check passed for the updated packaged Album Master state smoke.
+- Windows Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Album Master state smoke passed against the fresh release EXE.
+- Packaged Track Preview UI smoke passed after verifying region/live/render parity labels still hold.
+- Desktop CLI-contract integration passed.
+- Python compile passed.
+- `git diff --check` passed.
+- Evidence:
+  - `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`
+  - `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- Evidence values:
+  - `boundaryPreviewParity: "Bounded boundary preview"`
+  - `boundaryPreviewParityTitle` includes adjacent track tails/heads and not full-album approval.
+  - `boundaryPreviewParityWarn: false`
+  - `regionPreviewParity: "Render-faithful region"`
+  - `previewParityAfterControlChange: "Render required"`
+  - `previewParityAfterUpdatePreview: "Render-faithful preview"`
+  - `previewParityAfterReturnToLiveSource: "Approx audition"`
+
+Honest gap:
+
+- This tightens visible preview-path copy. It still does not convert Live Preview into export-chain DSP parity or record human listening approval.
+
 ### Album Master Boundary Preview Slice
 
 - Updated the Python `preview-transition` path so generated-off Album Master boundary previews include the same bounded `gap`, `fade`, `ring-out`, and `crossfade` behavior used by full album WAV assembly.
