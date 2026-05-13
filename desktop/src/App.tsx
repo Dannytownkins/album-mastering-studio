@@ -1828,38 +1828,62 @@ function App() {
   }
 
   async function openProject() {
-    const selected = await open({
-      multiple: false,
-      defaultPath: projectPath || settings.outputDir || repoRoot,
-      filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
-    });
-    if (typeof selected !== "string") return;
-    await openProjectFromPath(selected);
+    try {
+      const selected = await open({
+        multiple: false,
+        defaultPath: projectPath || settings.outputDir || repoRoot,
+        filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
+      });
+      if (typeof selected !== "string") {
+        pushLog("Open project canceled.");
+        setProgressLabel("Project open canceled.");
+        return;
+      }
+      await openProjectFromPath(selected);
+    } catch (error) {
+      pushLog(`Open project dialog failed: ${String(error)}`);
+      setProgressLabel("Project open dialog failed.");
+    }
   }
 
   async function saveProject() {
-    const selected =
-      projectPath ||
-      (await save({
+    if (projectPath) {
+      await saveProjectToPath(projectPath);
+      return;
+    }
+    try {
+      const selected = await save({
         defaultPath: `${settings.outputDir || repoRoot}\\album.ams.json`,
         filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
-      }));
-    if (typeof selected !== "string") return;
-    await invoke("write_project", {
-      path: selected,
-      project: buildProject(mode === "album", tracks),
-    });
-    setProjectPath(selected);
-    pushLog(`Saved project: ${selected}`);
+      });
+      if (typeof selected !== "string") {
+        pushLog("Save project canceled.");
+        setProgressLabel("Project save canceled.");
+        return;
+      }
+      await saveProjectToPath(selected);
+    } catch (error) {
+      pushLog(`Save project dialog failed: ${String(error)}`);
+      setProgressLabel("Project save dialog failed.");
+    }
   }
 
   async function saveProjectAs() {
-    const selected = await save({
-      defaultPath: projectPath || `${settings.outputDir || repoRoot}\\album.ams.json`,
-      filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
-    });
-    if (typeof selected !== "string") return;
-    await saveProjectToPath(selected);
+    try {
+      const selected = await save({
+        defaultPath: projectPath || `${settings.outputDir || repoRoot}\\album.ams.json`,
+        filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
+      });
+      if (typeof selected !== "string") {
+        pushLog("Save As canceled.");
+        setProgressLabel("Project Save As canceled.");
+        return;
+      }
+      await saveProjectToPath(selected);
+    } catch (error) {
+      pushLog(`Save As dialog failed: ${String(error)}`);
+      setProgressLabel("Project Save As dialog failed.");
+    }
   }
 
   async function openProjectFromPath(path: string = projectPath) {
