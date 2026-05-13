@@ -6,9 +6,9 @@ This checklist is the manual closeout path for the active goal. It does not repl
 
 ## Current Evidence Baseline
 
-- Current app-code release trace: `test-output\release-readiness-e619318-full\release-readiness.json`.
-- App-code commit covered by that trace: `e61931867a633a37669e61a7eab7cc92f7e6fcf6`.
-- Latest branch head may include docs-only handoff commits after that trace, plus the later Listening Approval Scope hardening until a fresh full trace is recorded.
+- Current app-code release trace: `test-output\release-readiness-8c6b5a0-full\release-readiness.json`.
+- App-code commit covered by that trace: `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
+- Latest branch head may include docs-only handoff commits after that trace.
 - Automated result: 23 passed, 0 failed, 0 skipped.
 - Remaining blockers: human listening approval, Live Preview scope acceptance, native Open/Save-As dialog coverage or waiver.
 

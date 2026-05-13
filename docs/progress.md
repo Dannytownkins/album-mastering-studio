@@ -2,6 +2,65 @@
 
 ## 2026-05-13
 
+### Full Release Readiness Trace at 8c6b5a0
+
+Scope:
+
+- Reran the full release-readiness runner from clean `master` commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0` after the Listening Approval Scope hardening commit.
+- Included the real-song smoke set with `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3`.
+- Included installer smokes so the trace covers release EXE, NSIS installed-app path, and MSI package path.
+
+Verification:
+
+```powershell
+cd desktop
+npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-8c6b5a0-full"
+```
+
+Results:
+
+- Release readiness passed: `23 passed`, `0 failed`, `0 skipped`.
+- Trace started at `2026-05-13T01:10:11.5957602-07:00`; final step completed at `2026-05-13T01:22:59.3063715-07:00`.
+- Dirty state proof: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log query found no Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries after the run.
+
+Evidence:
+
+- `test-output\release-readiness-8c6b5a0-full\release-readiness.json`
+- Per-step logs under `test-output\release-readiness-8c6b5a0-full\`.
+
+Passed gates:
+
+- `python-compile`
+- `python-unittest`
+- `python-cli-smoke`
+- `desktop-build`
+- `desktop-integration`
+- `native-audio-headless-probe`
+- `desktop-tauri-build`
+- `tauri-sidecar-startup`
+- `tauri-release-launch`
+- `tauri-track-preview-ui`
+- `tauri-release-album-state`
+- `tauri-release-album-codec-qc`
+- `tauri-release-track-codec-qc`
+- `tauri-release-session-safety`
+- `tauri-project-persistence`
+- `tauri-real-song-codec-qc`
+- `tauri-real-song-region-preview`
+- `tauri-real-song-native-ui`
+- `tauri-real-song-album-playback`
+- `tauri-real-song-album-codec-qc`
+- `tauri-nsis-installed-app`
+- `tauri-msi-package`
+- `git-diff-check`
+
+Remaining blockers:
+
+- Human listening approval has still not been recorded.
+- Live Preview is now explicitly scoped as directional-only in the app and handoff artifacts, but acceptance of that scope is still a product decision.
+- Native OS Open/Save-As dialog coverage is still unautomated/unwaived.
+
 ### Listening Approval Scope Hardening
 
 Scope:
@@ -45,11 +104,11 @@ Remaining blockers:
 - Human listening approval has still not been recorded.
 - Live Preview is still an approximate directional path; the app and handoff now say so more explicitly, but the product decision still needs acceptance or a deeper parity change.
 - Native OS Open/Save-As dialog coverage is still unautomated/unwaived.
-- A full release-readiness trace must be rerun from the app-code commit that includes this hardening before making a fresh full release-ready claim.
+- A full release-readiness trace was later rerun from the app-code commit that includes this hardening; see `Full Release Readiness Trace at 8c6b5a0` above.
 
 Next recommended action:
 
-- Commit this hardening, rerun `npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes` from a clean commit, then update this handoff with the trace result.
+- Run the human listening pass from `docs\RELEASE_CANDIDATE_CLOSEOUT.md`, then either accept the directional-only Live Preview scope and native dialog coverage limits or require those blockers to be fixed before completion.
 
 ### Manual Release-Candidate Closeout Checklist
 

@@ -41,6 +41,42 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
+## Latest Codex Pass: Full Release Trace for Approval Scope Commit
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Recorded the full release-readiness trace for clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
+- This is now the current app-code full trace for the Listening Approval Scope hardening.
+
+Verification run:
+
+- `cd desktop; npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-8c6b5a0-full"`
+
+Evidence:
+
+- `test-output\release-readiness-8c6b5a0-full\release-readiness.json`
+- Result: 23 passed, 0 failed, 0 skipped.
+- Trace commit: `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0` on `master`.
+- Trace timestamps: started `2026-05-13T01:10:11.5957602-07:00`; final step completed `2026-05-13T01:22:59.3063715-07:00`.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application logs showed no matching Album Mastering Studio Application Error, Application Hang, or WER entries during the checked window.
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; it is now explicitly scoped as directional-only in the app and handoff artifacts, but that scope still needs user acceptance or a deeper parity change before goal completion.
+- Native OS Open/Save-As dialogs remain unautomated/unwaived.
+
 ## Latest Codex Pass: Listening Approval Scope Hardening
 
 Date: 2026-05-13
@@ -86,7 +122,7 @@ Remaining blockers:
 - Human listening approval has not been recorded.
 - Live Preview remains approximate; it is now more explicitly scoped as directional-only, but this still needs user acceptance or a deeper parity change before goal completion.
 - Native OS Open/Save-As dialogs remain unautomated/unwaived.
-- Rerun the full release-readiness trace from the clean app-code commit that includes this pass before making a fresh release-ready claim.
+- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`; see the latest trace section above.
 
 ## Latest Codex Pass: Project Open Dialog Default Path Hardening
 
