@@ -21,3 +21,11 @@ A parallel from-scratch Rust DSP implementation already exists at `../album-mast
 - `engine.rs`: `analyze_tracks`, `render_track_preview`, `render_track_master` commands.
 
 Do not blind-copy. Adapt the shape into this repo's existing module structure. Where this repo has a `Settings` struct or a `Track` shape that differs, preserve this repo's types and write the DSP to fit them. The reference exists so we do not re-derive the math, not so we fork the codebase.
+
+## Addendum: EQ topology
+
+Date: 2026-05-13
+
+EQ topology is minimum-phase: causal RBJ biquads for low shelf, peak, and high shelf. This matches industry-standard mastering EQ behavior and keeps audition and export phase-coherent with each other because both paths use the same real-time-achievable DSP.
+
+Linear-phase EQ is a future opt-in feature, not a default. If added later, it will be a separate FFT-convolution stage with explicit look-ahead latency and explicit user-facing UI, for example "Linear Phase EQ - adds 23 ms latency."
