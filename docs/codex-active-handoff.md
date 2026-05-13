@@ -41,6 +41,53 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
+## Latest Codex Pass: Listening Approval Scope Hardening
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Added visible Listening Pass copy stating that approval covers rendered preview/export, codec preview, or album WAV listening, while Live Preview is directional only.
+- Added `approval_scope` to `listening-review.json` and `listening-handoff.json`.
+- Added an Audition Scope section plus caveats to `listening-handoff.html`.
+- Extended the packaged Album Codec QC smoke so the receipt, packet JSON, and packet HTML must preserve that approval scope.
+- Preserved existing approval behavior: approval can still be recorded by the user and still clears after render-affecting changes.
+
+Verification run:
+
+- `cd desktop; npm run build`
+- `cd desktop\src-tauri; cargo check`
+- `cd desktop; node --check .\tests\tauri-release-album-codec-qc-smoke.mjs`
+- `cd desktop; & cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'`
+- `cd desktop; npm run test:tauri-release-album-codec-qc`
+- `cd desktop; npm run test:tauri-release-session-safety`
+- `git diff --check`
+
+Evidence:
+
+- `test-output\tauri-release-album-codec-qc-smoke\tauri-release-album-codec-qc-smoke.json`
+- `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`
+- Album Codec QC evidence values: receipt and packet remain `not-approved`; `approval_scope.basis` is `rendered preview/export, codec preview, or album WAV listening`; `approval_scope.live_preview` is `directional-only`; packet HTML includes Audition Scope, approval-basis copy, Live Preview scope, caveats, and codec preview paths.
+- Windows Application logs showed no matching Album Mastering Studio Application Error, Application Hang, or WER entries during the checked window.
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; it is now more explicitly scoped as directional-only, but this still needs user acceptance or a deeper parity change before goal completion.
+- Native OS Open/Save-As dialogs remain unautomated/unwaived.
+- Rerun the full release-readiness trace from the clean app-code commit that includes this pass before making a fresh release-ready claim.
+
 ## Latest Codex Pass: Project Open Dialog Default Path Hardening
 
 Date: 2026-05-13

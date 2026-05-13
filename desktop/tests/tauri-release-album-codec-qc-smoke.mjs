@@ -81,6 +81,9 @@ try {
     listeningPacketJsonExists: existsSync(smoke.listeningPacketJsonPath),
     listeningPacketHtmlExists: existsSync(smoke.listeningPacketHtmlPath),
     listeningPacketHtmlIncludesCaveat: listeningPacketHtml.includes("not human approval"),
+    listeningPacketHtmlIncludesAuditionScope: listeningPacketHtml.includes("Audition Scope"),
+    listeningPacketHtmlIncludesApprovalBasis: listeningPacketHtml.includes("rendered preview/export, codec preview, or album WAV listening"),
+    listeningPacketHtmlIncludesLivePreviewScope: listeningPacketHtml.includes("directional-only"),
     listeningPacketHtmlIncludesCodecPreview: codecPreviewOutputs.every((output) => listeningPacketHtml.includes(output)),
     codecPreviewCount: codecPreviews.length,
     codecPreviewOutputs,
@@ -133,6 +136,9 @@ try {
   assert.equal(evidence.listeningReceipt.audition_context.live_preview.contract_preview_parity, "approximate");
   assert.equal(evidence.listeningReceipt.audition_context.live_preview.modeled_controls.includes("Low"), true);
   assert.equal(evidence.listeningReceipt.audition_context.native_playback.status, "ready");
+  assert.equal(evidence.listeningReceipt.approval_scope.basis, "rendered preview/export, codec preview, or album WAV listening");
+  assert.equal(evidence.listeningReceipt.approval_scope.live_preview, "directional-only");
+  assert.equal(evidence.listeningReceipt.caveats.includes("Approval covers rendered preview/export, codec preview, or album WAV listening. Live Preview is directional only."), true);
   assert.equal(evidence.listeningPacketJsonExists, true);
   assert.equal(evidence.listeningPacketHtmlExists, true);
   assert.equal(evidence.listeningPacket.approved, false);
@@ -141,7 +147,13 @@ try {
   assert.equal(evidence.listeningPacket.tracks.length, 2);
   assert.equal(evidence.listeningPacket.codec_previews.length, 2);
   assert.equal(evidence.listeningPacket.export_checks.status, "pass");
+  assert.equal(evidence.listeningPacket.approval_scope.basis, "rendered preview/export, codec preview, or album WAV listening");
+  assert.equal(evidence.listeningPacket.approval_scope.live_preview, "directional-only");
+  assert.equal(evidence.listeningPacket.caveats.includes("Approval covers rendered preview/export, codec preview, or album WAV listening. Live Preview is directional only."), true);
   assert.equal(evidence.listeningPacketHtmlIncludesCaveat, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesAuditionScope, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesApprovalBasis, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesLivePreviewScope, true);
   assert.equal(evidence.listeningPacketHtmlIncludesCodecPreview, true);
   assert.equal(evidence.manifestCodecPreviewFlag, true);
   assert.equal(evidence.codecPreviewCount, 2);

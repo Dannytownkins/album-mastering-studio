@@ -1803,6 +1803,8 @@ fn render_listening_packet_html(packet: &Value) -> String {
         .unwrap_or("");
     let render = packet.get("render").unwrap_or(&Value::Null);
     let export_checks = packet.get("export_checks").unwrap_or(&Value::Null);
+    let audition_context = packet.get("audition_context").unwrap_or(&Value::Null);
+    let approval_scope = packet.get("approval_scope").unwrap_or(&Value::Null);
 
     let mut html = String::from(
         r#"<!doctype html>
@@ -1838,6 +1840,25 @@ fn render_listening_packet_html(packet: &Value) -> String {
         escape_html(&created_at)
     ));
     html.push_str("<p class=\"caveat\">This packet is not human approval unless the user has actually listened and marked the render approved. Automated checks only prove file generation and technical smoke coverage.</p>");
+
+    html.push_str("<section><h2>Audition Scope</h2><ul>");
+    html.push_str(&format!(
+        "<li>Approval basis: <strong>{}</strong></li>",
+        escape_html(&json_str(approval_scope.get("basis")))
+    ));
+    html.push_str(&format!(
+        "<li>Current audition: <strong>{}</strong></li>",
+        escape_html(&json_str(audition_context.get("preview_parity")))
+    ));
+    html.push_str(&format!(
+        "<li>{}</li>",
+        escape_html(&json_str(audition_context.get("preview_note")))
+    ));
+    html.push_str(&format!(
+        "<li>Live Preview scope: <strong>{}</strong></li>",
+        escape_html(&json_str(approval_scope.get("live_preview")))
+    ));
+    html.push_str("</ul></section>");
 
     html.push_str("<section><h2>Render Files</h2><ul>");
     html_path_item(&mut html, "Manifest", render.get("manifest_path"));
@@ -1878,6 +1899,18 @@ fn render_listening_packet_html(packet: &Value) -> String {
         ));
     }
     html.push_str("</tbody></table></section>");
+
+    let caveats = json_array(packet.get("caveats"));
+    if !caveats.is_empty() {
+        html.push_str("<section><h2>Caveats</h2><ul>");
+        for caveat in caveats {
+            let text = caveat.as_str().unwrap_or("");
+            if !text.is_empty() {
+                html.push_str(&format!("<li>{}</li>", escape_html(text)));
+            }
+        }
+        html.push_str("</ul></section>");
+    }
 
     html.push_str("<section><h2>Listening Notes</h2><p>");
     html.push_str(&escape_html(notes));

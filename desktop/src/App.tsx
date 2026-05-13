@@ -766,6 +766,12 @@ function App() {
   const previewParityLabel = transportAuditionContext.parity;
   const previewParityTitle = transportAuditionContext.note;
   const previewParityWarn = previewParityLabel === "Approx audition" || previewParityLabel === "Render required";
+  const renderedApprovalBasis = "Approval covers rendered preview/export, codec preview, or album WAV listening. Live Preview is directional only.";
+  const listeningApprovalHint = hasStaleRender
+    ? "Approval is stale until audio is rendered again. Live Preview is directional only."
+    : manifest
+      ? renderedApprovalBasis
+      : "Render audio before saving approval. Live Preview is directional only.";
   const livePreviewContractModeledText = livePreviewContract?.modeledControls?.join(", ") ?? "Contract loading";
   const livePreviewContractRenderOnlyText = summarizePreviewStages(livePreviewContract?.unmodeledExportStages ?? []);
   const livePreviewContractTitle = livePreviewContract
@@ -1284,9 +1290,18 @@ function App() {
             : null,
         },
       },
+      approval_scope: {
+        basis: "rendered preview/export, codec preview, or album WAV listening",
+        live_preview: livePreviewContract?.previewParity === "approximate"
+          ? "directional-only"
+          : livePreviewContract?.previewParity ?? "unknown",
+        current_audition_parity: receiptAuditionContext.parity,
+        current_audition_note: receiptAuditionContext.note,
+      },
       caveats: [
         "This receipt records the local listening decision state only.",
         "Automated checks and saved receipts do not replace human sound approval.",
+        renderedApprovalBasis,
         livePreviewContract?.previewParity === "approximate"
           ? "Live Preview is an approximate audition path; rendered previews are the release-faithful reference."
           : "",
@@ -1372,9 +1387,18 @@ function App() {
         transport_path: playItem?.originalPath ?? playItem?.path ?? "",
         live_preview_contract_parity: livePreviewContract?.previewParity ?? null,
       },
+      approval_scope: {
+        basis: "rendered preview/export, codec preview, or album WAV listening",
+        live_preview: livePreviewContract?.previewParity === "approximate"
+          ? "directional-only"
+          : livePreviewContract?.previewParity ?? "unknown",
+        current_audition_parity: receiptAuditionContext.parity,
+        current_audition_note: receiptAuditionContext.note,
+      },
       caveats: [
         "This packet prepares a human listening pass; it is not human approval by itself.",
         "Treat approved=false or status not-approved as requiring user listening before release decisions.",
+        renderedApprovalBasis,
         livePreviewContract?.previewParity === "approximate"
           ? "Live Preview is an approximate audition path; rendered previews are the release-faithful reference."
           : "",
@@ -3469,6 +3493,9 @@ function App() {
             <ChecklistToggle label="Dashboard checked" checked={listeningChecklist.dashboardReviewed} onChange={(dashboardReviewed) => updateListeningChecklist({ dashboardReviewed })} />
           </div>
           <ChecklistToggle label="Approved after listening" checked={listeningApproved} onChange={updateListeningApproval} />
+          <p className={`listening-approval-note ${previewParityWarn ? "warn" : ""}`} title={previewParityTitle}>
+            {listeningApprovalHint}
+          </p>
           <textarea
             aria-label="Listening notes"
             value={listeningChecklist.notes}

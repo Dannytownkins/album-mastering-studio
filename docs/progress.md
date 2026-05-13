@@ -2,6 +2,55 @@
 
 ## 2026-05-13
 
+### Listening Approval Scope Hardening
+
+Scope:
+
+- Hardened the Listening Pass approval wording so approval is visibly scoped to rendered preview/export, codec preview, or album WAV listening.
+- Added the same approval scope to `listening-review.json` and `listening-handoff.json`.
+- Expanded `listening-handoff.html` with an Audition Scope section and caveats so the handoff cannot present Web Audio Live Preview as the release reference.
+- Kept the approval checkbox behavior unchanged: approval still persists only as a user decision and still clears when render-affecting settings change.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+cd src-tauri
+cargo check
+cd ..
+node --check .\tests\tauri-release-album-codec-qc-smoke.mjs
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-codec-qc
+npm run test:tauri-release-session-safety
+git diff --check
+```
+
+Results:
+
+- TypeScript/Vite build passed.
+- Rust `cargo check` passed.
+- Tauri release build passed and rebuilt the release EXE plus MSI/NSIS bundles.
+- Packaged Album Codec QC smoke passed and verified:
+  - receipt status remains `not-approved`;
+  - `approval_scope.basis` is `rendered preview/export, codec preview, or album WAV listening`;
+  - `approval_scope.live_preview` is `directional-only`;
+  - the handoff HTML includes `Audition Scope`, approval-basis copy, Live Preview scope, caveats, and codec preview paths.
+- Packaged session-safety smoke passed, preserving approval persistence and stale-clearing behavior.
+- `git diff --check` passed.
+- Windows Application log query for recent Album Mastering Studio `Application Error`, `Application Hang`, and `Windows Error Reporting` entries returned no matches after the packaged smokes.
+
+Remaining blockers:
+
+- Human listening approval has still not been recorded.
+- Live Preview is still an approximate directional path; the app and handoff now say so more explicitly, but the product decision still needs acceptance or a deeper parity change.
+- Native OS Open/Save-As dialog coverage is still unautomated/unwaived.
+- A full release-readiness trace must be rerun from the app-code commit that includes this hardening before making a fresh full release-ready claim.
+
+Next recommended action:
+
+- Commit this hardening, rerun `npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes` from a clean commit, then update this handoff with the trace result.
+
 ### Manual Release-Candidate Closeout Checklist
 
 - Added `docs\RELEASE_CANDIDATE_CLOSEOUT.md`.

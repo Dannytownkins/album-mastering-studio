@@ -8,7 +8,7 @@ This checklist is the manual closeout path for the active goal. It does not repl
 
 - Current app-code release trace: `test-output\release-readiness-e619318-full\release-readiness.json`.
 - App-code commit covered by that trace: `e61931867a633a37669e61a7eab7cc92f7e6fcf6`.
-- Latest branch head may include docs-only handoff commits after that trace.
+- Latest branch head may include docs-only handoff commits after that trace, plus the later Listening Approval Scope hardening until a fresh full trace is recorded.
 - Automated result: 23 passed, 0 failed, 0 skipped.
 - Remaining blockers: human listening approval, Live Preview scope acceptance, native Open/Save-As dialog coverage or waiver.
 
@@ -26,7 +26,7 @@ Use `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` unless
 8. Audition Mastered, Original/Mastered switching, loop/region behavior, and Volume Match off/on.
 9. Export Master.
 10. Review exported WAV, codec previews when enabled, dashboard, and quality warnings.
-11. In the Listening Pass panel, check the steps actually heard and set Approved after listening only if the sound is acceptable.
+11. In the Listening Pass panel, check the steps actually heard and set Approved after listening only if the rendered preview/export, codec preview, or album WAV sound is acceptable. Live Preview is directional only.
 12. Save Receipt and Save Listening Packet beside the render.
 
 Required evidence:

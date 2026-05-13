@@ -1221,6 +1221,23 @@ label {
   accent-color: var(--gold);
 }
 
+.listening-approval-note {
+  margin: -2px 0 0;
+  border: 1px solid var(--line-soft);
+  background: #151815;
+  color: var(--muted);
+  padding: 8px 9px;
+  font-size: 11px;
+  font-weight: 660;
+  line-height: 1.35;
+}
+
+.listening-approval-note.warn {
+  border-color: rgba(210, 158, 75, 0.45);
+  background: rgba(245, 166, 35, 0.08);
+  color: #e2bd74;
+}
+
 .listening-panel textarea {
   min-height: 78px;
   resize: vertical;
