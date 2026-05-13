@@ -41,7 +41,46 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Native Project Dialog Probe
+## Latest Codex Pass: Real-Song Track Master Listening Packet
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/package.json`
+- `desktop/tests/tauri-real-song-listening-packet-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Added a focused packaged-app smoke for the remaining human listening blocker preparation path.
+- The smoke self-launches the packaged app, uses `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3`, seeds a real analyzed Track Master session, exports Track Master with Codec QC, prepares an AAC codec preview for playback, starts/stops native playback, and saves both the visible listening receipt and listening handoff packet.
+- The smoke verifies the source MP3 is unchanged by size and SHA-256.
+
+Verification:
+
+- `node --check desktop\tests\tauri-real-song-listening-packet-smoke.mjs`
+- `cd desktop; $env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"; npm run test:tauri-real-song-listening-packet`
+
+Evidence:
+
+- Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
+- Ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`.
+- Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-review.json`.
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\dashboard.html`.
+- Values: `receiptStatus: "not-approved"`, `approved: false`, `trackCount: 1`, `codecPreviewCount: 2`, `exportStatus: "pass"`, `sourceUnchanged.size: true`, `sourceUnchanged.sha256: true`, `trackOutputsExist: true`, `codecPreviewOutputsExist: true`.
+
+Decision:
+
+- This prepares the Track Master human listening closeout package but does not approve the sound.
+- The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
+- Because this pass added a smoke-test script and npm command after the `9fe379b` full release trace, rerun the full release trace before claiming the entire harness is folded into the main release gate. The app behavior under test is still the same packaged app already covered by the current app-code trace.
+
+## Prior Codex Pass: Native Project Dialog Probe
 
 Date: 2026-05-13
 

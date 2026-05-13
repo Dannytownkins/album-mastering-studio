@@ -26,6 +26,7 @@
     "test:tauri-performance": "node tests/tauri-release-performance-smoke.mjs",
     "test:tauri-real-song-performance": "node tests/tauri-real-song-performance-smoke.mjs",
     "test:tauri-real-song-codec-qc": "node tests/tauri-real-song-codec-qc-smoke.mjs",
+    "test:tauri-real-song-listening-packet": "node tests/tauri-real-song-listening-packet-smoke.mjs",
     "test:tauri-real-song-region-preview": "node tests/tauri-real-song-region-preview-smoke.mjs",
     "test:tauri-real-song-region-ui": "node tests/tauri-real-song-region-ui-smoke.mjs",
     "test:tauri-real-song-album-performance": "node tests/tauri-real-song-album-performance-smoke.mjs",

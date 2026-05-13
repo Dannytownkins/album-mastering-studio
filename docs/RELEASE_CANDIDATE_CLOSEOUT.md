@@ -13,10 +13,22 @@ This checklist is the manual closeout path for the active goal. It does not repl
 - Windows Application log check saved beside the trace found zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries in the checked window.
 - Remaining blockers: human listening approval and Live Preview scope acceptance.
 - Native Project Save As/Open/cancel coverage is now recorded in `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
+- Ready-to-listen Track Master packet for the real MP3 is recorded in `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`.
+- That packet is intentionally `not-approved`; it proves the handoff exists and the files are ready for review, not that the sound has been accepted.
 
 ## Track Master Listening Pass
 
 Use `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` unless the user chooses a better real track.
+
+Prepared evidence package:
+
+- Handoff HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`
+- Handoff JSON: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.json`
+- Listening receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-review.json`
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`
+- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\dashboard.html`
+- Codec previews: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\codec_previews\`
+- Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`
 
 1. Launch the packaged desktop app.
 2. Add or drag/drop the audio file.
@@ -86,5 +98,4 @@ Required evidence:
 These are product decisions, not automation tasks:
 
 - Accept Live Preview as an approximate, clearly labeled directional audition while Update Preview, Render Region, and Export Master remain release-faithful.
-- Accept direct Project path Load/Save plus improved Open dialog default path as sufficient for this private release, or complete the manual native Project Dialog Check above before completion.
 - Decide whether the reference screenshot should drive a separate UI polish pass after the stability closeout.

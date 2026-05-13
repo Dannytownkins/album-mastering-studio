@@ -6243,3 +6243,34 @@ Date: 2026-05-13
   - Dirty proof: `dirty_before: []`, `dirty_after: []`.
   - Windows Application log artifact: `test-output\release-readiness-9fe379b-20260513-import-hardening\windows-application-events.json`, result `[]`.
 - Remaining blocker: this does not automate native OS file pickers or true OS drag/drop. Native dialog/drop coverage still needs manual verification, a better unattended route, or an explicit waiver.
+
+### Real-Song Track Master Listening Packet
+
+Date: 2026-05-13
+
+- Added a focused packaged-app smoke for the real MP3 listening closeout path:
+  - `desktop/tests/tauri-real-song-listening-packet-smoke.mjs`
+  - `desktop/package.json` script `test:tauri-real-song-listening-packet`
+- The smoke uses `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3`, self-launches the packaged app, seeds the analyzed Track Master session, exports Track Master with Codec QC, prepares the AAC codec preview for playback, starts/stops native playback, saves the listening receipt, and saves the listening handoff packet.
+- Verification passed:
+  - `node --check desktop\tests\tauri-real-song-listening-packet-smoke.mjs`
+  - `cd desktop; $env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"; npm run test:tauri-real-song-listening-packet`
+- Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
+- Ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`.
+- Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-review.json`.
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\dashboard.html`.
+- Evidence values:
+  - `receiptStatus: "not-approved"`
+  - `approved: false`
+  - `trackCount: 1`
+  - `codecPreviewCount: 2`
+  - `exportStatus: "pass"`
+  - `sourceUnchanged.size: true`
+  - `sourceUnchanged.sha256: true`
+  - `trackOutputsExist: true`
+  - `codecPreviewOutputsExist: true`
+- What passed: the app can produce a real-song Track Master handoff package with export checks, mastered WAV, dashboard, receipt, and codec previews while preserving the source file.
+- What failed: no failure observed in this focused smoke.
+- Remaining blockers: this is still automated evidence and intentionally not human approval. The user still needs to listen and either approve the sound or record concrete sound problems. Live Preview scope still needs acceptance as directional-only or deeper parity work.
+- Next recommended action: use the ready-to-listen packet above for the human Track Master listening pass before doing broad UI polish.
