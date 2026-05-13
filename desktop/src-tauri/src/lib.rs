@@ -10,12 +10,14 @@ use std::{
     process::{Child, Command, Stdio},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State};
+
+pub mod dsp;
 
 #[derive(Default)]
 struct ProcessState {
@@ -60,6 +62,7 @@ struct NativePlaybackSession {
     warnings: Arc<Mutex<Vec<String>>>,
     stop_requested: Arc<AtomicBool>,
     pause_requested: Arc<AtomicBool>,
+    eq_settings: Arc<RwLock<dsp::EqSettings>>,
     join_handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -1458,6 +1461,7 @@ fn start_native_ab_loop_playback(
     let warnings = Arc::new(Mutex::new(Vec::<String>::new()));
     let stop_requested = Arc::new(AtomicBool::new(false));
     let pause_requested = Arc::new(AtomicBool::new(false));
+    let eq_settings = Arc::new(RwLock::new(dsp::EqSettings::default()));
     let started_at = Instant::now();
     let id = native_session_id();
     let label = format!(
@@ -1471,6 +1475,7 @@ fn start_native_ab_loop_playback(
     let thread_warnings = warnings.clone();
     let thread_stop_requested = stop_requested.clone();
     let thread_pause_requested = pause_requested.clone();
+    let thread_eq_settings = eq_settings.clone();
     let thread_started_at = started_at;
     let join_handle = thread::spawn(move || {
         let result = match sample_format {
@@ -1480,6 +1485,7 @@ fn start_native_ab_loop_playback(
                 output_samples,
                 thread_stop_requested,
                 thread_pause_requested,
+                thread_eq_settings,
                 thread_played_frames,
                 thread_callback_events,
                 thread_stream_errors.clone(),
@@ -1491,6 +1497,7 @@ fn start_native_ab_loop_playback(
                 output_samples,
                 thread_stop_requested,
                 thread_pause_requested,
+                thread_eq_settings,
                 thread_played_frames,
                 thread_callback_events,
                 thread_stream_errors.clone(),
@@ -1502,6 +1509,7 @@ fn start_native_ab_loop_playback(
                 output_samples,
                 thread_stop_requested,
                 thread_pause_requested,
+                thread_eq_settings,
                 thread_played_frames,
                 thread_callback_events,
                 thread_stream_errors.clone(),
@@ -1534,6 +1542,7 @@ fn start_native_ab_loop_playback(
         warnings,
         stop_requested,
         pause_requested,
+        eq_settings,
         join_handle: Some(join_handle),
     };
     let status = native_playback_status_from_session(&session);
@@ -1608,6 +1617,7 @@ fn start_native_file_playback(
     let warnings = Arc::new(Mutex::new(initial_warnings));
     let stop_requested = Arc::new(AtomicBool::new(false));
     let pause_requested = Arc::new(AtomicBool::new(false));
+    let eq_settings = Arc::new(RwLock::new(dsp::EqSettings::default()));
     let started_at = Instant::now();
     let id = native_session_id();
     let fallback_label = source_path
@@ -1627,6 +1637,7 @@ fn start_native_file_playback(
     let thread_warnings = warnings.clone();
     let thread_stop_requested = stop_requested.clone();
     let thread_pause_requested = pause_requested.clone();
+    let thread_eq_settings = eq_settings.clone();
     let thread_started_at = started_at;
     let join_handle = thread::spawn(move || {
         let result = match sample_format {
@@ -1636,6 +1647,7 @@ fn start_native_file_playback(
                 output_samples,
                 thread_stop_requested,
                 thread_pause_requested,
+                thread_eq_settings,
                 thread_played_frames,
                 thread_callback_events,
                 thread_stream_errors.clone(),
@@ -1647,6 +1659,7 @@ fn start_native_file_playback(
                 output_samples,
                 thread_stop_requested,
                 thread_pause_requested,
+                thread_eq_settings,
                 thread_played_frames,
                 thread_callback_events,
                 thread_stream_errors.clone(),
@@ -1658,6 +1671,7 @@ fn start_native_file_playback(
                 output_samples,
                 thread_stop_requested,
                 thread_pause_requested,
+                thread_eq_settings,
                 thread_played_frames,
                 thread_callback_events,
                 thread_stream_errors.clone(),
@@ -1690,6 +1704,7 @@ fn start_native_file_playback(
         warnings,
         stop_requested,
         pause_requested,
+        eq_settings,
         join_handle: Some(join_handle),
     };
     let status = native_playback_status_from_session(&session);
@@ -1735,6 +1750,28 @@ fn pause_native_playback(
         return Ok(status);
     }
     session.pause_requested.store(paused, Ordering::Relaxed);
+    Ok(native_playback_status_from_session(session))
+}
+
+#[tauri::command]
+fn update_chain(
+    state: State<'_, NativePlaybackState>,
+    settings: dsp::EqSettings,
+) -> Result<NativePlaybackStatus, String> {
+    let mut guard = state
+        .session
+        .lock()
+        .map_err(|_| "Native playback lock poisoned.".to_string())?;
+    let Some(session) = guard.as_mut() else {
+        return Ok(inactive_native_playback_status());
+    };
+    {
+        let mut snapshot = session
+            .eq_settings
+            .write()
+            .map_err(|_| "Native playback EQ settings lock poisoned.".to_string())?;
+        *snapshot = settings;
+    }
     Ok(native_playback_status_from_session(session))
 }
 
@@ -2533,6 +2570,38 @@ fn read_pcm16_wav_segment(
     })
 }
 
+#[tauri::command]
+fn render_rust_eq(
+    input_path: String,
+    output_path: String,
+    settings: dsp::EqSettings,
+) -> Result<Value, String> {
+    let input = PathBuf::from(input_path);
+    let output = PathBuf::from(output_path);
+    let mut clip = read_pcm16_wav_segment(&input, 0.0, None)?;
+    if clip.channels != 2 {
+        return Err(format!(
+            "Rust EQ Phase 1 expects stereo PCM16 WAV input; got {} channel(s).",
+            clip.channels
+        ));
+    }
+    if clip.samples.len() % 2 != 0 {
+        return Err("Rust EQ Phase 1 received an incomplete stereo frame.".to_string());
+    }
+
+    dsp::process_eq(&mut clip.samples, &settings, clip.sample_rate as f32);
+    write_pcm16_wav(&output, &clip.samples, clip.channels, clip.sample_rate)?;
+
+    Ok(json!({
+        "status": "ok",
+        "input_path": input.display().to_string(),
+        "output_path": output.display().to_string(),
+        "channels": clip.channels,
+        "sample_rate": clip.sample_rate,
+        "frames": clip.total_frames
+    }))
+}
+
 fn native_playback_output_samples(
     clip: &NativePlaybackClip,
     output_channels: usize,
@@ -3005,6 +3074,7 @@ fn run_native_audio_samples_until_stop<T>(
     samples: Vec<f32>,
     stop_requested: Arc<AtomicBool>,
     pause_requested: Arc<AtomicBool>,
+    eq_settings: Arc<RwLock<dsp::EqSettings>>,
     played_frames: Arc<AtomicUsize>,
     events: Arc<Mutex<Vec<(u128, u32)>>>,
     errors: Arc<Mutex<Vec<String>>>,
@@ -3020,17 +3090,30 @@ where
     let stream_errors = errors.clone();
     let played_frames_for_callback = played_frames.clone();
     let samples_for_callback = samples.clone();
+    let mut eq_processor = dsp::EqProcessor::new(
+        eq_settings
+            .read()
+            .map(|settings| *settings)
+            .unwrap_or_default(),
+        config.sample_rate.0 as f32,
+    );
 
     let stream = device
         .build_output_stream(
             &config,
             move |data: &mut [T], _| {
                 let paused = pause_requested.load(Ordering::Relaxed);
+                let current_eq_settings = eq_settings
+                    .read()
+                    .map(|settings| *settings)
+                    .unwrap_or_default();
+                eq_processor.update(current_eq_settings);
                 let mut cursor_frames = played_frames_for_callback
                     .load(Ordering::Relaxed)
                     .min(queued_frames);
+                let mut frame_values = vec![0.0_f32; channels];
                 for frame in data.chunks_mut(channels) {
-                    for (channel, sample) in frame.iter_mut().enumerate() {
+                    for channel in 0..frame.len() {
                         let value = if paused {
                             0.0
                         } else if cursor_frames < queued_frames {
@@ -3041,7 +3124,16 @@ where
                         } else {
                             0.0
                         };
-                        *sample = T::from_sample(value);
+                        frame_values[channel] = value;
+                    }
+                    if !paused && channels >= 2 {
+                        let (left, right) =
+                            eq_processor.process_stereo(frame_values[0], frame_values[1]);
+                        frame_values[0] = left;
+                        frame_values[1] = right;
+                    }
+                    for (channel, sample) in frame.iter_mut().enumerate() {
+                        *sample = T::from_sample(frame_values[channel]);
                     }
                     if !paused && cursor_frames < queued_frames {
                         cursor_frames += 1;
@@ -3990,6 +4082,7 @@ pub fn run() {
             live_preview_contract,
             render_live_preview_model,
             render_native_live_preview_model,
+            render_rust_eq,
             native_audio_probe,
             native_audio_stream_probe,
             native_playback_file_probe,
@@ -3998,6 +4091,7 @@ pub fn run() {
             start_native_file_playback,
             native_playback_status,
             pause_native_playback,
+            update_chain,
             seek_native_playback,
             stop_native_playback,
             render_track_master,

@@ -960,14 +960,25 @@ function App() {
     if (!chain) return;
     applyLiveAuditionChain(chain, {
       active: liveAuditionActive,
-      bass: settings.bass,
+      bass: 0,
       compression: settings.compression,
-      high: settings.air,
-      mid: settings.presence,
+      high: 0,
+      mid: 0,
       outputGain: playbackVolume,
       width: settings.width,
     });
   }, [liveAudition, liveAuditionActive, settings.air, settings.bass, settings.compression, settings.presence, settings.width, playbackVolume]);
+
+  useEffect(() => {
+    if (!nativePlaybackStatus.active) return;
+    invoke("update_chain", {
+      settings: {
+        lowDb: settings.bass,
+        midDb: settings.presence,
+        highDb: settings.air,
+      },
+    }).catch((error) => pushLog(`Native EQ update failed: ${String(error)}`));
+  }, [nativePlaybackStatus.active, settings.air, settings.bass, settings.presence]);
 
   useEffect(() => {
     return () => {

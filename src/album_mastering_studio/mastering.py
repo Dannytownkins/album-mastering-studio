@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 
 import numpy as np
 from scipy import ndimage, signal
@@ -10,9 +15,6 @@ from .loudness import integrated_lufs, true_peak_dbfs
 
 EPSILON = 1e-12
 TONE_LOW_SHELF_HZ = 105.0
-TONE_LOW_SHELF_Q = 0.70
-TONE_LOW_MID_HZ = 330.0
-TONE_LOW_MID_Q = 0.85
 TONE_PRESENCE_HZ = 3200.0
 TONE_PRESENCE_Q = 0.90
 TONE_AIR_HZ = 9800.0
@@ -490,13 +492,18 @@ def master_track(
     processed = samples.astype(np.float32, copy=True)
     processed = _remove_dc(processed)
     processed = _highpass(processed, sample_rate, preset.highpass_hz)
-    processed = _tone_eq(
+    processed = _rust_eq(
         processed,
         sample_rate,
-        low_shelf_db=preset.low_shelf_db + fine_tune.low_end_db_offset - (brightness * 0.12),
-        low_mid_db=preset.low_mid_db + fine_tune.low_mid_db_offset,
-        presence_db=preset.presence_db + fine_tune.presence_db_offset + (brightness * 0.48),
-        air_db=preset.air_db + fine_tune.air_db_offset + (brightness * 0.82),
+        low_db=preset.low_shelf_db + fine_tune.low_end_db_offset - (brightness * 0.12),
+        mid_db=(
+            preset.low_mid_db
+            + fine_tune.low_mid_db_offset
+            + preset.presence_db
+            + fine_tune.presence_db_offset
+            + (brightness * 0.48)
+        ),
+        high_db=preset.air_db + fine_tune.air_db_offset + (brightness * 0.82),
     )
     processed = _linked_compressor(
         processed,
@@ -625,13 +632,12 @@ def _apply_edge_segment(
 
     output = samples.copy()
     segment = output[:frames] if is_head else output[-frames:]
-    wet = _tone_eq(
+    wet = _rust_eq(
         segment,
         sample_rate,
-        low_shelf_db=float(treatment.get("low_shelf_db", 0.0)),
-        low_mid_db=float(treatment.get("low_mid_db", 0.0)),
-        presence_db=float(treatment.get("presence_db", 0.0)),
-        air_db=float(treatment.get("air_db", 0.0)),
+        low_db=float(treatment.get("low_shelf_db", 0.0)),
+        mid_db=float(treatment.get("low_mid_db", 0.0)) + float(treatment.get("presence_db", 0.0)),
+        high_db=float(treatment.get("air_db", 0.0)),
     )
     wet = _stereo_width(wet, max(float(treatment.get("width", 1.0)), 0.15))
     wet = _saturate(wet, max(float(treatment.get("warmth", 0.0)), 0.0))
@@ -665,19 +671,47 @@ def _highpass(samples: np.ndarray, sample_rate: int, cutoff_hz: float) -> np.nda
     return signal.sosfiltfilt(sos, samples, axis=0).astype(np.float32)
 
 
-def _tone_eq(
+def _rust_eq(
     samples: np.ndarray,
     sample_rate: int,
-    low_shelf_db: float,
-    low_mid_db: float,
-    presence_db: float,
-    air_db: float,
+    low_db: float,
+    mid_db: float,
+    high_db: float,
 ) -> np.ndarray:
-    processed = samples
-    processed = _apply_biquad(processed, *_low_shelf(sample_rate, TONE_LOW_SHELF_HZ, low_shelf_db, TONE_LOW_SHELF_Q))
-    processed = _apply_biquad(processed, *_peaking_eq(sample_rate, TONE_LOW_MID_HZ, low_mid_db, TONE_LOW_MID_Q))
-    processed = _apply_biquad(processed, *_peaking_eq(sample_rate, TONE_PRESENCE_HZ, presence_db, TONE_PRESENCE_Q))
-    processed = _apply_biquad(processed, *_high_shelf(sample_rate, TONE_AIR_HZ, air_db, TONE_AIR_Q))
+    if samples.size == 0:
+        return samples.astype(np.float32)
+    if max(abs(low_db), abs(mid_db), abs(high_db)) < EPSILON:
+        return samples.astype(np.float32)
+
+    stereo = np.asarray(samples, dtype=np.float32)
+    if stereo.ndim == 1:
+        stereo = stereo[:, np.newaxis]
+    if stereo.shape[1] == 1:
+        stereo = np.repeat(stereo, 2, axis=1)
+    elif stereo.shape[1] > 2:
+        stereo = stereo[:, :2]
+    stereo = np.ascontiguousarray(stereo, dtype=np.float32)
+
+    with tempfile.TemporaryDirectory(prefix="album-master-rust-eq-") as tmpdir:
+        input_path = Path(tmpdir) / "input.raw"
+        output_path = Path(tmpdir) / "output.raw"
+        stereo.tofile(input_path)
+        command = _rust_eq_command()
+        subprocess.run(
+            [
+                *command,
+                str(input_path),
+                str(output_path),
+                str(int(sample_rate)),
+                str(float(low_db)),
+                str(float(mid_db)),
+                str(float(high_db)),
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        processed = np.fromfile(output_path, dtype=np.float32).reshape((-1, 2))
     return processed.astype(np.float32)
 
 
@@ -879,12 +913,28 @@ def _one_pole(values: np.ndarray, sample_rate: int, seconds: float) -> np.ndarra
     return signal.lfilter([1.0 - coefficient], [1.0, -coefficient], values).astype(values.dtype, copy=False)
 
 
-def _apply_biquad(samples: np.ndarray, b: np.ndarray, a: np.ndarray) -> np.ndarray:
-    if np.allclose(b, a):
-        return samples
-    if samples.shape[0] < 24:
-        return signal.lfilter(b, a, samples, axis=0).astype(np.float32)
-    return signal.filtfilt(b, a, samples, axis=0).astype(np.float32)
+def _rust_eq_command() -> list[str]:
+    configured = os.environ.get("ALBUM_MASTER_RUST_EQ")
+    if configured:
+        return [configured]
+
+    root = Path(__file__).resolve().parents[2]
+    manifest = root / "desktop" / "src-tauri" / "Cargo.toml"
+    if manifest.exists():
+        cargo = os.environ.get("CARGO", "cargo")
+        return [
+            cargo,
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(manifest),
+            "--bin",
+            "rust-eq",
+            "--",
+        ]
+
+    executable = Path(sys.executable).with_name("rust-eq.exe" if os.name == "nt" else "rust-eq")
+    return [str(executable)]
 
 
 def _peaking_eq(sample_rate: int, frequency: float, gain_db: float, q: float) -> tuple[np.ndarray, np.ndarray]:
@@ -901,42 +951,6 @@ def _peaking_eq(sample_rate: int, frequency: float, gain_db: float, q: float) ->
     a0 = 1.0 + (alpha / amplitude)
     a1 = -2.0 * cos_omega
     a2 = 1.0 - (alpha / amplitude)
-    return _normalize_biquad(b0, b1, b2, a0, a1, a2)
-
-
-def _low_shelf(sample_rate: int, frequency: float, gain_db: float, q: float) -> tuple[np.ndarray, np.ndarray]:
-    return _shelf(sample_rate, frequency, gain_db, q, high=False)
-
-
-def _high_shelf(sample_rate: int, frequency: float, gain_db: float, q: float) -> tuple[np.ndarray, np.ndarray]:
-    return _shelf(sample_rate, frequency, gain_db, q, high=True)
-
-
-def _shelf(sample_rate: int, frequency: float, gain_db: float, q: float, high: bool) -> tuple[np.ndarray, np.ndarray]:
-    if abs(gain_db) < EPSILON:
-        return np.array([1.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0])
-
-    amplitude = 10.0 ** (gain_db / 40.0)
-    omega = 2.0 * np.pi * frequency / sample_rate
-    alpha = np.sin(omega) / (2.0 * q)
-    cos_omega = np.cos(omega)
-    root = np.sqrt(amplitude)
-
-    if high:
-        b0 = amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha))
-        b1 = -2.0 * amplitude * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega))
-        b2 = amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha))
-        a0 = (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)
-        a1 = 2.0 * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega))
-        a2 = (amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)
-    else:
-        b0 = amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha))
-        b1 = 2.0 * amplitude * ((amplitude - 1.0) - ((amplitude + 1.0) * cos_omega))
-        b2 = amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha))
-        a0 = (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) + (2.0 * root * alpha)
-        a1 = -2.0 * ((amplitude - 1.0) + ((amplitude + 1.0) * cos_omega))
-        a2 = (amplitude + 1.0) + ((amplitude - 1.0) * cos_omega) - (2.0 * root * alpha)
-
     return _normalize_biquad(b0, b1, b2, a0, a1, a2)
 
 
