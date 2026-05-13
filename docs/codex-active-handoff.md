@@ -41,6 +41,29 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
+## Latest Codex Pass: Current HEAD Docs-Only Audit
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+- `docs/codex-active-handoff.md`
+
+What happened:
+
+- Audited whether current `master` head invalidates the latest full app-code release trace.
+- `git diff --name-status 8c6b5a0..HEAD` shows only docs changes.
+- `git diff --quiet 8c6b5a0..HEAD -- ':!docs/**'` returned no non-doc diff.
+
+Decision:
+
+- `test-output\release-readiness-8c6b5a0-full\release-readiness.json` remains the current app-code/binary evidence.
+- Rerun full release readiness only after a code, package, smoke-test, or installer-relevant change, or when intentionally refreshing the baseline.
+- The active goal remains open because the unresolved items are manual listening approval, Live Preview scope acceptance or deeper parity, and native Open/Save-As verification or waiver.
+
 ## Latest Codex Pass: Native Dialog Automation Recheck
 
 Date: 2026-05-13

@@ -8,7 +8,8 @@ This checklist is the manual closeout path for the active goal. It does not repl
 
 - Current app-code release trace: `test-output\release-readiness-8c6b5a0-full\release-readiness.json`.
 - App-code commit covered by that trace: `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
-- Latest branch head may include docs-only handoff commits after that trace.
+- Current branch head: `28594a0`.
+- Changes after `8c6b5a0` are docs-only handoff and closeout updates; no app-code, package, or smoke-test file changed after the current release trace.
 - Automated result: 23 passed, 0 failed, 0 skipped.
 - Remaining blockers: human listening approval, Live Preview scope acceptance, native Open/Save-As dialog coverage or waiver.
 
