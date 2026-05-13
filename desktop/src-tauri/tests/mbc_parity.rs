@@ -220,7 +220,10 @@ np.asarray(trace, dtype=np.float32).tofile(trace_path)
         .current_dir(&root)
         .status()
         .expect("run Python MBC parity oracle");
-    assert!(status.success(), "Python MBC parity oracle failed: {status}");
+    assert!(
+        status.success(),
+        "Python MBC parity oracle failed: {status}"
+    );
 
     let samples = read_f32_raw(&output_path);
     let trace_values = read_f32_raw(&trace_path);

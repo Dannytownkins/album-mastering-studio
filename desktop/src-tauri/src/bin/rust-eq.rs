@@ -51,8 +51,12 @@ fn run() -> Result<(), String> {
         .iter()
         .flat_map(|sample| sample.to_le_bytes())
         .collect::<Vec<_>>();
-    fs::write(&output, output_bytes)
-        .map_err(|error| format!("Could not write EQ raw output {}: {error}", output.display()))
+    fs::write(&output, output_bytes).map_err(|error| {
+        format!(
+            "Could not write EQ raw output {}: {error}",
+            output.display()
+        )
+    })
 }
 
 fn parse_db(label: &str, value: &str) -> Result<f32, String> {

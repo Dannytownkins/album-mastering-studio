@@ -35,7 +35,13 @@ pub struct BiquadCoeffs {
 
 impl BiquadCoeffs {
     pub fn low_shelf(sample_rate: f32, frequency_hz: f32, gain_db: f32) -> Self {
-        shelf(sample_rate, frequency_hz, gain_db, EQ_SHELF_SLOPE, ShelfKind::Low)
+        shelf(
+            sample_rate,
+            frequency_hz,
+            gain_db,
+            EQ_SHELF_SLOPE,
+            ShelfKind::Low,
+        )
     }
 
     pub fn peak(sample_rate: f32, frequency_hz: f32, q: f32, gain_db: f32) -> Self {
@@ -55,7 +61,13 @@ impl BiquadCoeffs {
     }
 
     pub fn high_shelf(sample_rate: f32, frequency_hz: f32, gain_db: f32) -> Self {
-        shelf(sample_rate, frequency_hz, gain_db, EQ_SHELF_SLOPE, ShelfKind::High)
+        shelf(
+            sample_rate,
+            frequency_hz,
+            gain_db,
+            EQ_SHELF_SLOPE,
+            ShelfKind::High,
+        )
     }
 
     pub fn butter_lowpass(sample_rate: f32, frequency_hz: f32, q: f32) -> Self {
@@ -313,7 +325,12 @@ impl BandCompressor {
         };
         self.envelope = (coeff * self.envelope) + ((1.0 - coeff) * level);
         let input_db = amplitude_to_db(self.envelope);
-        let reduction_db = gain_reduction_db(input_db, settings.threshold_dbfs, settings.ratio, settings.knee_db);
+        let reduction_db = gain_reduction_db(
+            input_db,
+            settings.threshold_dbfs,
+            settings.ratio,
+            settings.knee_db,
+        );
         let gain = db_to_amplitude(reduction_db + settings.makeup_db);
         (gain, -reduction_db)
     }
@@ -360,9 +377,12 @@ struct Lr4Splitter {
 impl Lr4Splitter {
     fn new(sample_rate: f32) -> Self {
         let low_lp = BiquadCoeffs::butter_lowpass(sample_rate, MBC_LOW_CROSSOVER_HZ, BUTTERWORTH_Q);
-        let mid_hp = BiquadCoeffs::butter_highpass(sample_rate, MBC_LOW_CROSSOVER_HZ, BUTTERWORTH_Q);
-        let mid_lp = BiquadCoeffs::butter_lowpass(sample_rate, MBC_HIGH_CROSSOVER_HZ, BUTTERWORTH_Q);
-        let high_hp = BiquadCoeffs::butter_highpass(sample_rate, MBC_HIGH_CROSSOVER_HZ, BUTTERWORTH_Q);
+        let mid_hp =
+            BiquadCoeffs::butter_highpass(sample_rate, MBC_LOW_CROSSOVER_HZ, BUTTERWORTH_Q);
+        let mid_lp =
+            BiquadCoeffs::butter_lowpass(sample_rate, MBC_HIGH_CROSSOVER_HZ, BUTTERWORTH_Q);
+        let high_hp =
+            BiquadCoeffs::butter_highpass(sample_rate, MBC_HIGH_CROSSOVER_HZ, BUTTERWORTH_Q);
         Self {
             low_lp1: Biquad::new(low_lp),
             low_lp2: Biquad::new(low_lp),
@@ -438,7 +458,12 @@ fn eq_chain(settings: &EqSettings, sample_rate: f32) -> [Biquad; 3] {
             BiquadCoeffs::low_shelf(sample_rate, EQ_LOW_HZ as f32, settings.low_db)
         }),
         biquad_or_bypass(settings.mid_db, || {
-            BiquadCoeffs::peak(sample_rate, EQ_MID_HZ as f32, EQ_MID_Q as f32, settings.mid_db)
+            BiquadCoeffs::peak(
+                sample_rate,
+                EQ_MID_HZ as f32,
+                EQ_MID_Q as f32,
+                settings.mid_db,
+            )
         }),
         biquad_or_bypass(settings.high_db, || {
             BiquadCoeffs::high_shelf(sample_rate, EQ_HIGH_HZ as f32, settings.high_db)
@@ -534,8 +559,8 @@ mod tests {
     fn boosted_eq_changes_signal_without_nan() {
         let mut samples = (0..4_800)
             .flat_map(|index| {
-                let value = ((index as f32 / 48_000.0) * 2.0 * std::f32::consts::PI * 440.0).sin()
-                    * 0.25;
+                let value =
+                    ((index as f32 / 48_000.0) * 2.0 * std::f32::consts::PI * 440.0).sin() * 0.25;
                 [value, value]
             })
             .collect::<Vec<_>>();
