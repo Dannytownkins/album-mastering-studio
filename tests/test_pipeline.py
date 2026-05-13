@@ -28,6 +28,7 @@ from album_mastering_studio.scoring import score_render
 from album_mastering_studio.pipeline import (
     RenderOptions,
     create_project,
+    plan_project,
     render_album,
     render_project,
     render_transition_preview,
@@ -399,6 +400,57 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(interludes[0]["duration_seconds"], 0.5)
             self.assertTrue(Path(interludes[0]["output"]).exists())
             self.assertTrue((output_dir / "album_sequence.wav").exists())
+
+    def test_plan_project_reports_album_arc_without_rendering(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "inputs"
+            output_dir = root / "outputs"
+            project_path = root / "album.ams.json"
+            input_dir.mkdir()
+            self._write_sine(input_dir / "01_a.wav", 220.0, 0.35)
+            self._write_sine(input_dir / "02_b.wav", 329.63, 0.45)
+
+            project = create_project(
+                [input_dir],
+                project_path,
+                RenderOptions(interlude_duration=0.75, interlude_style="auto", arc="cinematic", album_wav=True, codec_preview=False),
+                album_title="Plan Review Test",
+            )
+            project["settings"]["generated_transitions"] = False
+            project["settings"]["default_boundary_style"] = "crossfade"
+            project["settings"]["default_boundary_duration"] = 0.5
+            project["tracks"][1]["character"] = "heavy_djent"
+            for transition in project["transitions"]:
+                transition["enabled"] = False
+                transition["boundary_style"] = "crossfade"
+                transition["boundary_duration_seconds"] = 0.5
+            project_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+
+            plan = plan_project(project_path)
+
+            self.assertEqual(plan["album_title"], "Plan Review Test")
+            self.assertEqual(plan["track_count"], 2)
+            self.assertEqual(plan["interlude_count"], 0)
+            self.assertEqual(plan["transition_count"], 1)
+            self.assertTrue(plan["plan_only"])
+            self.assertFalse(plan["audio_rendered"])
+            self.assertFalse(output_dir.exists())
+            self.assertIn("album_story", plan)
+            self.assertEqual(len(plan["arc"]["tracks"]), 2)
+            self.assertEqual([item["type"] for item in plan["sequence"]], ["track", "boundary", "track"])
+            first_track = plan["sequence"][0]
+            boundary = plan["sequence"][1]
+            second_track = plan["sequence"][2]
+            self.assertIn("integrated_lufs", first_track["before"])
+            self.assertIsNone(first_track["output"])
+            self.assertIn("planned_target_lufs", first_track)
+            self.assertEqual(boundary["style"], "crossfade")
+            self.assertEqual(boundary["duration_seconds"], 0.5)
+            self.assertIn("equal-power crossfade", boundary["rationale"])
+            self.assertEqual(second_track["character"]["label"], "heavy_djent")
+            self.assertGreaterEqual(len(plan["decision_log"]["tracks"]), 2)
+            self.assertGreaterEqual(len(plan["decision_log"]["transitions"]), 1)
 
     def test_disabled_project_transitions_preserve_direct_album_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

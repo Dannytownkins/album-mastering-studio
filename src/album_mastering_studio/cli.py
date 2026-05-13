@@ -15,6 +15,7 @@ from .interludes import INTERLUDE_STYLE_CHOICES
 from .pipeline import (
     RenderOptions,
     create_project,
+    plan_project,
     render_album,
     render_project,
     render_transition_preview,
@@ -182,6 +183,12 @@ def build_parser() -> argparse.ArgumentParser:
     render_project_parser.add_argument("--output", "-o", type=Path, required=True, help="Output folder.")
     render_project_parser.add_argument("--json-events", action="store_true", help="Print newline-delimited JSON progress events during render.")
 
+    plan_project_parser = subparsers.add_parser(
+        "plan-project",
+        help="Analyze an editable album project JSON file and print the engine album plan without rendering audio.",
+    )
+    plan_project_parser.add_argument("project", type=Path, help="Project JSON path.")
+
     preview = subparsers.add_parser(
         "preview-transition",
         help="Render a short audition file for one project transition.",
@@ -313,6 +320,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "render-project":
         manifest = render_project(args.project, args.output, progress=_json_event_progress if args.json_events else None)
         print(json.dumps(_render_summary(manifest), indent=2))
+        return 0
+
+    if args.command == "plan-project":
+        plan = plan_project(args.project)
+        print(json.dumps(plan))
         return 0
 
     if args.command == "preview-transition":

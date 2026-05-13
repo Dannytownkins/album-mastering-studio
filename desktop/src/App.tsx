@@ -224,7 +224,7 @@ type AlbumRolePreview = {
   role: string;
   character: string;
   confidence: string;
-  source: "render" | "analysis" | "manual" | "pending";
+  source: "render" | "plan" | "analysis" | "manual" | "pending";
   rationale: string;
 };
 
@@ -544,11 +544,13 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("Waiting.");
   const [manifest, setManifest] = useState<RenderManifest | null>(null);
+  const [albumPlan, setAlbumPlan] = useState<RenderManifest | null>(null);
   const [exportChecks, setExportChecks] = useState<ExportCheckResult | null>(null);
   const [dashboardPath, setDashboardPath] = useState("");
   const [projectPath, setProjectPath] = useState("");
   const [sessionRevision, setSessionRevision] = useState(0);
   const [renderRevision, setRenderRevision] = useState<number | null>(null);
+  const [albumPlanRevision, setAlbumPlanRevision] = useState<number | null>(null);
   const [previewArtifact, setPreviewArtifact] = useState<PreviewArtifact | null>(null);
   const [regionPreviewArtifact, setRegionPreviewArtifact] = useState<RegionPreviewArtifact | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -597,6 +599,8 @@ function App() {
   const selectedBoundaryRightTrack = canPreviewAlbumBoundary ? tracks[selectedIndex + 1] : null;
   const hasCurrentRender = renderRevision !== null && renderRevision === sessionRevision;
   const hasStaleRender = renderRevision !== null && renderRevision !== sessionRevision;
+  const hasCurrentAlbumPlan = albumPlanRevision !== null && albumPlanRevision === sessionRevision;
+  const hasStaleAlbumPlan = albumPlanRevision !== null && albumPlanRevision !== sessionRevision;
   const transitions = useMemo(() => (hasStaleRender ? [] : manifestTransitions(manifest)), [manifest, hasStaleRender]);
   const selectedPreviewArtifact =
     selectedTrack && previewArtifact?.trackId === selectedTrack.id && previewArtifact.revision === sessionRevision
@@ -625,14 +629,32 @@ function App() {
     [codecPreviews, selectedTrack],
   );
   const albumTrackItems = useMemo(() => (hasStaleRender ? [] : manifestTrackItems(manifest)), [manifest, hasStaleRender]);
+  const albumPlanTrackItems = useMemo(
+    () => (hasCurrentAlbumPlan ? manifestTrackItems(albumPlan) : []),
+    [albumPlan, hasCurrentAlbumPlan],
+  );
+  const albumReviewTrackItems = albumTrackItems.length ? albumTrackItems : albumPlanTrackItems;
+  const albumReviewSource: AlbumRolePreview["source"] = albumTrackItems.length ? "render" : albumPlanTrackItems.length ? "plan" : "analysis";
   const albumRolePreviews = useMemo(
-    () => buildAlbumRolePreviews(tracks, albumTrackItems),
-    [tracks, albumTrackItems],
+    () => buildAlbumRolePreviews(tracks, albumReviewTrackItems, albumReviewSource),
+    [tracks, albumReviewTrackItems, albumReviewSource],
   );
   const albumStoryText = useMemo(
-    () => buildAlbumStoryText(manifest, tracks, allAnalyzed, hasStaleRender),
-    [manifest, tracks, allAnalyzed, hasStaleRender],
+    () => buildAlbumStoryText(manifest, albumPlan, tracks, allAnalyzed, hasStaleRender, hasStaleAlbumPlan),
+    [manifest, albumPlan, tracks, allAnalyzed, hasStaleRender, hasStaleAlbumPlan],
   );
+  const canReviewAlbumPlan = mode === "album" && Boolean(settings.outputDir) && tracks.length > 0 && !busy;
+  const albumPlanTrackCountLabel = `${tracks.length} track${tracks.length === 1 ? "" : "s"}`;
+  const albumPlanTitleLabel = settings.albumTitle || "Untitled Album";
+  const albumPlanStatus = hasCurrentRender
+    ? `Render plan ready - ${albumPlanTitleLabel} - ${albumPlanTrackCountLabel}`
+    : hasCurrentAlbumPlan
+      ? `Engine plan ready - ${albumPlanTitleLabel} - ${albumPlanTrackCountLabel}`
+      : hasStaleAlbumPlan
+        ? "Plan stale"
+        : allAnalyzed
+          ? "Ready to review"
+          : "Needs analysis";
   const activePreset = TRACK_PRESETS.find((preset) => preset.enginePreset === settings.preset);
   const selectedUserPreset = userPresets.find((preset) => preset.id === selectedUserPresetId) ?? null;
   const selectedTimelineDuration = selectedTrack?.analysis?.duration_seconds ?? duration;
@@ -1020,12 +1042,14 @@ function App() {
     setListeningApproved(Boolean(snapshot.listeningApproved));
     setRenderHistory(normalizeRenderHistory(snapshot.renderHistory));
     setManifest(null);
+    setAlbumPlan(null);
     setExportChecks(null);
     setDashboardPath("");
     setListeningReceiptPath("");
     setListeningPacketPath("");
     setListeningPacketPath("");
     setRenderRevision(null);
+    setAlbumPlanRevision(null);
     setPreviewArtifact(null);
     setComparePair(null);
     setPlayItem(null);
@@ -1398,6 +1422,36 @@ function App() {
     if (typeof selected === "string") updateSettings({ referenceTrack: selected });
   }
 
+  async function reviewAlbumPlan(targetTracks: Track[] = tracks, options: { manageBusy?: boolean } = {}) {
+    if (mode !== "album" || !targetTracks.length || !settings.outputDir) return;
+    const manageBusy = options.manageBusy ?? true;
+    const revisionAtStart = sessionRevisionRef.current;
+    const outputDir = `${settings.outputDir}\\album-plan-${timestamp()}`;
+    if (manageBusy) {
+      setBusy(true);
+      setPhase("Reviewing Album Plan");
+      setProgress(0.15);
+    }
+    setProgressLabel("Reviewing album plan.");
+    try {
+      const project = buildProject(true, targetTracks, { transitionsEnabled: settings.transitionsEnabled });
+      const plan = await invoke<RenderManifest>("plan_album_project", { project, outputDir });
+      setAlbumPlan(plan);
+      setAlbumPlanRevision(revisionAtStart);
+      setProgress(1);
+      setProgressLabel("Engine album plan ready.");
+      pushLog(`Album plan ready: ${plan.track_count ?? targetTracks.length} track(s). ${outputDir}`);
+    } catch (error) {
+      pushLog(`Album plan review failed: ${String(error)}`);
+      setProgressLabel("Album plan review failed.");
+    } finally {
+      if (manageBusy) {
+        setBusy(false);
+        setPhase("Idle");
+      }
+    }
+  }
+
   async function analyze() {
     if (!tracks.length) return;
     setBusy(true);
@@ -1432,15 +1486,25 @@ function App() {
         sampleRate: settings.sampleRate,
         waveformBins: 640,
       });
-      setTracks((current) =>
-        current.map((track) => {
-          const row = rows.find((candidate) => samePath(candidate.source, track.path));
-          return row ? { ...track, analysis: row.analysis, waveform: row.waveform } : track;
-        }),
-      );
+      const nextTracks = tracks.map((track) => {
+        const status = sourceStatus.find((candidate) => samePath(candidate.path, track.path));
+        const row = rows.find((candidate) => samePath(candidate.source, track.path));
+        return {
+          ...track,
+          sourceStatus: status ?? track.sourceStatus,
+          analysis: row ? row.analysis : track.analysis,
+          waveform: row ? row.waveform : track.waveform,
+        };
+      });
+      setTracks(nextTracks);
       pushLog(`Analyzed ${rows.length} track(s).`);
-      setProgress(1);
-      setProgressLabel("Analysis complete.");
+      if (mode === "album") {
+        setProgress(0.82);
+        await reviewAlbumPlan(nextTracks, { manageBusy: false });
+      } else {
+        setProgress(1);
+        setProgressLabel("Analysis complete.");
+      }
     } catch (error) {
       pushLog(`Analyze failed: ${String(error)}`);
       setProgressLabel("Analyze failed.");
@@ -1576,13 +1640,15 @@ function App() {
       const result = await invoke<ProductRenderResult>("render_album_master", { project, outputDir });
       const loaded = withDashboard(result.manifest, result.dashboard_path);
       setManifest(loaded);
+      setAlbumPlan(loaded);
       await updateExportChecks(loaded);
       setProjectPath(result.project_path);
       setTracks((current) => attachMasterPaths(current, loaded, outputDir));
       setRenderRevision(revisionAtStart);
+      setAlbumPlanRevision(revisionAtStart);
       setPreviewArtifact(null);
-    setListeningReceiptPath("");
-    setListeningPacketPath("");
+      setListeningReceiptPath("");
+      setListeningPacketPath("");
       pushLog(`Album render complete: ${loaded.track_count} masters, ${loaded.interlude_count} transitions. ${outputDir}`);
       setDashboardPath(result.dashboard_path ?? "");
       recordRenderHistory({
@@ -3082,7 +3148,10 @@ function App() {
               <AlbumStoryReview
                 story={albumStoryText}
                 roles={albumRolePreviews}
+                status={albumPlanStatus}
+                canReview={canReviewAlbumPlan}
                 selectedTrackId={selectedTrackId}
+                onReviewPlan={() => reviewAlbumPlan()}
                 onSelectTrack={setSelectedTrackId}
                 onUpdateRole={(id, character) => updateTrack(id, { character })}
               />
@@ -3243,21 +3312,30 @@ function NumberField({ label, value, onChange }: { label: string; value: string;
 function AlbumStoryReview({
   story,
   roles,
+  status,
+  canReview,
   selectedTrackId,
+  onReviewPlan,
   onSelectTrack,
   onUpdateRole,
 }: {
   story: string;
   roles: AlbumRolePreview[];
+  status: string;
+  canReview: boolean;
   selectedTrackId: string | null;
+  onReviewPlan: () => void;
   onSelectTrack: (id: string) => void;
   onUpdateRole: (id: string, character: string) => void;
 }) {
   return (
-    <div className="album-story-review" aria-label="Album Story / Roles">
-      <div className="panel-title compact">
+    <div className="album-story-review album-plan-review" aria-label="Album Story / Roles">
+      <div className="panel-title compact album-plan-title">
         <span>Album Story / Roles</span>
-        <small>{roles.length ? `${roles.length} track${roles.length === 1 ? "" : "s"}` : "No tracks"}</small>
+        <small className={`engine-plan-status ${status.includes("stale") ? "warn" : ""}`}>{status}</small>
+        <button type="button" disabled={!canReview} onClick={onReviewPlan}>
+          Review Album Plan
+        </button>
       </div>
       <p className="story-copy">{story}</p>
       <div className="role-review-list">
@@ -3578,36 +3656,48 @@ function attachMasterPaths(tracks: Track[], manifest: RenderManifest, outputDir:
 
 function buildAlbumStoryText(
   manifest: RenderManifest | null,
+  albumPlan: RenderManifest | null,
   tracks: Track[],
   allAnalyzed: boolean,
   hasStaleRender: boolean,
+  hasStaleAlbumPlan: boolean,
 ) {
   const story = !hasStaleRender ? manifest?.album_story : "";
   if (story) return story;
+  const plannedStory = !hasStaleAlbumPlan ? albumPlan?.album_story : "";
+  if (plannedStory) return plannedStory;
   if (!tracks.length) return "Add tracks to build an album story.";
+  if (hasStaleAlbumPlan) return "Album plan is stale. Review Album Plan before export to refresh roles and transition intent.";
   if (!allAnalyzed) return "Analyze the album to review likely roles before export.";
   const opener = tracks[0]?.title ?? "the opener";
   const closer = tracks[tracks.length - 1]?.title ?? "the closer";
   return `${opener} opens the sequence and ${closer} closes it. Review likely roles before export; the render will write the final album story and decision log.`;
 }
 
-function buildAlbumRolePreviews(tracks: Track[], manifestItems: ManifestTrackItem[]): AlbumRolePreview[] {
+function buildAlbumRolePreviews(
+  tracks: Track[],
+  manifestItems: ManifestTrackItem[],
+  source: AlbumRolePreview["source"] = "render",
+): AlbumRolePreview[] {
   return tracks.map((track, index) => {
     const item = manifestItems[index];
     if (item) {
       const character = item.character?.display_name ?? characterOptionLabel(item.character?.label ?? track.character);
+      const sourceLabel = source === "plan" ? "Engine plan" : "Render plan";
       const confidence =
         typeof item.character?.confidence === "number"
-          ? `${Math.round(item.character.confidence * 100)}% confidence`
-          : "Render plan";
+          ? source === "plan"
+            ? `Engine plan ${Math.round(item.character.confidence * 100)}%`
+            : `${Math.round(item.character.confidence * 100)}% confidence`
+          : sourceLabel;
       return {
         track,
         index: index + 1,
         role: item.arc?.role ? titleCase(item.arc.role) : positionRole(index, tracks.length),
         character,
         confidence,
-        source: "render",
-        rationale: item.rationale ?? item.arc?.rationale ?? item.mastering_moves?.rationale ?? item.character?.reason ?? "Render plan is available for this track.",
+        source,
+        rationale: item.rationale ?? item.arc?.rationale ?? item.mastering_moves?.rationale ?? item.character?.reason ?? `${sourceLabel} is available for this track.`,
       };
     }
     if (track.character !== "auto") {

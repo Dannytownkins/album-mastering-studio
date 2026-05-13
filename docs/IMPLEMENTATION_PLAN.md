@@ -604,6 +604,15 @@ No-victory-lap check:
 - Evidence values include album title `Release Album State -> Release Album Redone`, transitions `false -> true`, boundary `direct -> crossfade`, boundary seconds `2.0 s -> 4.5 s`, track role `auto -> heavy_djent`, and track preset `auto -> bright-air`.
 - Remaining gap: this is state-safety evidence only; it does not render or listen to album audio.
 
+2026-05-12 packaged Album Plan Review baseline:
+
+- Added Python `plan-project` and Tauri `plan_album_project` so Album Master can request the engine's album arc/story/role/transition plan before rendering audio.
+- Added a visible `Review Album Plan` action and `Engine plan ready` status inside `Album Story / Roles`.
+- The plan review uses the same local analysis, character inference, album arc, transition/boundary, album story, and decision-log logic as the render path.
+- Evidence: `test-output/tauri-release-album-state-smoke/tauri-release-album-state-smoke.json`.
+- Evidence values include `albumPlanButtonEnabledBefore: true`, `albumPlanReadyVisible: true`, `albumPlanLogReady: true`, and `albumPlanStatusText: "Engine plan ready - Release Album State - 2 tracks"`.
+- Remaining gap: this is pre-render planning visibility, not human listening approval or final render/export proof.
+
 ## Phase 8: Album Master Near-Term Path
 
 Goal: build the user's required album workflow on the Track Master foundation.

@@ -907,6 +907,29 @@ label {
   padding: 10px;
 }
 
+.album-plan-title {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.album-plan-title button {
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.engine-plan-status {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engine-plan-status.warn {
+  color: var(--amber);
+}
+
 .story-copy,
 .album-role-card p {
   margin: 0;

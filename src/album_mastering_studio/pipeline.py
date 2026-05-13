@@ -73,6 +73,17 @@ class LoadedTrack:
     samples: np.ndarray
 
 
+@dataclass(frozen=True)
+class ProjectRenderInputs:
+    project: dict
+    options: RenderOptions
+    track_specs: list[TrackSpec]
+    transitions: list[TransitionSpec]
+    project_path: Path
+    album_title: str | None
+    album_metadata: dict
+
+
 def render_album(inputs: list[Path], output_dir: Path, options: RenderOptions, progress: ProgressCallback | None = None) -> dict:
     tracks = collect_audio_files(inputs)
     track_specs = [TrackSpec(path=track) for track in tracks]
@@ -88,6 +99,32 @@ def render_album(inputs: list[Path], output_dir: Path, options: RenderOptions, p
 
 
 def render_project(project_path: Path, output_dir: Path, progress: ProgressCallback | None = None) -> dict:
+    inputs = _project_render_inputs(project_path)
+    return render_sequence(
+        inputs.track_specs,
+        output_dir,
+        inputs.options,
+        inputs.transitions,
+        project_path=inputs.project_path,
+        album_title=inputs.album_title,
+        album_metadata=inputs.album_metadata,
+        progress=progress,
+    )
+
+
+def plan_project(project_path: Path) -> dict:
+    inputs = _project_render_inputs(project_path)
+    return _plan_sequence(
+        inputs.track_specs,
+        inputs.options,
+        inputs.transitions,
+        project_path=inputs.project_path,
+        album_title=inputs.album_title,
+        album_metadata=inputs.album_metadata,
+    )
+
+
+def _project_render_inputs(project_path: Path) -> ProjectRenderInputs:
     project = load_project(project_path)
     base_dir = project_path.resolve().parent
     settings = project.get("settings", {})
@@ -132,15 +169,14 @@ def render_project(project_path: Path, output_dir: Path, progress: ProgressCallb
         raise ValueError(f"Project has no tracks: {project_path}")
 
     transitions = _project_transitions(project, options, len(track_specs))
-    return render_sequence(
-        track_specs,
-        output_dir,
-        options,
-        transitions,
+    return ProjectRenderInputs(
+        project=project,
+        options=options,
+        track_specs=track_specs,
+        transitions=transitions,
         project_path=project_path,
         album_title=project.get("album_title"),
         album_metadata=dict(project.get("metadata", {})),
-        progress=progress,
     )
 
 
@@ -580,6 +616,179 @@ def render_sequence(
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     _progress(progress, "complete", "Render complete", total_steps, total_steps)
     return manifest
+
+
+def _plan_sequence(
+    tracks: list[TrackSpec],
+    options: RenderOptions,
+    transitions: list[TransitionSpec],
+    project_path: Path | None,
+    album_title: str | None,
+    album_metadata: dict | None = None,
+) -> dict:
+    if len(tracks) > MAX_TRACKS:
+        raise ValueError(f"Album Mastering Studio supports up to {MAX_TRACKS} tracks per render.")
+    loaded_tracks = _load_tracks(tracks, options.sample_rate)
+    source_stats = [analyze_audio(track.samples, options.sample_rate) for track in loaded_tracks]
+    warnings: list[str] = []
+    reference = _reference_report(options.reference_track, options.sample_rate)
+    if reference and reference.get("warning"):
+        warnings.append(f"Reference: {reference['warning']}")
+
+    characters = infer_album_characters(
+        source_stats,
+        [track.spec.title or track.spec.path.stem for track in loaded_tracks],
+        [track.spec.character for track in loaded_tracks],
+    )
+    preset = PRESETS[options.preset]
+    arc_plan = build_album_arc(
+        source_stats,
+        preset,
+        options.arc,
+        options.interlude_duration,
+        options.interlude_style,
+        options.arc_intensity,
+        characters=characters,
+    )
+    transitions = _resolve_transition_plan(transitions, arc_plan)
+
+    sequence: list[dict] = []
+    for index, loaded in enumerate(loaded_tracks, start=1):
+        track = loaded.spec
+        source = track.path
+        track_arc = arc_plan.tracks[index - 1].to_dict()
+        head_transition = transitions[index - 2] if index > 1 and index - 2 < len(transitions) else None
+        tail_transition = transitions[index - 1] if index <= len(transitions) else None
+        sequence.append(
+            {
+                "type": "track",
+                "index": index,
+                "title": track.title,
+                "artist": track.artist,
+                "isrc": track.isrc,
+                "source": str(source),
+                "output": None,
+                "probe": _safe_probe(source),
+                "selected_preset": _track_preset_name(track, options),
+                "character": track_arc["character"],
+                "before": source_stats[index - 1].to_dict(),
+                "after": None,
+                "applied_gain_db": None,
+                "preset": PRESETS[_track_preset_name(track, options)].to_dict(),
+                "ceiling_dbfs": _interlude_ceiling(options),
+                "planned_target_lufs": _target_lufs_for_track(arc_plan.tracks[index - 1].target_lufs, options, preset),
+                "arc": track_arc,
+                "mastering_moves": track_arc["mastering"],
+                "edge_treatments": {
+                    "head": arc_plan.transitions[index - 2].head_treatment if head_transition and head_transition.enabled else None,
+                    "tail": arc_plan.transitions[index - 1].tail_treatment if tail_transition and tail_transition.enabled else None,
+                },
+                "warnings": [],
+                "rationale": track_arc["rationale"],
+            }
+        )
+
+        if index <= len(loaded_tracks) - 1:
+            transition = transitions[index - 1]
+            transition_arc = arc_plan.transitions[index - 1].to_dict()
+            if transition.enabled:
+                sequence.append(
+                    {
+                        "type": "interlude",
+                        "between": [index, index + 1],
+                        "output": None,
+                        "duration_seconds": transition.duration_seconds,
+                        "style": transition.style,
+                        "handoff": transition_arc["handoff"],
+                        "analysis": None,
+                        "tail_treatment": transition_arc["tail_treatment"],
+                        "head_treatment": transition_arc["head_treatment"],
+                        "arc": {
+                            **transition_arc,
+                            "rendered_style": transition.style,
+                            "rendered_duration_seconds": transition.duration_seconds,
+                        },
+                        "warnings": [],
+                        "rationale": _actual_transition_rationale(transition_arc, transition),
+                    }
+                )
+            else:
+                sequence.append(
+                    {
+                        "type": "boundary",
+                        "between": [index, index + 1],
+                        "output": None,
+                        "style": transition.boundary_style,
+                        "duration_seconds": transition.boundary_duration_seconds,
+                        "handoff": transition_arc["handoff"],
+                        "tail_treatment": None,
+                        "head_treatment": None,
+                        "arc": {
+                            **transition_arc,
+                            "rendered_style": transition.boundary_style,
+                            "rendered_duration_seconds": transition.boundary_duration_seconds,
+                        },
+                        "warnings": [],
+                        "rationale": _boundary_rationale(transition, transition_arc["handoff"]),
+                    }
+                )
+
+    profile = delivery_profile(options.delivery_profile)
+    metadata = _clean_metadata(album_metadata or {})
+    return {
+        "version": 1,
+        "plan_only": True,
+        "audio_rendered": False,
+        "settings": {
+            "sample_rate": options.sample_rate,
+            "preset": options.preset,
+            "output_format": options.output_format,
+            "bit_depth": options.bit_depth,
+            "delivery_profile": profile.key,
+            "codec_preview": options.codec_preview,
+            "generated_transitions": any(transition.enabled for transition in transitions),
+            "default_boundary_style": transitions[0].boundary_style if transitions else "direct",
+            "default_boundary_duration": transitions[0].boundary_duration_seconds if transitions else 0.0,
+            "target_lufs": options.target_lufs,
+            "ceiling_dbfs": options.ceiling_dbfs,
+            "interlude_duration": options.interlude_duration,
+            "interlude_style": options.interlude_style,
+            "arc": options.arc,
+            "arc_intensity": options.arc_intensity,
+            "tweak_lufs": options.tweak_lufs,
+            "tweak_brightness_db": options.tweak_brightness_db,
+            "tweak_warmth": options.tweak_warmth,
+            "tweak_low_end_db": options.tweak_low_end_db,
+            "tweak_air_db": options.tweak_air_db,
+            "tweak_presence_db": options.tweak_presence_db,
+            "tweak_width": options.tweak_width,
+            "tweak_intensity": options.tweak_intensity,
+            "tweak_limiter": options.tweak_limiter,
+            "album_wav": options.album_wav,
+            "reference_track": str(options.reference_track) if options.reference_track else None,
+        },
+        "delivery_profile": profile.to_dict(),
+        "normalization_preview": None,
+        "metadata": metadata,
+        "reference": reference,
+        "album_title": album_title,
+        "album_story": _album_story(arc_plan),
+        "arc": arc_plan.to_dict(),
+        "project": str(project_path) if project_path else None,
+        "track_count": len(loaded_tracks),
+        "interlude_count": sum(1 for transition in transitions if transition.enabled),
+        "transition_count": len(transitions),
+        "album_sequence": None,
+        "album_analysis": None,
+        "cue_points": [],
+        "cue_sheet": None,
+        "codec_previews": [],
+        "outputs": {},
+        "warnings": warnings,
+        "album_warnings": [],
+        "sequence": sequence,
+        "decision_log": _decision_log(arc_plan, sequence, transitions),
+    }
 
 
 def create_project(

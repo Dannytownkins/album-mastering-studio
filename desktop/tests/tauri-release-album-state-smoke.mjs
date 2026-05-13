@@ -81,6 +81,12 @@ try {
   assert.equal(evidence.activeMode, "Album Master");
   assert.equal(evidence.trackCountLabel, "2 / 8 tracks");
   assert.equal(evidence.albumControlsVisible, true);
+  assert.equal(evidence.albumPlanButtonEnabledBefore, true);
+  assert.equal(evidence.albumPlanReadyVisible, true);
+  assert.match(evidence.albumPlanStatusText, /Engine plan ready/i);
+  assert.match(evidence.albumPlanReviewText, /Release Album State/);
+  assert.match(evidence.albumPlanReviewText, /2 tracks/i);
+  assert.equal(evidence.albumPlanLogReady, true);
   assert.equal(evidence.initialAlbumTitle, "Release Album State");
   assert.equal(evidence.albumTitleRoundTrip.undone, "Release Album State");
   assert.equal(evidence.albumTitleRoundTrip.redone, "Release Album Redone");
@@ -304,6 +310,16 @@ function albumStateExpression() {
   const boundarySecondsSlider = sliderByLabel('Boundary Seconds');
   const trackRoleSelect = controlSelect('Track Role');
   const trackPresetSelect = controlSelect('Track Preset');
+  const albumPlanButton = buttonByText('Review Album Plan');
+  const albumPlanButtonEnabledBefore = !albumPlanButton.disabled;
+  click(albumPlanButton);
+  const albumPlanReadyVisible = await waitFor(
+    () => /Engine plan ready/i.test(text(document.querySelector('.album-plan-review .engine-plan-status'))),
+    120000,
+  );
+  const albumPlanStatusText = text(document.querySelector('.album-plan-review .engine-plan-status'));
+  const albumPlanReviewText = text(document.querySelector('.album-plan-review'));
+  const albumPlanLogReady = /Album plan ready:/.test(logText());
 
   const initialAlbumTitle = albumInput.value;
   const albumTitleRoundTrip = await roundTrip({
@@ -382,6 +398,11 @@ function albumStateExpression() {
   return JSON.stringify({
     activeMode: activeModeValue,
     albumControlsVisible,
+    albumPlanButtonEnabledBefore,
+    albumPlanLogReady,
+    albumPlanReadyVisible,
+    albumPlanReviewText,
+    albumPlanStatusText,
     albumTitleRoundTrip,
     appTextIncludesBrand: document.body.innerText.includes('Album Mastering Studio'),
     boundarySecondsRoundTrip,

@@ -17,7 +17,56 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Mandatory Research Guidance Integration
+## Latest Codex Pass: Engine-Backed Album Plan Review
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `src/album_mastering_studio/pipeline.py`
+- `src/album_mastering_studio/cli.py`
+- `tests/test_pipeline.py`
+- `desktop/src-tauri/src/lib.rs`
+- `desktop/src/App.tsx`
+- `desktop/src/styles.css`
+- `desktop/tests/tauri-release-album-state-smoke.mjs`
+- `docs/progress.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Added Python `plan_project` / CLI `plan-project` to return the engine album plan without rendering mastered audio.
+- Added Tauri `plan_album_project` to call the Python sidecar and return the plan JSON to the desktop UI.
+- Added `Review Album Plan` and visible `Engine plan ready` status to Album Master's `Album Story / Roles` panel.
+- The panel uses current engine plan data before render and final render manifest data after render.
+- Extended the packaged Album Master state smoke to prove the release app can request and show the engine plan.
+
+Verification already run:
+
+- `python -m compileall -q src tests`
+- `python -m unittest tests.test_pipeline.PipelineTest.test_plan_project_reports_album_arc_without_rendering`
+- `python -m unittest discover -s tests` passed 24 tests.
+- `cd desktop; node --check .\tests\tauri-release-album-state-smoke.mjs`
+- `cd desktop; npm run build`
+- `cd desktop; npm run test:integration`
+- `cd desktop\src-tauri; cargo check`
+- `cd desktop; npm run tauri:build` through the Visual Studio Build Tools command, rebuilding sidecar, EXE, MSI, and NSIS bundles.
+- `cd desktop; npm run test:tauri-release-album-state`
+
+Evidence:
+
+- `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`
+- Key values: `albumPlanButtonEnabledBefore: true`, `albumPlanReadyVisible: true`, `albumPlanLogReady: true`, `albumPlanStatusText: "Engine plan ready - Release Album State - 2 tracks"`.
+
+Remaining blockers:
+
+- This is pre-render album planning visibility only; it is not human listening approval.
+- Live Preview remains approximate; rendered preview/export paths remain the release-faithful paths.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Rerun full release readiness after any later code/package/smoke change before making a fresh release-ready claim.
+
+## Previous Codex Pass: Mandatory Research Guidance Integration
 
 Date: 2026-05-12
 
@@ -50,10 +99,9 @@ Reference-only / do not build from this branch right now:
 - DDP, PQ-sheet, stem separation, neural repair, target-curve overlays, large multi-reference browsers, linear-phase mode expansion, and advanced delivery authoring.
 - Codec preview expansion unless a future stabilization pass explicitly chooses it after playback, metering, limiting, and export stability improve.
 
-Current WIP note:
+Follow-up status:
 
-- The Album Plan Review implementation was stashed before this docs integration under `stash@{0}` with message `wip-album-plan-review-before-research-docs-merge`.
-- Resume by applying that stash after the docs integration commit/push is complete, then continue the engine-backed Album Plan Review slice.
+- The temporary Album Plan Review stash was restored after this docs integration and is now completed in the latest pass above.
 
 Verification:
 

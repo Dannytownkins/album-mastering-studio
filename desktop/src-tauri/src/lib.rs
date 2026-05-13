@@ -703,6 +703,49 @@ fn render_album_master(
 }
 
 #[tauri::command]
+fn plan_album_project(
+    app: AppHandle,
+    state: State<'_, ProcessState>,
+    project: Value,
+    output_dir: String,
+) -> Result<Value, String> {
+    let output_dir = PathBuf::from(output_dir);
+    fs::create_dir_all(&output_dir).map_err(|error| {
+        format!(
+            "Could not create album plan folder {}: {error}",
+            output_dir.display()
+        )
+    })?;
+    let project_path = output_dir.join("album-plan.ams.json");
+    write_json_file(&project_path, &project)?;
+    let result = run_engine_command(
+        &app,
+        state.inner(),
+        vec![
+            "plan-project".to_string(),
+            project_path.to_string_lossy().to_string(),
+        ],
+        None,
+    )?;
+    let stdout = result.stdout.trim();
+    let mut plan: Value = serde_json::from_str(stdout).map_err(|error| {
+        format!("Could not parse album plan as JSON: {error}. Output: {stdout}")
+    })?;
+    let object = plan
+        .as_object_mut()
+        .ok_or_else(|| "Album plan must be a JSON object.".to_string())?;
+    object.insert(
+        "output_dir".to_string(),
+        json!(output_dir.to_string_lossy().to_string()),
+    );
+    object.insert(
+        "project_path".to_string(),
+        json!(project_path.to_string_lossy().to_string()),
+    );
+    Ok(plan)
+}
+
+#[tauri::command]
 fn render_album_boundary_preview(
     app: AppHandle,
     state: State<'_, ProcessState>,
@@ -3691,6 +3734,7 @@ pub fn run() {
             render_track_master,
             render_track_region_preview,
             render_album_master,
+            plan_album_project,
             render_album_boundary_preview,
             run_export_checks,
             autosave_session,

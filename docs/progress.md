@@ -2,6 +2,49 @@
 
 ## 2026-05-12
 
+### Engine-Backed Album Plan Review
+
+- Added Python `plan-project` support so an editable `.ams.json` project can be analyzed into the same album arc, character, transition, boundary, album story, and decision-log structures used by the render path without writing mastered audio.
+- Added Tauri `plan_album_project`, which writes a temporary project file under the chosen output folder and calls the Python engine sidecar instead of duplicating album-planning logic in Rust.
+- Updated Album Master's `Album Story / Roles` panel with a `Review Album Plan` action and visible engine-plan status.
+- The panel now uses a current engine plan after analysis/review, marks it stale when the session changes, and still prefers the final render manifest once an album render exists.
+- Extended the packaged Album Master state smoke to click `Review Album Plan` and assert the engine-plan status, plan body text, and log entry before exercising the existing undo/redo and boundary-preview state coverage.
+
+Verification:
+
+```powershell
+python -m compileall -q src tests
+python -m unittest tests.test_pipeline.PipelineTest.test_plan_project_reports_album_arc_without_rendering
+python -m unittest discover -s tests
+cd desktop
+node --check .\tests\tauri-release-album-state-smoke.mjs
+npm run build
+npm run test:integration
+cd src-tauri
+cargo check
+cd ..
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-release-album-state
+```
+
+Results:
+
+- Python compile passed.
+- Focused `plan_project` regression passed.
+- Full Python unit suite passed: 24 tests.
+- Album state smoke syntax check passed.
+- Desktop TypeScript/Vite build passed.
+- Desktop CLI-contract integration passed.
+- Rust `cargo check` passed.
+- Tauri release build passed and rebuilt the Python sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Album Master state smoke passed against the rebuilt release EXE.
+- Evidence: `test-output\tauri-release-album-state-smoke\tauri-release-album-state-smoke.json`.
+- Evidence values include `albumPlanButtonEnabledBefore: true`, `albumPlanReadyVisible: true`, `albumPlanLogReady: true`, and `albumPlanStatusText: "Engine plan ready - Release Album State - 2 tracks"`.
+
+Remaining gap:
+
+- This proves the app can request and display the engine's pre-render album plan. It is not a final human listening approval and does not make Live Preview export-chain faithful.
+
 ### Mandatory Research Guidance Integration
 
 - Fetched and reviewed `origin/codex/mandatory-mastering-research` at `9d8babe`.
