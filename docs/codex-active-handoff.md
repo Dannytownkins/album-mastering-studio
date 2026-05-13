@@ -41,7 +41,46 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Real-Song Track Master Listening Packet
+## Latest Codex Pass: Release Gate Includes Listening Packet
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `scripts/release-readiness.ps1`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Added the new `tauri-real-song-listening-packet` smoke to the real-song release-readiness gate.
+- Reran the full release-readiness trace from clean commit `dbfaad7fba44d16deea5813a23ae183aedd5ab47` with real-song and installer gates enabled.
+
+Verification:
+
+- Full trace command: `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-dbfaad7-listening-packet-gate"`.
+- Result: `24 passed`, `0 failed`, `0 skipped`.
+- Dirty proof: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log artifact: `test-output\release-readiness-dbfaad7-listening-packet-gate\windows-application-events.json`, result `[]`.
+
+Evidence:
+
+- Release trace: `test-output\release-readiness-dbfaad7-listening-packet-gate\release-readiness.json`.
+- New gate step: `tauri-real-song-listening-packet`, passed in `50.714` seconds.
+- Latest ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\listening-handoff.html`.
+- Latest receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\listening-review.json`.
+- Latest mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Latest dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\01-lay-the-money-on-the-desk-1\dashboard.html`.
+
+Decision:
+
+- The listening-packet smoke is now part of the main real-song release-readiness gate.
+- The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
+- The latest listening package is still intentionally `not-approved`; do not treat the trace as musical approval.
+
+## Prior Codex Pass: Real-Song Track Master Listening Packet
 
 Date: 2026-05-13
 
@@ -68,7 +107,7 @@ Verification:
 Evidence:
 
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
-- Ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`.
+- Standalone packet from this pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`.
 - Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-review.json`.
 - Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\dashboard.html`.
@@ -78,7 +117,7 @@ Decision:
 
 - This prepares the Track Master human listening closeout package but does not approve the sound.
 - The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
-- Because this pass added a smoke-test script and npm command after the `9fe379b` full release trace, rerun the full release trace before claiming the entire harness is folded into the main release gate. The app behavior under test is still the same packaged app already covered by the current app-code trace.
+- This prepared the standalone smoke and was superseded by the later `dbfaad7` full release trace, which includes the smoke in the main real-song gate.
 
 ## Prior Codex Pass: Native Project Dialog Probe
 
@@ -160,7 +199,7 @@ Evidence:
 - Frontend build passed after import hardening.
 - Desktop CLI contract still passed: `desktop CLI contract can analyze dropped files and render a manifest`.
 - Python compile passed.
-- Current app-code full release trace: `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
+- Prior app-code full release trace: `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
 - Trace result: 23 passed, 0 failed, 0 skipped from clean commit `9fe379bac5093df0dcc0769027a74d70cf4fc362`.
 - Trace dirty proof: `dirty_before: []`, `dirty_after: []`.
 - Windows Application log artifact: `test-output\release-readiness-9fe379b-20260513-import-hardening\windows-application-events.json`, result `[]`.
@@ -169,7 +208,7 @@ Decision:
 
 - This improves the user-visible import/drop failure surface and fixes a stale-state risk in the Tauri drag/drop listener.
 - This did not close native OS file-picker automation at the time; native Project Save As/Open/cancel was later covered by the native dialog probe above.
-- This is the current app-code full release trace. The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
+- This was the current app-code full release trace at the time; it is now superseded by the `dbfaad7` release trace above. The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
 
 ## Prior Codex Pass: Source Integrity Smoke and Prior Full Trace
 
@@ -250,7 +289,7 @@ Evidence:
 
 Decision:
 
-- This was the current app-code release trace at the time; it is superseded by the `9fe379b` trace above.
+- This was the current app-code release trace at the time; it is superseded by later full release traces.
 - Native OS Open/Save-As dialog coverage remains open until manually verified or explicitly waived. This pass hardens failure/cancel behavior but does not prove the native dialogs can be driven unattended.
 - Human listening approval and Live Preview scope acceptance remain open.
 
@@ -322,7 +361,7 @@ Changed files in this pass:
 What changed:
 
 - Recorded the full release-readiness trace for clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
-- This was the current app-code full trace for the Listening Approval Scope hardening at the time; it is superseded by the `9fe379b` trace above.
+- This was the current app-code full trace for the Listening Approval Scope hardening at the time; it is superseded by later full release traces.
 
 Verification run:
 

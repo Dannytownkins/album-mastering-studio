@@ -2,6 +2,36 @@
 
 ## 2026-05-13
 
+### Current Full Trace With Listening Packet Gate
+
+Scope:
+
+- Added `tauri-real-song-listening-packet` to `scripts\release-readiness.ps1` when `-RealSongPath` is supplied.
+- Rebuilt the packaged Tauri app, including sidecar, EXE, MSI, and NSIS bundles.
+- Reran the full release-readiness trace with real-song and installer gates.
+
+Results:
+
+- Current commit: `dbfaad7fba44d16deea5813a23ae183aedd5ab47`.
+- Full release readiness passed: `24 passed`, `0 failed`, `0 skipped`.
+- Trace: `test-output\release-readiness-dbfaad7-listening-packet-gate\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
+- The new runner step `tauri-real-song-listening-packet` passed in `50.714` seconds.
+- Windows Application log check found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\release-readiness-dbfaad7-listening-packet-gate\windows-application-events.json`.
+
+Current ready-to-listen package:
+
+- Handoff HTML: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\listening-handoff.html`.
+- Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\listening-review.json`.
+- Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-042817-494\01-lay-the-money-on-the-desk-1\dashboard.html`.
+- Evidence remains `receiptStatus: "not-approved"` and `approved: false`.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded.
+- Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
+
 ### Native Project Dialog Probe
 
 Scope:
@@ -28,7 +58,7 @@ Decision:
 - Remaining goal blockers are human listening approval and Live Preview scope acceptance or deeper parity.
 - Live OS drag/drop remains manually confirmable, but the core import requirement is covered by Add plus hardened Tauri drag/drop listener behavior.
 
-### Current Full Trace After Import Path Hardening
+### Prior Full Trace After Import Path Hardening
 
 Scope:
 
@@ -38,7 +68,7 @@ Scope:
 
 Results:
 
-- Current app-code commit: `9fe379bac5093df0dcc0769027a74d70cf4fc362`.
+- App-code commit covered at the time: `9fe379bac5093df0dcc0769027a74d70cf4fc362`.
 - Full release readiness passed: `23 passed`, `0 failed`, `0 skipped`.
 - Trace: `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
 - Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
@@ -155,7 +185,7 @@ Results:
 - Pre-commit `HEAD` for this audit was `28594a0`; the audit update itself is docs-only.
 - Files changed since `8c6b5a0`: `docs/GOAL_AUDIT.md`, `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, `docs/codex-active-handoff.md`, and `docs/progress.md`.
 - No non-doc diff exists since `8c6b5a0`.
-- This audit was superseded by app-code commit `1a36415`, then by the current full trace at `test-output\release-readiness-9fe379b-20260513-import-hardening\release-readiness.json`.
+- This audit was superseded by app-code commit `1a36415`, then by later full release traces including `test-output\release-readiness-dbfaad7-listening-packet-gate\release-readiness.json`.
 
 ### Native Dialog Automation Recheck
 
@@ -6256,7 +6286,7 @@ Date: 2026-05-13
   - `node --check desktop\tests\tauri-real-song-listening-packet-smoke.mjs`
   - `cd desktop; $env:AMS_REAL_SONG_PATH="C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"; npm run test:tauri-real-song-listening-packet`
 - Smoke artifact: `test-output\tauri-real-song-listening-packet-smoke\tauri-real-song-listening-packet-smoke.json`.
-- Ready-to-listen packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`.
+- Standalone packet from this pass: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-handoff.html`.
 - Receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\listening-review.json`.
 - Mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 - Dashboard: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-041325-264\01-lay-the-money-on-the-desk-1\dashboard.html`.
