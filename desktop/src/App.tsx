@@ -884,9 +884,10 @@ function App() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !playItem) return;
-    audio.load();
-    recordAudioEvent("load");
+    let playRequested = false;
     const playWhenReady = () => {
+      if (playRequested) return;
+      playRequested = true;
       if (pendingSeekRef.current != null) {
         audio.currentTime = Math.max(0, Math.min(pendingSeekRef.current, Math.max((audio.duration || 0) - 0.1, 0)));
         pendingSeekRef.current = null;
@@ -903,8 +904,13 @@ function App() {
       });
     };
     audio.addEventListener("loadedmetadata", playWhenReady, { once: true });
+    audio.load();
+    recordAudioEvent("load");
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      window.queueMicrotask(playWhenReady);
+    }
     return () => audio.removeEventListener("loadedmetadata", playWhenReady);
-  }, [playItem?.path]);
+  }, [playItem]);
 
   useEffect(() => {
     if (audioRef.current) {

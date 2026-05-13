@@ -12,7 +12,7 @@ const sourcePath = process.env.AMS_REAL_SONG_PATH;
 const outputRoot =
   process.env.AMS_TAURI_REAL_SONG_REGION_UI_OUTPUT ||
   path.join(repoRoot, "test-output", "tauri-real-song-region-ui-smoke");
-const cdpPort = process.env.TAURI_CDP_PORT || "9355";
+const cdpPort = process.env.TAURI_CDP_PORT || String(9300 + (process.pid % 1000));
 const cdpBase = `http://127.0.0.1:${cdpPort}`;
 const requestedRegionSeconds = Number(process.env.AMS_REAL_SONG_REGION_SECONDS || 12);
 const statePath = path.join(os.homedir(), "Documents", "Album Mastering Studio", "State", "recent-session.json");
@@ -68,6 +68,7 @@ try {
   const screenshotPath = path.join(outputRoot, "tauri-real-song-region-ui.png");
   writeFileSync(screenshotPath, Buffer.from(screenshot.data, "base64"));
 
+  const resultPath = path.join(outputRoot, "tauri-real-song-region-ui-smoke.json");
   const evidence = {
     ...seeded,
     ...smoke,
@@ -93,7 +94,9 @@ try {
     stderr: stderr.join(""),
     targetTitle: target.title,
     targetUrl: target.url,
+    cdpPort,
   };
+  writeFileSync(resultPath, JSON.stringify(evidence, null, 2));
 
   assert.equal(evidence.releaseExeExists, true);
   assert.equal(evidence.appTextIncludesBrand, true);
@@ -116,6 +119,8 @@ try {
   assert.notEqual(evidence.regionReadoutAfterDrag, "00:00 - 00:00 (00:00)");
   assert.equal(evidence.regionPreviewButtonEnabledBefore, true);
   assert.equal(evidence.sourcePlaybackReadyBeforeRegion, true);
+  assert.ok(Number.isFinite(evidence.sourcePlaybackEvidenceBeforeRegion?.click_to_playing_ms));
+  assert.ok(evidence.sourcePlaybackEvidenceBeforeRegion.click_to_playing_ms < 5000);
   assert.equal(evidence.livePreviewActiveBeforeRegion, true);
   assert.equal(evidence.livePreviewParityBeforeRegion, "Render required");
   assert.equal(evidence.livePreviewParityWarnBeforeRegion, true);
@@ -165,7 +170,6 @@ try {
   assert.ok(evidence.transportDurationSeconds > 0);
   assert.equal(evidence.screenshotExists, true);
 
-  const resultPath = path.join(outputRoot, "tauri-real-song-region-ui-smoke.json");
   writeFileSync(resultPath, JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({ passed: true, output: outputRoot, result: resultPath }, null, 2));
 } finally {
@@ -380,6 +384,8 @@ function realSongRegionUiExpression(seeded) {
       log: logText().slice(-1000)
     }));
   }
+  await waitFor(() => Number.isFinite(window.__AMS_PLAYBACK_EVIDENCE__?.click_to_playing_ms), 10000);
+  const sourcePlaybackEvidenceBeforeRegion = window.__AMS_PLAYBACK_EVIDENCE__ || null;
   const livePreviewButton = auditionButtonByText('Live Preview');
   if (livePreviewButton.disabled) throw new Error('Live Preview button was disabled after Analyze');
   livePreviewButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -566,6 +572,7 @@ function realSongRegionUiExpression(seeded) {
     regionReadoutAfterDrag,
     regionPreviewButtonEnabledBefore,
     sourcePlaybackReadyBeforeRegion,
+    sourcePlaybackEvidenceBeforeRegion,
     livePreviewActiveBeforeRegion,
     livePreviewParityBeforeRegion,
     livePreviewParityWarnBeforeRegion,

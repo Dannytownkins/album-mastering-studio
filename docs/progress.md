@@ -2,6 +2,95 @@
 
 ## 2026-05-12
 
+### Release-Candidate Playback Hardening Pass
+
+Scope:
+
+- Resumed the paused goal loop as a release-candidate stabilization pass, not a feature sprint.
+- Kept the work focused on Track Master-first playback, real-song evidence, and a lighter Album Master regression pass.
+- Treated the UI reference screenshot as later non-canonical polish direction only.
+
+Root causes addressed:
+
+- The browser audio effect called `audio.load()` before attaching the one-shot `loadedmetadata` listener. Cached/local media could race past metadata and make playback startup flaky.
+- Re-selecting the same prepared audio path reset playback evidence but did not rerun the playback effect because it only depended on `playItem.path`. This affected same-path Mastered re-audition and Original/Mastered toggles.
+- The Track Master and real-song region smokes could fail without writing usable JSON evidence, and fixed CDP ports could collide with stale WebView targets.
+
+Changes:
+
+- Registered `loadedmetadata` before `audio.load()`, guarded duplicate play attempts, and added an immediate metadata fallback when the media element is already ready.
+- Changed the playback effect dependency from `playItem.path` to the full `playItem` object so same-path re-auditions still reload and play.
+- Hardened the Track Master and real-song region smokes with process-unique default CDP ports and pre-assertion evidence JSON writes.
+- Tightened the real-song region smoke so cold MP3 source playback must reach an actual `playing` event and report `click_to_playing_ms`.
+- Tightened the Track Master smoke to wait for the visible `Master ready` state before sampling preview state.
+
+Verification:
+
+```powershell
+cd desktop
+node --check .\tests\tauri-track-preview-ui-smoke.mjs
+node --check .\tests\tauri-real-song-region-ui-smoke.mjs
+npm run build
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-track-preview-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'; npm run test:tauri-real-song-region-ui
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'; $env:TAURI_CDP_PORT='10131'; npm run test:tauri-real-song-album-ui
+```
+
+Results:
+
+- Desktop TypeScript/Vite build passed.
+- Windows Tauri release build passed and rebuilt the sidecar, release EXE, MSI, and NSIS bundles.
+- Packaged Track Master UI smoke passed.
+- Real-song region UI smoke passed on a cold playback-cache MP3 run.
+- Real-song Album Master UI smoke passed as a lighter regression pass using derived real-song clips.
+- Windows Application log query found no `Application Error`, `Application Hang`, or `Windows Error Reporting` entries for Album Mastering Studio during the verified window.
+- No stale `album-mastering-studio.exe` process remained after the controlled runs.
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- `test-output\tauri-real-song-album-ui-smoke\tauri-real-song-album-ui-smoke.json`
+
+Measured playback evidence:
+
+- Track Master cold Mastered preview: `cache_hit: false`, `prepare_engine_elapsed_ms: 103`, `click_to_playing_ms: 230.3`.
+- Track Master Reference playback: `click_to_playing_ms: 123.5`.
+- Track Master cached A/B switches: Original/source `23.8 ms`, Mastered `21.2 ms`, Original return `19.3 ms`.
+- Real MP3 cold Original playback: `cache_hit: false`, `prepare_engine_elapsed_ms: 183.6`, `prepare_client_elapsed_ms: 186.3`, `bytes: 35773668`, `click_to_playing_ms: 291.9`.
+- Real MP3 region preview: expected start `65.226 s`, engine audition start `65.036 s`, expected duration `12 s`, rendered duration `12.011 s`.
+
+Album Master light pass:
+
+- `sourceMode: single-song-derived-clips`
+- `manifestTrackCount: 3`
+- `manifestInterludeCount: 2`
+- `exportChecks.status: pass`
+- `Track outputs: pass`
+- `Album WAV: pass`
+- `albumPlaybackReady: true`
+- `transitionPlaybackReady: true`
+- Native file playback started, paused/seeked/resumed, and stopped cleanly.
+
+Important distinction:
+
+- Generated transitions are still off by default in app settings (`transitionsEnabled: false`). The real-song Album Master UI smoke intentionally opts into generated transitions so the transition render/playback path remains covered.
+- The standalone `tauri-ui` harness was not counted in this pass because it targets the dev-server URL (`127.0.0.1:1420`) rather than the packaged release URL.
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain the release-faithful path.
+- Native OS Open/Save-As dialogs remain unautomated.
+- A full release-readiness runner pass should be rerun after this commit if we want a single current-commit release trace.
+
+Next recommended action:
+
+- Keep Track Master behavior frozen except for bug fixes.
+- Run a full release-readiness trace from the commit containing this hardening pass when audio/UI interruption is acceptable.
+- Then do a human listening pass on a real song before calling the goal complete.
+
 ### Playback Start Evidence
 
 - Added `prepare_playback_file_info` beside the existing string-returning `prepare_playback_file` Tauri command so the UI can preserve current callers while also recording playback-cache hit/miss, engine prepare duration, prepared path, source path, and output bytes.

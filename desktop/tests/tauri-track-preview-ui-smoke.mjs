@@ -17,7 +17,7 @@ const outputRoot =
   process.env.AMS_TAURI_TRACK_PREVIEW_OUTPUT ||
   path.join(repoRoot, "test-output", "tauri-track-preview-ui-smoke");
 const inputsDir = path.join(outputRoot, "inputs");
-const cdpPort = process.env.TAURI_CDP_PORT || "9348";
+const cdpPort = process.env.TAURI_CDP_PORT || String(9300 + (process.pid % 1000));
 const cdpBase = `http://127.0.0.1:${cdpPort}`;
 const statePath = path.join(os.homedir(), "Documents", "Album Mastering Studio", "State", "recent-session.json");
 const stateBackup = existsSync(statePath) ? readFileSync(statePath, "utf8") : null;
@@ -125,7 +125,10 @@ try {
     stderr: stderr.join(""),
     targetTitle: target.title,
     targetUrl: target.url,
+    cdpPort,
   };
+  const resultPath = path.join(outputRoot, "tauri-track-preview-ui-smoke.json");
+  writeFileSync(resultPath, JSON.stringify(evidence, null, 2));
 
   assert.equal(evidence.releaseExeExists, true);
   assert.equal(evidence.appTextIncludesBrand, true);
@@ -382,7 +385,6 @@ try {
   assert.equal(evidence.masteredButtonEnabledAfterControlChange, false);
   assert.equal(evidence.screenshotExists, true);
 
-  const resultPath = path.join(outputRoot, "tauri-track-preview-ui-smoke.json");
   writeFileSync(resultPath, JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({ passed: true, output: outputRoot, result: resultPath }, null, 2));
 } finally {
@@ -561,6 +563,7 @@ function trackPreviewExpression() {
   const previewMatch = /Preview ready: ([^\\n]+)/.exec(logText());
   if (!previewMatch) throw new Error('Preview path was not logged');
   const previewMasterPath = previewMatch[1].trim();
+  await waitFor(() => masterStatus() === 'Master ready' && masteredActionButton()?.disabled === false, 10000);
   const masterStatusAfterPreview = masterStatus();
   const dashboardPanelReadyAfterPreview = await waitFor(
     () => Boolean(document.querySelector('.dashboard-pane iframe')?.getAttribute('src')),

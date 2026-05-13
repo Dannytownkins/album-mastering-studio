@@ -17,15 +17,13 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-Operational pause note:
+Operational note:
 
-- 2026-05-13: the user reaffirmed the pause and asked to get organized before stopping.
-- The active goal remains open. Do not mark it complete and do not kill the goal loop.
-- Do not run tools, edit files, test, commit, push, launch apps, or do background work after this organization pass until the user gives an explicit green light.
-- When the user resumes, first inspect `git status --short --branch`, read this top section, and continue with one verified slice.
-- The user specifically called out that app/audio tests were interrupting gaming. Do not launch Tauri/WebView, installers, or any test that plays audio until the user gives explicit approval.
-- Silent docs/git bookkeeping was approved only for this organization pass. Future docs/git work should also wait for the green light.
-- Do not rerun release-readiness, Native A/B, album playback, installer, or `tauri:dev` flows without approval.
+- 2026-05-13: the user explicitly resumed the loop and asked for release-candidate stabilization.
+- The active goal remains open. Do not mark it complete until Track Master has real listening approval and the remaining blockers are resolved or explicitly accepted.
+- Keep scope Track Master-first. Do not expand features unless a missing capability directly blocks the core flow.
+- Generated transitions must remain opt-in, not default-enabled.
+- If running disruptive UI/audio/installer tests again, make sure the user has not asked to pause.
 
 Non-canonical visual reference:
 
@@ -39,10 +37,61 @@ Resume checklist:
 
 1. Confirm the working tree is clean.
 2. Re-read the active blockers in `docs/GOAL_AUDIT.md`.
-3. Avoid disruptive UI/audio/installer tests unless the user approves them.
-4. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
+3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
+4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Expanded Full Release Readiness Trace at 2ada649
+## Latest Codex Pass: Release-Candidate Playback Hardening
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `desktop/tests/tauri-real-song-region-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Fixed playback startup ordering by attaching `loadedmetadata` before `audio.load()`.
+- Added a duplicate-play guard and immediate metadata fallback for cached media.
+- Changed the playback effect dependency from `playItem.path` to `playItem` so same-path Mastered re-audition and Original/Mastered toggles still reload/play.
+- Hardened Track Master and real-song region smokes with unique default CDP ports and pre-assertion JSON evidence.
+- Made the real-song region smoke wait for actual source `playing` timing before recording MP3 playback evidence.
+
+Verification run:
+
+- `node --check desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `node --check desktop/tests/tauri-real-song-region-ui-smoke.mjs`
+- `cd desktop; npm run build`
+- `cd desktop; & cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'`
+- `cd desktop; npm run test:tauri-track-preview-ui`
+- `cd desktop; $env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'; npm run test:tauri-real-song-region-ui`
+- `cd desktop; $env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'; $env:TAURI_CDP_PORT='10131'; npm run test:tauri-real-song-album-ui`
+
+Evidence:
+
+- `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`
+- `test-output\tauri-real-song-region-ui-smoke\tauri-real-song-region-ui-smoke.json`
+- `test-output\tauri-real-song-album-ui-smoke\tauri-real-song-album-ui-smoke.json`
+
+Key results:
+
+- Track Master packaged UI smoke passed.
+- Real-song MP3 region UI smoke passed after a cold playback-cache run.
+- Album Master real-song UI smoke passed as a light regression pass.
+- Track Master cold Mastered preview started in `230.3 ms`; cold real MP3 Original playback started in `291.9 ms`; cached A/B switches were `19.3-23.8 ms`.
+- Windows Application logs showed no Album Mastering Studio Application Error, Application Hang, or WER entries during the verified window.
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Full release-readiness should be rerun from the hardening commit if a single current-commit trace is needed.
+
+## Previous Codex Pass: Expanded Full Release Readiness Trace at 2ada649
 
 Date: 2026-05-12
 
