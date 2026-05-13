@@ -2,6 +2,32 @@
 
 ## 2026-05-13
 
+### Native Project Dialog Probe
+
+Scope:
+
+- Verified the packaged app's native Project Save As, Open, and Save As cancel behavior through actual Windows dialogs.
+- No app code changed.
+- The probe backed up and restored the user's autosaved session state.
+
+Results:
+
+- Probe artifact: `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
+- Saved project path: `test-output\native-project-dialog-probe\album.ams.json`.
+- `saveDialogAfterButton.visible: true`.
+- `openDialogAfterButton.visible: true`.
+- `cancelDialogAfterButton.visible: true`.
+- Save As created the `.ams.json` file and wrote `album_title: "Native Dialog Probe Original"`.
+- Open restored the title from `Native Dialog Probe Mutated` back to `Native Dialog Probe Original`.
+- Cancel preserved the saved project path and left `appResponsiveAfterCancel: true`.
+- Windows Application log artifact: `test-output\native-project-dialog-probe\windows-application-events.json`, result `[]`.
+
+Decision:
+
+- Native Project Save As/Open/cancel coverage is now covered for the packaged app path.
+- Remaining goal blockers are human listening approval and Live Preview scope acceptance or deeper parity.
+- Live OS drag/drop remains manually confirmable, but the core import requirement is covered by Add plus hardened Tauri drag/drop listener behavior.
+
 ### Current Full Trace After Import Path Hardening
 
 Scope:
@@ -22,7 +48,7 @@ Remaining blockers:
 
 - Human listening approval is still not recorded.
 - Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
-- Native OS Open/Save-As dialogs and true OS drag/drop still need manual verification, better unattended automation, or explicit waiver.
+- Native Project Save As/Open/cancel was verified afterward in `test-output\native-project-dialog-probe\native-project-dialog-probe.json`. True OS drag/drop remains optional manual confirmation; the Add path covers the core import requirement.
 
 ### Source Integrity Smoke and Prior Full Trace
 
@@ -57,11 +83,11 @@ Note:
 
 - The first full release rerun for `1c4aad1` failed in `tauri-track-preview-ui` because the smoke sampled `audio.currentTime` before the rendered-preview media seek settled. The app handoff metadata already had the expected start; the smoke now waits for the seek and the later `1a7c870` full trace passed.
 
-Remaining blockers:
+Remaining blockers at the time:
 
 - Human listening approval is still not recorded.
 - Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
-- Native OS Open/Save-As dialogs still need manual verification or explicit waiver.
+- Native OS Open/Save-As dialogs still needed manual verification or explicit waiver at the time; this was later covered by `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
 
 ### Project Dialog Failure/Cancel Hardening and Full Trace
 
@@ -92,11 +118,11 @@ Results:
 - Windows Application log check found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\release-readiness-1a36415-20260513-022743\windows-application-events.json`.
 - This trace is now superseded by `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`, which adds source-integrity smoke evidence.
 
-Remaining blockers:
+Remaining blockers at the time:
 
 - Human listening approval is still not recorded.
 - Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
-- Native OS Open/Save-As dialogs still need manual verification or explicit waiver.
+- Native OS Open/Save-As dialogs still needed manual verification or explicit waiver at the time; this was later covered by `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
 
 ### Stabilization Prompt-To-Artifact Checklist
 
@@ -108,7 +134,7 @@ Scope:
 Result:
 
 - No app code changed.
-- The checklist confirms the remaining open gates are still native Open/Save-As manual verification or waiver, human listening approval, and Live Preview scope acceptance or deeper parity.
+- The checklist confirmed the remaining open gates at the time. Native Open/Save-As was later covered by `test-output\native-project-dialog-probe\native-project-dialog-probe.json`; human listening approval and Live Preview scope acceptance remain open.
 
 ### Docs-Only Audit Before Dialog Hardening
 
@@ -148,15 +174,15 @@ Results:
 - Direct `plugin:dialog|save` stayed pending without surfacing a visible dialog in the unattended run.
 - The attempted smoke was removed rather than promoted because it did not produce reliable evidence.
 
-Current decision:
+Decision at the time:
 
-- Native OS Open/Save-As dialog coverage remains a blocker requiring manual verification or explicit waiver.
+- Native OS Open/Save-As dialog coverage remained a blocker at the time; it was later covered by `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
 - Direct `.ams.json` path Load/Save remains covered by `test:tauri-project-persistence`, but it is still not native dialog coverage.
 - Do not rerun this same automation route unless a new Windows dialog-driving strategy is available.
 
 Follow-up organization:
 
-- Added the manual `Native Project Dialog Check` to `docs\RELEASE_CANDIDATE_CLOSEOUT.md` so the remaining dialog blocker has concrete Save As, Open, cancel, path-restoration, and responsiveness checks.
+- Added the manual `Native Project Dialog Check` to `docs\RELEASE_CANDIDATE_CLOSEOUT.md`; it is now retained as optional manual confirmation because the packaged native dialog probe later passed.
 
 ### Full Release Readiness Trace at 8c6b5a0
 
@@ -215,7 +241,7 @@ Remaining blockers:
 
 - Human listening approval has still not been recorded.
 - Live Preview is now explicitly scoped as directional-only in the app and handoff artifacts, but acceptance of that scope is still a product decision.
-- Native OS Open/Save-As dialog coverage is still unautomated/unwaived.
+- Native OS Open/Save-As dialog coverage was still unautomated/unwaived at the time; it was later covered by `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
 
 ### Listening Approval Scope Hardening
 
@@ -264,14 +290,14 @@ Remaining blockers:
 
 Next recommended action:
 
-- Run the human listening pass from `docs\RELEASE_CANDIDATE_CLOSEOUT.md`, then either accept the directional-only Live Preview scope and native dialog coverage limits or require those blockers to be fixed before completion.
+- Run the human listening pass from `docs\RELEASE_CANDIDATE_CLOSEOUT.md`, then either accept the directional-only Live Preview scope or require deeper parity before completion.
 
 ### Manual Release-Candidate Closeout Checklist
 
 - Added `docs\RELEASE_CANDIDATE_CLOSEOUT.md`.
 - The checklist turns the remaining human-present blockers into concrete Track Master and Album Master listening steps.
 - It identifies the required receipt artifacts: `listening-review.json`, `listening-handoff.json`, and `listening-handoff.html`.
-- It makes the remaining product decisions explicit: accept Live Preview as approximate, waive or manually verify native Open/Save-As dialog coverage, and decide whether the reference screenshot becomes a separate polish pass.
+- It makes the remaining product decisions explicit. Native Open/Save-As dialog coverage was later covered by `test-output\native-project-dialog-probe\native-project-dialog-probe.json`; Live Preview scope acceptance and the separate reference-screenshot polish decision remain.
 - No app code changed in this docs pass.
 
 ### Project Open Dialog Default Path Hardening
@@ -280,7 +306,7 @@ Scope:
 
 - Hardened the native Open Project dialog path by passing `defaultPath: projectPath || settings.outputDir || repoRoot` to the Tauri dialog plugin.
 - This means Open Project now starts from the current saved project path when one exists, then the current output folder, then the repo root fallback.
-- Attempted a packaged Windows native dialog automation probe for Save As plus Open. Save As could be driven to create the default `album.ams.json`, but Open dialog selection remained too flaky to promote into release-readiness. The native Open/Save-As automation blocker remains open.
+- Attempted a packaged Windows native dialog automation probe for Save As plus Open. Save As could be driven to create the default `album.ams.json`, but Open dialog selection remained too flaky to promote into release-readiness at that time. This was later superseded by the passing native project dialog probe.
 
 Verification:
 

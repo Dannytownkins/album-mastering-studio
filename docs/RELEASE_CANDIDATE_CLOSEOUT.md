@@ -11,7 +11,8 @@ This checklist is the manual closeout path for the active goal. It does not repl
 - The trace was run from a clean worktree and records `dirty_before: []` and `dirty_after: []`.
 - Automated result: 23 passed, 0 failed, 0 skipped.
 - Windows Application log check saved beside the trace found zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries in the checked window.
-- Remaining blockers: human listening approval, Live Preview scope acceptance, native Open/Save-As dialog coverage or waiver.
+- Remaining blockers: human listening approval and Live Preview scope acceptance.
+- Native Project Save As/Open/cancel coverage is now recorded in `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
 
 ## Track Master Listening Pass
 
@@ -62,7 +63,7 @@ Required evidence:
 
 ## Native Project Dialog Check
 
-This is the manual check for the remaining OS file-picker blocker. It is separate from the direct Project path field, which is already covered by `test:tauri-project-persistence`.
+This check has automated evidence from `test-output\native-project-dialog-probe\native-project-dialog-probe.json`. Keep these steps here for manual confirmation if the user wants to repeat the OS file-picker path by hand.
 
 1. Launch the packaged desktop app.
 2. Add or drag/drop one audio file and run Analyze so the session has state worth saving.

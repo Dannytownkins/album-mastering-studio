@@ -41,7 +41,50 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Import Path Hardening
+## Latest Codex Pass: Native Project Dialog Probe
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Closed the native project dialog blocker with an OS-level packaged-app probe, without changing app code.
+- The probe launched the packaged app, seeded a harmless Track Master session, clicked the visible `Save As` and `Open` buttons, drove the real Windows `Save As` / `Open` dialogs through Win32 child-button handles, and restored the user's autosave state afterward.
+- Save As wrote `test-output\native-project-dialog-probe\album.ams.json`.
+- Open restored the saved project title after mutating it in the running app.
+- Save As cancel preserved the current project path and left the app responsive.
+
+Verification:
+
+- One-off native dialog probe artifact: `test-output\native-project-dialog-probe\native-project-dialog-probe.json`.
+- Windows Application log query for Application Error, Application Hang, and Windows Error Reporting entries involving Album Mastering Studio.
+
+Evidence:
+
+- `saveDialogAfterButton.visible: true`
+- `openDialogAfterButton.visible: true`
+- `cancelDialogAfterButton.visible: true`
+- `saveAsCreatedFile: true`
+- `savedProject.album_title: "Native Dialog Probe Original"`
+- `afterMutation.albumTitle: "Native Dialog Probe Mutated"`
+- `afterOpen.albumTitle: "Native Dialog Probe Original"`
+- `cancelPreservedProjectPath: true`
+- `appResponsiveAfterCancel: true`
+- Windows Application log artifact: `test-output\native-project-dialog-probe\windows-application-events.json`, result `[]`.
+
+Decision:
+
+- Native Project Save As/Open/cancel coverage is now covered for the packaged app path.
+- The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
+- Live OS drag/drop is still not fully automated, but the Add path is covered and the Tauri drag/drop listener has been hardened; treat true OS drag/drop as an optional manual confirmation rather than a release-candidate blocker unless the user makes it mandatory.
+
+## Prior Codex Pass: Import Path Hardening
 
 Date: 2026-05-13
 
@@ -86,8 +129,8 @@ Evidence:
 Decision:
 
 - This improves the user-visible import/drop failure surface and fixes a stale-state risk in the Tauri drag/drop listener.
-- This does not close native OS file-picker automation. Native Open/Save-As and true OS drag/drop remain manual/waiver coverage items unless a reliable unattended route is found.
-- This is the current app-code full release trace. The active goal remains open only on human listening approval, Live Preview scope acceptance or deeper parity, and native dialog/true OS drag-drop manual verification or waiver.
+- This did not close native OS file-picker automation at the time; native Project Save As/Open/cancel was later covered by the native dialog probe above.
+- This is the current app-code full release trace. The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
 
 ## Prior Codex Pass: Source Integrity Smoke and Prior Full Trace
 
@@ -130,7 +173,7 @@ Decision:
 
 - This was the app-code/test release trace for the source-integrity pass and is superseded by the `9fe379b` trace above.
 - The source non-destructive requirement now has real-song byte-for-byte hash evidence in addition to output-path behavior.
-- The active goal remains open because human listening approval, Live Preview scope acceptance or deeper parity, and native Open/Save-As verification or waiver are still unresolved.
+- The active goal remains open because human listening approval and Live Preview scope acceptance or deeper parity are still unresolved. Native Open/Save-As was later covered by the native dialog probe above.
 
 ## Prior Codex Pass: Project Dialog Failure/Cancel Hardening
 
@@ -193,7 +236,7 @@ Decision:
 
 - This was true at the time, but is now superseded by app-code/test commit `1a7c870` and `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
 - Rerun full release readiness only after a code, package, smoke-test, or installer-relevant change, or when intentionally refreshing the baseline.
-- The active goal remains open because the unresolved items are manual listening approval, Live Preview scope acceptance or deeper parity, and native Open/Save-As verification or waiver.
+- The active goal remains open because the unresolved items are manual listening approval and Live Preview scope acceptance or deeper parity; native Open/Save-As was later covered by the native project dialog probe above.
 
 ## Latest Codex Pass: Native Dialog Automation Recheck
 
@@ -324,7 +367,7 @@ What changed:
 
 - Hardened the native Open Project dialog by giving it a default path: current project path, then output folder, then repo root.
 - Rebuilt the packaged release app and reran the targeted project persistence smoke.
-- Attempted a packaged native dialog automation route for Save As plus Open. Save As could create the default project file, but Open selection remained unreliable enough that the smoke was not promoted into release-readiness. Keep the native OS dialog blocker open.
+- Attempted a packaged native dialog automation route for Save As plus Open. Save As could create the default project file, but Open selection remained unreliable enough that the smoke was not promoted into release-readiness at that time. This was later superseded by the native project dialog probe above.
 - Reran the full release-readiness trace from clean `master` commit `e61931867a633a37669e61a7eab7cc92f7e6fcf6`.
 
 Verification run:
