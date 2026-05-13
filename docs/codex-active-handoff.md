@@ -6705,7 +6705,7 @@ What exists now:
 - Backend commands: `repo_root`, `default_output_dir`, `read_json`, `write_project`, `open_path`, `cancel_cli`, `run_cli`, and `prepare_playback_file`.
 - `run_cli` sets `PYTHONPATH` to the repo `src/`, streams stdout/stderr/status to the frontend, and stores one active child process so cancel can kill it.
 - Frontend supports drag/drop audio import, row reordering by drag, remove, inline rename, analyze with waveform thumbnails, preset/delivery/arc/transition/fine-tune controls, open/save `.ams.json`, render full album, render tracks/transitions only, cancel, embedded dashboard, output folder open, and HTML5 audio playback for source/master/album/reference/transitions.
-- Keyboard shortcuts implemented in the webview: Ctrl+O, Ctrl+S, Ctrl+R, Space for play/pause, Delete to remove selected track.
+- Keyboard shortcuts implemented in the webview: Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+R, Space for play/pause, Delete to remove selected track.
 - CLI now has `analyze --waveform-bins` and `render`/`render-project --json-events` for waveform thumbnails and stage-level render progress.
 - CLI render/init-project now have `--reference-track` parity.
 - Release builds now call the bundled `album-master-engine.exe` sidecar instead of `python -m ...`.
