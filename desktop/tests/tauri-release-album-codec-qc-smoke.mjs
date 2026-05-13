@@ -88,6 +88,7 @@ try {
     listeningPacketHtmlIncludesReviewDownload: listeningPacketHtml.includes("Download review JSON"),
     listeningPacketHtmlIncludesReviewDecisionDefault: listeningPacketHtml.includes('status: approved ? "approved" : "not-approved"'),
     listeningPacketHtmlIncludesReviewDecisionFilename: listeningPacketHtml.includes("listening-review-decision.json"),
+    listeningPacketHtmlIncludesLivePreviewScopeDecision: listeningPacketHtml.includes("Live Preview directional scope accepted"),
     listeningPacketHtmlIncludesCodecPreview: codecPreviewOutputs.every((output) => listeningPacketHtml.includes(output)),
     codecPreviewCount: codecPreviews.length,
     codecPreviewOutputs,
@@ -162,6 +163,7 @@ try {
   assert.equal(evidence.listeningPacketHtmlIncludesReviewDownload, true);
   assert.equal(evidence.listeningPacketHtmlIncludesReviewDecisionDefault, true);
   assert.equal(evidence.listeningPacketHtmlIncludesReviewDecisionFilename, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesLivePreviewScopeDecision, true);
   assert.equal(evidence.listeningPacketHtmlIncludesCodecPreview, true);
   assert.equal(evidence.manifestCodecPreviewFlag, true);
   assert.equal(evidence.codecPreviewCount, 2);

@@ -67,6 +67,7 @@ try {
   assert.equal(evidence.reviewJsonKind, "listening-review-decision");
   assert.equal(evidence.reviewJsonDefaultStatus, "not-approved");
   assert.equal(evidence.reviewJsonDefaultApproved, false);
+  assert.equal(evidence.reviewJsonDefaultLivePreviewScopeAccepted, false);
   assert.equal(evidence.reviewDownloadButtonVisible, true);
   for (const item of evidence.items) {
     assert.equal(item.error, null, `${item.label || item.src} reported media error`);
@@ -219,6 +220,7 @@ function audioMetadataExpression() {
     reviewDownloadButtonVisible: Boolean(document.querySelector('#download-review')),
     reviewJsonDefaultStatus: reviewPreview.status,
     reviewJsonDefaultApproved: reviewPreview.approved,
+    reviewJsonDefaultLivePreviewScopeAccepted: reviewPreview.checklist?.live_preview_scope_accepted,
     reviewJsonKind: reviewPreview.kind,
     elapsedMs: Math.round((performance.now() - started) * 10) / 10,
     items: audioEvidence,

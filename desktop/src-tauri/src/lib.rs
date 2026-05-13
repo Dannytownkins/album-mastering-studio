@@ -1944,6 +1944,7 @@ fn render_listening_packet_html(packet: &Value) -> String {
   <label><input type="checkbox" id="heard-album"> Album WAV heard</label>
   <label><input type="checkbox" id="reviewed-dashboard"> Dashboard reviewed</label>
   <label><input type="checkbox" id="reviewed-export-checks"> Export checks reviewed</label>
+  <label><input type="checkbox" id="accepted-live-preview-scope"> Live Preview directional scope accepted</label>
 </div>
 <label class="approval-check"><input type="checkbox" id="decision-approved"> Approved after listening</label>
 <label for="decision-notes"><strong>Review notes</strong></label>
@@ -1984,6 +1985,7 @@ fn render_listening_packet_html(packet: &Value) -> String {
         album_wav_heard: checked("heard-album"),
         dashboard_reviewed: checked("reviewed-dashboard"),
         export_checks_reviewed: checked("reviewed-export-checks"),
+        live_preview_scope_accepted: checked("accepted-live-preview-scope"),
         notes: notes()
       },
       approval_scope: packet.approval_scope || {},
@@ -4085,9 +4087,11 @@ mod tests {
         assert!(html.contains("not human approval"));
         assert!(html.contains("id=\"review-decision\""));
         assert!(html.contains("Approved after listening"));
+        assert!(html.contains("Live Preview directional scope accepted"));
         assert!(html.contains("Download review JSON"));
         assert!(html.contains("listening-review-decision.json"));
         assert!(html.contains("kind: \"listening-review-decision\""));
+        assert!(html.contains("live_preview_scope_accepted"));
     }
 
     #[test]
