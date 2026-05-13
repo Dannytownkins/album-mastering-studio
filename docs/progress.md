@@ -5260,3 +5260,27 @@ Results:
 Remaining caveat:
 
 - This pass adds the reusable trace runner. It does not by itself close the current-commit final release-loop blocker until the runner is executed from the commit being evaluated and the trace passes.
+
+### Release Trace Playback Gate Fix
+
+- A full release-readiness attempt from commit `422ce43` passed the default gates through project persistence, then failed at optional `tauri-real-song-album-playback`.
+- Root cause: `desktop/tests/tauri-real-song-album-ui-smoke.mjs` was still a dev-WebView smoke that assumed a Tauri dev process had already been launched with a CDP port.
+- Updated that smoke to launch the packaged release EXE by default, while keeping the old external-app path available with `AMS_TAURI_USE_EXISTING_APP=1`.
+- The same targeted rerun exposed a real stale-render edge: immediately changing an album role and clicking Export could stamp the render with the previous React revision. `desktop/src/App.tsx` now keeps a synchronous session revision ref and uses it for render revision stamps.
+
+Verification:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-album-ui-smoke.mjs
+cd desktop
+npm run build
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_ALBUM_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-album-ui-release-selflaunch'
+npm run test:tauri-real-song-album-playback
+```
+
+Results:
+
+- Real-song Album playback smoke passed against the packaged release EXE and wrote `test-output\tauri-real-song-album-ui-release-selflaunch\tauri-real-song-album-ui-smoke.json`.
+- The prior `422ce43` full-trace attempt remains failed; rerun the full trace from the next clean commit before claiming the current-commit release loop is closed.

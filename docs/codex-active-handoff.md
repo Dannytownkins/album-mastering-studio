@@ -17,7 +17,7 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Release Readiness Trace Runner
+## Previous Codex Pass: Release Readiness Trace Runner
 
 Date: 2026-05-12
 
@@ -60,6 +60,39 @@ Add `-IncludeInstallerSmokes` when intentionally validating NSIS/MSI installers.
 Next useful slice:
 
 - Run the release-readiness trace from a clean commit, then update `docs/progress.md`, this handoff, and `docs/GOAL_AUDIT.md` with the trace path, passed steps, skipped optional gates, and remaining human-listening/native-dialog gaps.
+
+## Latest Codex Pass: Real-Song Album Playback Gate
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/tests/tauri-real-song-album-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- The real-song Album UI/playback smoke now launches the packaged release EXE by default instead of assuming a pre-launched Tauri dev WebView CDP process.
+- Existing dev-app behavior remains available with `AMS_TAURI_USE_EXISTING_APP=1`.
+- App render revision bookkeeping now uses a synchronous session revision ref, so a render started immediately after an album role/control edit is not incorrectly marked stale.
+
+Verification already run:
+
+```powershell
+node --check .\desktop\tests\tauri-real-song-album-ui-smoke.mjs
+cd desktop
+npm run build
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'
+$env:AMS_TAURI_REAL_SONG_ALBUM_OUTPUT='C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-album-ui-release-selflaunch'
+npm run test:tauri-real-song-album-playback
+```
+
+Remaining gap:
+
+- The full release-readiness trace must be rerun from the clean commit that includes this fix. The `422ce43` trace failed at the old playback gate and should not be treated as current release evidence.
 
 ## Previous Codex Pass: Album Codec And History Evidence
 

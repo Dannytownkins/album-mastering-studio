@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+const releaseExe =
+  process.env.AMS_TAURI_RELEASE_EXE ||
+  path.join(repoRoot, "desktop", "src-tauri", "target", "release", "album-mastering-studio.exe");
 const outputRoot = process.env.AMS_TAURI_REAL_SONG_ALBUM_OUTPUT || path.join(repoRoot, "test-output", "tauri-real-song-album-ui-smoke");
 const inputsDir = path.join(outputRoot, "inputs");
 const sourcePaths = readAlbumSourcePaths();
@@ -13,12 +16,16 @@ const distinctSourceCount = new Set(sourcePaths.map((item) => path.resolve(item)
 const sourceMode = distinctSourceCount > 1 ? "multi-song" : "single-song-derived-clips";
 const cdpPort = process.env.TAURI_CDP_PORT || "9222";
 const cdpBase = `http://127.0.0.1:${cdpPort}`;
+const useExistingApp = process.env.AMS_TAURI_USE_EXISTING_APP === "1";
 const albumPlaybackSeconds = Number(process.env.AMS_REAL_SONG_ALBUM_PLAYBACK_SECONDS || 20);
 const statePath = path.join(os.homedir(), "Documents", "Album Mastering Studio", "State", "recent-session.json");
 const stateBackup = existsSync(statePath) ? readFileSync(statePath, "utf8") : null;
 
 assert.ok(sourcePaths.length >= 1, "Set AMS_REAL_SONG_PATH or AMS_REAL_SONG_ALBUM_PATHS to local audio files for this smoke.");
 assert.ok(sourcePaths.length <= 8, "Album Master smoke supports up to 8 source files.");
+if (!useExistingApp) {
+  assert.equal(existsSync(releaseExe), true, `Release executable not found: ${releaseExe}`);
+}
 for (const candidate of sourcePaths) {
   assert.equal(existsSync(candidate), true, `Real-song fixture does not exist: ${candidate}`);
 }
@@ -26,13 +33,33 @@ mkdirSync(inputsDir, { recursive: true });
 
 const albumClips = writeAlbumClips(sourcePaths, inputsDir);
 const clipPaths = albumClips.map((clip) => clip.path);
-const target = await findTauriPageTarget();
-const cdp = await connectCdp(target.webSocketDebuggerUrl);
-await cdp.send("Runtime.enable");
-await cdp.send("Page.enable");
-await waitForCondition(cdp, "typeof window.__TAURI_INTERNALS__?.invoke === 'function'", 15000);
+const browserArguments = [
+  process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS,
+  `--remote-debugging-port=${cdpPort}`,
+]
+  .filter(Boolean)
+  .join(" ");
+const app = useExistingApp
+  ? null
+  : spawn(releaseExe, [], {
+      cwd: path.dirname(releaseExe),
+      env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: browserArguments },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+const stdout = [];
+const stderr = [];
+app?.stdout?.on("data", (chunk) => stdout.push(chunk.toString()));
+app?.stderr?.on("data", (chunk) => stderr.push(chunk.toString()));
 
+let cdp;
 try {
+  const target = await findTauriPageTarget();
+  cdp = await connectCdp(target.webSocketDebuggerUrl);
+  await cdp.send("Runtime.enable");
+  await cdp.send("Page.enable");
+  await waitForCondition(cdp, "typeof window.__TAURI_INTERNALS__?.invoke === 'function'", 15000);
+
   const seeded = await seedAlbumSession(cdp, clipPaths);
   await cdp.send("Page.reload", { ignoreCache: true });
   await waitForCondition(cdp, "document.body.innerText.includes('Album Clip 1')", 15000);
@@ -52,6 +79,11 @@ try {
     dashboardExists: existsSync(dashboardPath),
     albumSequenceExists: existsSync(albumSequencePath),
     albumPlaybackCachePathExists: existsSync(smoke.albumPlaybackCachePath),
+    releaseExe,
+    releaseExeExists: existsSync(releaseExe),
+    launchedReleaseApp: !useExistingApp,
+    stdout: stdout.join(""),
+    stderr: stderr.join(""),
     screenshot: screenshotPath,
     screenshotExists: existsSync(screenshotPath),
   };
@@ -125,7 +157,8 @@ try {
 } finally {
   await sleep(1000);
   restoreAutosave();
-  cdp.close();
+  cdp?.close();
+  app?.kill();
 }
 
 function readAlbumSourcePaths() {
@@ -440,19 +473,30 @@ function realSongAlbumUiExpression(playbackSeconds) {
 }
 
 async function findTauriPageTarget() {
-  let response;
-  try {
-    response = await fetch(`${cdpBase}/json/list`);
-  } catch (error) {
-    throw new Error(
-      `Could not reach Tauri WebView CDP at ${cdpBase}. Start Tauri dev with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${cdpPort}. ${error}`,
-    );
+  const started = Date.now();
+  let lastError;
+  while (Date.now() - started < 20_000) {
+    try {
+      const response = await fetch(`${cdpBase}/json/list`);
+      if (response.ok) {
+        const targets = await response.json();
+        const target = targets.find(
+          (item) => item.type === "page" && item.webSocketDebuggerUrl && !item.url.startsWith("devtools://"),
+        );
+        if (target) return target;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(250);
   }
-  assert.equal(response.ok, true, `CDP target list failed with HTTP ${response.status}`);
-  const targets = await response.json();
-  const target = targets.find((item) => item.type === "page" && item.url.includes("127.0.0.1:1420"));
-  assert.ok(target, `No Tauri page target found on ${cdpBase}`);
-  return target;
+  throw new Error(
+    `Could not reach Tauri WebView CDP at ${cdpBase}. ${
+      useExistingApp
+        ? `Start Tauri dev with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${cdpPort}.`
+        : `Release app was launched with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${cdpPort}.`
+    } ${lastError || "timed out"}`,
+  );
 }
 
 async function connectCdp(webSocketUrl) {

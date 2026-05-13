@@ -578,6 +578,7 @@ function App() {
   const liveAuditionRef = useRef<LiveAuditionChain | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const lastAutosaveKeyRef = useRef("");
+  const sessionRevisionRef = useRef(0);
 
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? tracks[0] ?? null;
   const selectedIndex = selectedTrack ? tracks.findIndex((track) => track.id === selectedTrack.id) : -1;
@@ -1018,7 +1019,7 @@ function App() {
     setPreviewArtifact(null);
     setComparePair(null);
     setPlayItem(null);
-    setSessionRevision((current) => current + 1);
+    bumpSessionRevision();
     if (action !== "restore") {
       pushLog(action === "undo" ? "Undo." : "Redo.");
     }
@@ -1061,7 +1062,7 @@ function App() {
 
   function markDirty() {
     rememberUndo();
-    setSessionRevision((current) => current + 1);
+    bumpSessionRevision();
     setPreviewArtifact(null);
     setRegionPreviewArtifact(null);
     setExportChecks(null);
@@ -1072,6 +1073,13 @@ function App() {
     setPlayItem((current) =>
       current && ["master", "album", "transition", "codec"].includes(current.kind) ? null : current,
     );
+  }
+
+  function bumpSessionRevision() {
+    const next = sessionRevisionRef.current + 1;
+    sessionRevisionRef.current = next;
+    setSessionRevision(next);
+    return next;
   }
 
   function updateListeningChecklist(patch: Partial<ListeningChecklist>) {
@@ -1371,7 +1379,7 @@ function App() {
 
   async function exportTrackMasters() {
     if (!tracks.length || !settings.outputDir || !allAnalyzed) return;
-    const revisionAtStart = sessionRevision;
+    const revisionAtStart = sessionRevisionRef.current;
     const exportRoot = `${settings.outputDir}\\track-master-${timestamp()}`;
     const updates = new Map<string, Partial<Track>>();
     setBusy(true);
@@ -1451,7 +1459,7 @@ function App() {
 
   async function renderAlbum(albumWav: boolean) {
     if (!tracks.length || !settings.outputDir || !allAnalyzed) return;
-    const revisionAtStart = sessionRevision;
+    const revisionAtStart = sessionRevisionRef.current;
     setBusy(true);
     setPhase(albumWav ? "Rendering Album Master" : "Rendering album files");
     setProgress(0);
@@ -1684,7 +1692,7 @@ function App() {
     setRegion(null);
     setUndoStack([]);
     setRedoStack([]);
-    setSessionRevision((current) => current + 1);
+    bumpSessionRevision();
     pushLog(`Opened project: ${path}`);
   }
 
@@ -1863,7 +1871,7 @@ function App() {
     options: { audition?: boolean } = {},
   ): Promise<string | null> {
     if (!track || !settings.outputDir || !track.analysis) return null;
-    const revisionAtStart = sessionRevision;
+    const revisionAtStart = sessionRevisionRef.current;
     const sourceDuration = track.analysis.duration_seconds ?? duration;
     const auditionStartSeconds = region
       ? regionStartTime(region, sourceDuration)
@@ -1963,7 +1971,7 @@ function App() {
       setProgressLabel("Region preview unavailable.");
       return null;
     }
-    const revisionAtStart = sessionRevision;
+    const revisionAtStart = sessionRevisionRef.current;
     setBusy(true);
     setPhase("Rendering region preview");
     setProgress(0);
