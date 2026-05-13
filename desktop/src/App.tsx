@@ -740,6 +740,15 @@ function App() {
   const nativeLivePreviewPlaybackActive = nativePlaybackStatus.active && nativePlaybackLabel.includes("Native Live Preview");
   const nativeFilePlaybackActive = nativePlaybackStatus.active && !nativeAbPlaybackActive && !nativeLivePreviewPlaybackActive;
   const nativePlaybackKind = nativeAbPlaybackActive ? "Native A/B" : nativeLivePreviewPlaybackActive ? "Native Live Preview" : "Native playback";
+  const realtimeAuditionActive = nativePlaybackStatus.active;
+  const realtimeAuditionMode = compareSide === "master" ? "Mastered" : "Original";
+  const transportPosition = nativePlaybackStatus.active ? nativePlaybackStatus.position_seconds : position;
+  const transportDuration = nativePlaybackStatus.active ? nativePlaybackStatus.duration_seconds : duration;
+  const transportLabel = nativePlaybackStatus.active
+    ? `${selectedTrack?.title ?? nativePlaybackStatus.label ?? "Track"} - ${realtimeAuditionMode}`
+    : selectedTrack
+      ? `${selectedTrack.title} - ${realtimeAuditionMode}`
+      : "Player idle";
   const listeningCompletedCount = Object.entries(listeningChecklist).filter(
     ([key, value]) => key !== "notes" && value === true,
   ).length;
@@ -971,28 +980,18 @@ function App() {
 
   useEffect(() => {
     if (!nativePlaybackStatus.active) return;
-    invoke("update_chain", {
-      settings: {
-        lowDb: settings.bass,
-        midDb: settings.presence,
-        highDb: settings.air,
-      },
-    }).catch((error) => pushLog(`Native EQ update failed: ${String(error)}`));
-  }, [nativePlaybackStatus.active, settings.air, settings.bass, settings.presence]);
-
-  useEffect(() => {
-    if (!nativePlaybackStatus.active) return;
-    invoke("update_mbc_chain", { settings: nativeMbcSettings(settings.compression) }).catch((error) =>
-      pushLog(`Native compressor update failed: ${String(error)}`),
+    applyRealtimeAuditionChain(compareSide).catch((error) =>
+      pushLog(`Realtime audition update failed: ${String(error)}`),
     );
-  }, [nativePlaybackStatus.active, settings.compression]);
-
-  useEffect(() => {
-    if (!nativePlaybackStatus.active) return;
-    invoke("update_character_chain", { settings: { warmth: Math.max(settings.warmth, 0) } }).catch((error) =>
-      pushLog(`Native character update failed: ${String(error)}`),
-    );
-  }, [nativePlaybackStatus.active, settings.warmth]);
+  }, [
+    compareSide,
+    nativePlaybackStatus.active,
+    settings.air,
+    settings.bass,
+    settings.compression,
+    settings.presence,
+    settings.warmth,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -2597,12 +2596,15 @@ function App() {
   }
 
   function switchCompare(side: AuditionSide) {
+    setCompareSide(side);
+    if (nativePlaybackStatus.active) {
+      applyRealtimeAuditionChain(side).catch((error) => pushLog(`Realtime A/B switch failed: ${String(error)}`));
+      return;
+    }
     if (!comparePair) {
-      startCompare(side);
       return;
     }
     pendingSeekRef.current = audioRef.current?.currentTime ?? 0;
-    setCompareSide(side);
     const nextItem = side === "source" ? comparePair.source : comparePair.master;
     publishPlaybackEvidence(createPlaybackEvidence(nextItem, null, performance.now(), null));
     setPlayItem(nextItem);
@@ -2611,6 +2613,81 @@ function App() {
   function toggleCompareSide() {
     if (!comparePair) return;
     switchCompare(compareSide === "source" ? "master" : "source");
+  }
+
+  async function applyRealtimeAuditionChain(side: AuditionSide = compareSide) {
+    const mastered = side === "master";
+    await Promise.all([
+      invoke("update_chain", {
+        settings: mastered
+          ? {
+              lowDb: settings.bass,
+              midDb: settings.presence,
+              highDb: settings.air,
+            }
+          : {
+              lowDb: 0,
+              midDb: 0,
+              highDb: 0,
+            },
+      }),
+      invoke("update_mbc_chain", { settings: mastered ? nativeMbcSettings(settings.compression) : nativeMbcBypassSettings() }),
+      invoke("update_character_chain", { settings: { warmth: mastered ? Math.max(settings.warmth, 0) : 0 } }),
+    ]);
+  }
+
+  async function toggleRealtimeAudition() {
+    if (playbackBusy) return;
+    if (nativePlaybackStatus.active) {
+      await setNativeAuditionPaused(!nativePlaybackStatus.paused);
+      return;
+    }
+    if (!selectedTrack) return;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    setLiveAudition(false);
+    setNativeLivePreviewAudition(null);
+    setPlaybackBusy(true);
+    setProgressLabel("Starting realtime audition.");
+    const requestedAtMs = performance.now();
+    try {
+      const prepared = await invoke<PreparedPlaybackFile>("prepare_playback_file_info", { path: selectedTrack.path });
+      const sourceDuration = selectedTrack.analysis?.duration_seconds ?? duration;
+      const startSeconds = clamp(
+        region ? regionStartTime(region, sourceDuration) : transportPosition,
+        0,
+        Math.max(sourceDuration - 0.1, 0),
+      );
+      const status = await invoke<NativePlaybackStatus>("start_native_file_playback", {
+        path: prepared.path,
+        label: `${selectedTrack.title} - Realtime audition`,
+        startSeconds,
+        maxDurationMs: 60 * 60 * 1000,
+      });
+      setNativePlaybackStatus(status);
+      await applyRealtimeAuditionChain(compareSide);
+      window.__AMS_NATIVE_PLAYBACK_EVIDENCE__ = {
+        label: `${selectedTrack.title} - Realtime audition`,
+        path: prepared.path,
+        kind: "realtime-audition",
+        start_seconds: roundMs(startSeconds),
+        invoke_elapsed_ms: roundMs(performance.now() - requestedAtMs),
+        active: status.active,
+        callback_count: status.callback_count,
+        queued_output_frames: status.queued_output_frames,
+        played_output_frames: status.played_output_frames,
+        stream_errors: status.stream_errors,
+        warnings: status.warnings,
+      };
+      setProgressLabel("Realtime audition running.");
+      pushLog(`Realtime audition started: ${selectedTrack.title} on ${status.output_device ?? "default output"}.`);
+    } catch (error) {
+      setNativePlaybackStatus(idleNativePlaybackStatus);
+      pushLog(`Realtime audition failed: ${String(error)}`);
+      setProgressLabel("Realtime audition failed.");
+    } finally {
+      setPlaybackBusy(false);
+    }
   }
 
   async function toggleNativeAbLoop() {
@@ -3190,9 +3267,11 @@ function App() {
           </div>
 
           <div className="transport">
-            <button className="play" onClick={togglePlay} disabled={!playItem}>{isPlaying ? <Pause /> : <Play />}</button>
+            <button className="play" onClick={toggleRealtimeAudition} disabled={!selectedTrack || playbackBusy}>
+              {realtimeAuditionActive && !nativePlaybackStatus.paused ? <Pause /> : <Play />}
+            </button>
             <div className="transport-main">
-              <div className="transport-label">{playItem ? `${playItem.label}` : "Player idle"}</div>
+              <div className="transport-label">{transportLabel}</div>
               {playbackEvidence && (
                 <div className="playback-evidence" title={playbackEvidenceTitle(playbackEvidence)}>
                   {playbackEvidenceSummary(playbackEvidence)}
@@ -3203,23 +3282,15 @@ function App() {
                 className="seek"
                 type="range"
                 min={0}
-                max={duration || 0}
+                max={transportDuration || 0}
                 step={0.01}
-                value={position}
-                onInput={(event) => seek(Number(event.currentTarget.value))}
-                onChange={(event) => seek(Number(event.currentTarget.value))}
+                value={transportPosition}
+                onInput={(event) => realtimeAuditionActive ? seekNativeAudition(Number(event.currentTarget.value)) : seek(Number(event.currentTarget.value))}
+                onChange={(event) => realtimeAuditionActive ? seekNativeAudition(Number(event.currentTarget.value)) : seek(Number(event.currentTarget.value))}
               />
-              <div className="time-row"><span>{formatTime(position)}</span><span>{formatTime(duration)}</span></div>
+              <div className="time-row"><span>{formatTime(transportPosition)}</span><span>{formatTime(transportDuration)}</span></div>
             </div>
-            <button onClick={stopPlayback} disabled={!playItem}><Square size={17} /> Stop</button>
-            <button
-              className={nativeFilePlaybackActive ? "active" : ""}
-              onClick={toggleNativeFilePlayback}
-              disabled={(!playItem && !nativeFilePlaybackActive) || busy}
-              title="Plays the current prepared transport item through the native Windows audio path. Source Live Preview renders the Rust model first."
-            >
-              {nativeFilePlaybackActive ? <Square size={17} /> : <Volume2 size={17} />} {nativeFilePlaybackActive ? "Native Stop" : "Native Play"}
-            </button>
+            <button onClick={realtimeAuditionActive ? stopNativeAudition : stopPlayback} disabled={!realtimeAuditionActive && !playItem}><Square size={17} /> Stop</button>
             <audio
               ref={audioRef}
               src={playItem ? convertFileSrc(playItem.path) : undefined}
@@ -3251,121 +3322,27 @@ function App() {
           </div>
 
           <div className="audition-actions">
-            <button disabled={!selectedTrack || playbackBusy} onClick={() => selectedTrack && setAudio({ label: `${selectedTrack.title} - Original`, path: selectedTrack.path, kind: "source", trackId: selectedTrack.id })}>
-              <Play size={16} /> Original
-            </button>
-            <button disabled={!selectedTrack?.analysis || busy || playbackBusy} onClick={() => renderPreviewMaster(selectedTrack, { audition: true })}>
-              <Activity size={16} /> Update Preview
-            </button>
-            <button
-              disabled={!selectedTrack?.analysis || busy || playbackBusy}
-              onClick={() => renderRegionPreview(selectedTrack)}
-              title="Renders the selected region or current playhead window through the Python export engine."
-            >
-              <Scissors size={16} /> Render Region
-            </button>
-            <button
-              className={nativeLivePreviewPlaybackActive ? "active" : ""}
-              disabled={(!selectedTrack?.analysis && !nativeLivePreviewPlaybackActive) || busy || playbackBusy}
-              onClick={() => startNativePreviewWindow(selectedTrack)}
-              title="Renders the selected region or current playhead window through the Rust first-control preview model, then plays it through native Windows audio."
-            >
-              {nativeLivePreviewPlaybackActive ? <Square size={16} /> : <Volume2 size={16} />} {nativeLivePreviewPlaybackActive ? "Native Stop" : "Native Preview"}
-            </button>
-            <button disabled={!selectedMaster || playbackBusy} onClick={() => selectedTrack && selectedMaster && setAudio({ label: `${selectedTrack.title} - Mastered`, path: selectedMaster, kind: "master", trackId: selectedTrack.id })}>
-              <Activity size={16} /> Mastered
-            </button>
-            <button
-              disabled={!settings.referenceTrack || playbackBusy}
-              onClick={() => settings.referenceTrack && setAudio({ label: `${fileStem(settings.referenceTrack)} - Reference`, path: settings.referenceTrack, kind: "reference" })}
-              title="Plays the selected reference track unprocessed for comparison. Export settings are unchanged."
-            >
-              <GitCompare size={16} /> Reference
-            </button>
-            <button
-              className={liveAudition ? "active" : ""}
-              disabled={!selectedTrack?.analysis || playbackBusy}
-              onClick={toggleLiveAudition}
-              title="Applies the first-layer controls to source playback immediately. This is a Web Audio audition baseline, not the final export engine."
-            >
-              <SlidersHorizontal size={16} /> Live Preview
-            </button>
-            <div className="ab-switch" role="group" aria-label="Original mastered toggle">
-              <button className={compareSide === "source" && comparePair ? "active" : ""} disabled={!selectedTrack?.analysis || busy || playbackBusy} onClick={() => switchCompare("source")}>
+            <div className="ab-switch primary" role="group" aria-label="Original mastered toggle">
+              <button className={compareSide === "source" ? "active" : ""} disabled={!selectedTrack || playbackBusy} onClick={() => switchCompare("source")}>
                 Original
               </button>
-              <button className={compareSide === "master" && comparePair ? "active" : ""} disabled={!selectedTrack?.analysis || busy || playbackBusy} onClick={() => switchCompare("master")}>
+              <button className={compareSide === "master" ? "active" : ""} disabled={!selectedTrack?.analysis || playbackBusy} onClick={() => switchCompare("master")}>
                 Mastered
               </button>
             </div>
             <button
-              className={nativeAbPlaybackActive ? "active" : ""}
-              disabled={!selectedTrack?.analysis || busy || playbackBusy}
-              onClick={toggleNativeAbLoop}
-              title="Runs a bounded native source/master A/B loop through the Rust audio path. This is native transport proof, not live DSP parity."
+              className={volumeMatch ? "active" : ""}
+              disabled={playbackBusy}
+              onClick={() => setVolumeMatch((current) => !current)}
+              title="Aligns playback loudness for fair tone comparison. Export level is unchanged."
             >
-              <GitCompare size={16} /> Native A/B
-            </button>
-            <button
-              className={nativePlaybackStatus.paused ? "active" : ""}
-              disabled={!nativePlaybackStatus.active || playbackBusy}
-              onClick={() => setNativeAuditionPaused(!nativePlaybackStatus.paused)}
-              title={nativePlaybackStatus.paused ? "Resume native playback" : "Pause native playback"}
-            >
-              {nativePlaybackStatus.paused ? <Play size={16} /> : <Pause size={16} />} {nativePlaybackStatus.paused ? "Resume" : "Pause"}
-            </button>
-            <button className={volumeMatch ? "active" : ""} disabled={playbackBusy} onClick={() => setVolumeMatch((current) => !current)} title="Aligns playback loudness for fair tone comparison. Export level is unchanged.">
               <Volume2 size={16} /> Volume Match
             </button>
-            <span className={`live-audition-status ${liveAuditionActive ? "active" : ""}`}>
-              {liveAudition
-                ? `Live Preview ${liveAuditionActive ? "active" : "armed"}${liveAuditionLatencyMs ? ` ~${Math.round(liveAuditionLatencyMs)} ms` : ""}`
-                : "Offline preview"}
+            <span className={`native-audition-status ${realtimeAuditionActive ? "active" : ""}`}>
+              {realtimeAuditionActive ? `Realtime ${nativePlaybackStatus.paused ? "paused" : "playing"}` : "Ready"}
             </span>
-            <span
-              className={`preview-parity-status ${previewParityWarn ? "warn" : ""}`}
-              title={previewParityTitle}
-            >
-              {previewParityLabel}
-            </span>
-            <span className="live-contract-status modeled" title={livePreviewContractTitle}>
-              Live model: {livePreviewContractModeledText}
-            </span>
-            <span className="live-contract-status render-only" title={livePreviewContractTitle}>
-              Render-only: {livePreviewContractRenderOnlyText}
-            </span>
-            {livePreviewContractDrift.length > 0 && (
-              <span className="live-contract-status warn" title={livePreviewContractTitle}>
-                Contract drift
-              </span>
-            )}
-            <span className={`native-audition-status ${nativePlaybackStatus.active ? "active" : ""}`}>
-              {nativePlaybackStatus.active
-                ? `${nativePlaybackKind} ${nativePlaybackStatus.paused ? "paused" : "playing"}`
-                : "Native transport ready"}
-            </span>
-            {nativeLivePreviewAudition && (
-              <span className="native-audition-status active" title={nativeLivePreviewAudition.output}>
-                Rust model: {nativeLivePreviewAudition.modeled_width.toFixed(2)} width, {nativeLivePreviewAudition.modeled_drive.toFixed(2)} intensity
-              </span>
-            )}
-            {nativePlaybackStatus.active && (
-              <div className="native-transport-control">
-                <input
-                  aria-label="Native playback position"
-                  type="range"
-                  min={0}
-                  max={Math.max(nativePlaybackStatus.duration_seconds, 0.01)}
-                  step={0.01}
-                  value={Math.min(nativePlaybackStatus.position_seconds, Math.max(nativePlaybackStatus.duration_seconds, 0.01))}
-                  onInput={(event) => seekNativeAudition(Number(event.currentTarget.value))}
-                />
-                <span>{formatTime(nativePlaybackStatus.position_seconds)} / {formatTime(nativePlaybackStatus.duration_seconds)}</span>
-                {nativePlaybackStatus.output_device && <span className="native-device">{nativePlaybackStatus.output_device}</span>}
-              </div>
-            )}
             {(nativePlaybackStatus.stream_errors.length > 0 || nativePlaybackStatus.warnings.length > 0) && (
-              <span className="native-audition-status warn">Native issue</span>
+              <span className="native-audition-status warn">Playback issue</span>
             )}
           </div>
 
@@ -4489,6 +4466,17 @@ function nativeMbcSettings(intensity: number) {
     attackSeconds: livePreviewConfig.compressor.attackSeconds,
     releaseSeconds: livePreviewConfig.compressor.releaseSeconds,
     kneeDb: livePreviewConfig.compressor.kneeDb,
+    makeupDb: 0,
+  };
+}
+
+function nativeMbcBypassSettings() {
+  return {
+    thresholdDbfs: 0,
+    ratio: 1,
+    attackSeconds: livePreviewConfig.compressor.attackSeconds,
+    releaseSeconds: livePreviewConfig.compressor.releaseSeconds,
+    kneeDb: 0,
     makeupDb: 0,
   };
 }
