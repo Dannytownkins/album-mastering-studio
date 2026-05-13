@@ -25,6 +25,10 @@ Current decision:
 - Direct `.ams.json` path Load/Save remains covered by `test:tauri-project-persistence`, but it is still not native dialog coverage.
 - Do not rerun this same automation route unless a new Windows dialog-driving strategy is available.
 
+Follow-up organization:
+
+- Added the manual `Native Project Dialog Check` to `docs\RELEASE_CANDIDATE_CLOSEOUT.md` so the remaining dialog blocker has concrete Save As, Open, cancel, path-restoration, and responsiveness checks.
+
 ### Full Release Readiness Trace at 8c6b5a0
 
 Scope:

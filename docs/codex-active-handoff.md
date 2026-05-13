@@ -70,6 +70,7 @@ Decision:
 - Do not promote this automation route into release-readiness.
 - Native OS Open/Save-As remains open until manually verified or explicitly waived.
 - Direct Project path Load/Save coverage is still valid as a deterministic fallback, but it does not close native dialog coverage.
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md` now includes the manual Native Project Dialog Check for Save As, Open, cancel, restored values, and app responsiveness.
 
 ## Latest Codex Pass: Full Release Trace for Approval Scope Commit
 

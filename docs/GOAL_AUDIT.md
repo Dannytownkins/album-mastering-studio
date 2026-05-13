@@ -124,3 +124,4 @@ Best next slice when the user is present:
 
 1. Run Track Master on `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3`, listen through Live Preview, Update Preview, Render Region, and Export Master, then record the listening result.
 2. Run Album Master with real source material, listen through the continuous album WAV and boundaries, then record approval or concrete problems.
+3. Run the manual Native Project Dialog Check in `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, or explicitly waive native Open/Save-As dialog coverage for this private release.

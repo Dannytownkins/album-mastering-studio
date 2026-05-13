@@ -59,10 +59,30 @@ Required evidence:
 - `listening-handoff.json`
 - Notes stating approve/reject and exact boundary or level issues.
 
+## Native Project Dialog Check
+
+This is the manual check for the remaining OS file-picker blocker. It is separate from the direct Project path field, which is already covered by `test:tauri-project-persistence`.
+
+1. Launch the packaged desktop app.
+2. Add or drag/drop one audio file and run Analyze so the session has state worth saving.
+3. Use the visible Project Save As action or `Ctrl+Shift+S`.
+4. Confirm a native Windows Save dialog appears, starts in a sensible folder, filters to `.ams.json`, and can save a project file without freezing the app.
+5. Change an obvious project value after saving, such as album title or one track title.
+6. Use the visible Open Project action or `Ctrl+O`.
+7. Confirm a native Windows Open dialog appears, starts near the saved project path or output folder, filters to `.ams.json`, and can reopen the saved project.
+8. Confirm the saved value is restored and the app remains responsive.
+9. Repeat Save As once and cancel the dialog; confirm cancel does not change the current project path or hang the app.
+
+Required evidence:
+
+- Saved `.ams.json` path.
+- Notes stating whether Save As, Open, and cancel behaved correctly.
+- Any crash/hang, missing dialog, wrong start folder, bad file filter, or path-restoration issue.
+
 ## Explicit Decisions Needed
 
 These are product decisions, not automation tasks:
 
 - Accept Live Preview as an approximate, clearly labeled directional audition while Update Preview, Render Region, and Export Master remain release-faithful.
-- Accept direct Project path Load/Save plus improved Open dialog default path as sufficient for this private release, or require manual native Open/Save-As verification before completion.
+- Accept direct Project path Load/Save plus improved Open dialog default path as sufficient for this private release, or complete the manual native Project Dialog Check above before completion.
 - Decide whether the reference screenshot should drive a separate UI polish pass after the stability closeout.
