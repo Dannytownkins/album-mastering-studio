@@ -41,7 +41,51 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Listening Approval Gate + Current Release Trace
+## Latest Codex Pass: Handoff Browser-Audio Gate + Current Release Trace
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/package.json`
+- `desktop/tests/listening-handoff-browser-audio-smoke.mjs`
+- `scripts/release-readiness.ps1`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Added a reusable Chrome/CDP smoke that opens the generated standalone listening handoff HTML and verifies every local audio control loads metadata with finite duration and no media errors.
+- Wired that smoke into `scripts/release-readiness.ps1` after `tauri-real-song-listening-packet` whenever `-RealSongPath` is supplied.
+- This turns the ready-to-listen HTML check from a one-off artifact into a reproducible release gate.
+
+Verification:
+
+- `cd desktop; node --check tests/listening-handoff-browser-audio-smoke.mjs`
+- `cd desktop; npm run test:listening-handoff-browser-audio -- "C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html"`
+- Full trace command after commit `572c0cdd9d10956dc68a6764e7f22401823498b2`: `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-572c0cd-handoff-browser-audio"`.
+- Full trace result: `25 passed`, `0 failed`, `0 skipped`, with `dirty_before: []` and `dirty_after: []`.
+- Full-trace Windows Application log artifact: `test-output\release-readiness-572c0cd-handoff-browser-audio\windows-application-events.json`, result `[]`.
+
+Evidence:
+
+- Full trace: `test-output\release-readiness-572c0cd-handoff-browser-audio\release-readiness.json`.
+- Browser-audio artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
+- Browser-audio values: `audioCount: 4`, `allAudioReady: true`, all four controls at `readyState: 4`, finite durations around `186.32s`, and `error: null`.
+- Current ready-to-listen packet from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-handoff.html`.
+- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-review.json`.
+- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+
+Decision:
+
+- The current release gate now proves that the generated human-listening packet is directly playable in browser audio controls.
+- The human listening package remains intentionally `not-approved`; this is readiness evidence, not sound approval.
+- The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
+- The latest full release trace covers app-code/test-runner commit `572c0cd`; any later app code, package, smoke-test, or release-runner change needs a fresh trace before being treated as current release-gate evidence.
+
+## Prior Codex Pass: Listening Approval Gate
 
 Date: 2026-05-13
 
@@ -78,16 +122,16 @@ Evidence:
 - Full trace: `test-output\release-readiness-48adeb5-approval-gate\release-readiness.json`.
 - Session-safety evidence: `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`.
 - Session-safety values: `listeningApprovalBlockedNoRender: true`, `listeningApprovalAfterBlockedAttempt: "Not approved"`, `previewReadyForApproval: true`, `listeningApprovalEnabledAfterPreview: true`, `listeningApprovalAfterChecks: "Approved"`, and `persistedListeningApprovedAfterDirtyChange: false`.
-- Current ready-to-listen packet from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html`.
-- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-review.json`.
-- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Ready-to-listen packet from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html`.
+- Receipt from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-review.json`.
+- Mastered WAV from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 
 Decision:
 
 - The app now prevents a misleading release-approved state from Live Preview-only or Original-only listening.
 - The human listening package remains intentionally `not-approved`.
 - The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
-- The latest full release trace covers the app-code commit `48adeb5`; any later app code, package, or smoke-test change needs a fresh trace before being treated as current release-gate evidence.
+- The full release trace covered app-code commit `48adeb5`; it is superseded by the current `572c0cd` trace above.
 
 ## Prior Codex Pass: Playable Listening Handoff
 
@@ -136,7 +180,7 @@ Decision:
 
 - The human listening package is now directly playable from the generated HTML, but it remains intentionally `not-approved`.
 - The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
-- The full release trace covered app-code commit `cba8ae7`; it is superseded by the current `48adeb5` trace above.
+- The full release trace covered app-code commit `cba8ae7`; it is superseded by the current `572c0cd` trace above.
 
 ## Prior Codex Pass: Release Gate Includes Listening Packet
 
@@ -305,7 +349,7 @@ Decision:
 
 - This improves the user-visible import/drop failure surface and fixes a stale-state risk in the Tauri drag/drop listener.
 - This did not close native OS file-picker automation at the time; native Project Save As/Open/cancel was later covered by the native dialog probe above.
-- This was the current app-code full release trace at the time; it is now superseded by the `dbfaad7` release trace above. The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
+- This was the current app-code full release trace at the time; it is now superseded by the current `572c0cd` release trace above. The active goal remains open on human listening approval and Live Preview scope acceptance or deeper parity.
 
 ## Prior Codex Pass: Source Integrity Smoke and Prior Full Trace
 
@@ -525,7 +569,7 @@ Remaining blockers:
 - Human listening approval has not been recorded.
 - Live Preview remains approximate; it is now more explicitly scoped as directional-only, but this still needs user acceptance or a deeper parity change before goal completion.
 - Native OS Open/Save-As dialogs remain unautomated/unwaived.
-- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`, then superseded by the current `9fe379b` trace above.
+- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`, then superseded by the current `572c0cd` trace above.
 
 ## Latest Codex Pass: Project Open Dialog Default Path Hardening
 

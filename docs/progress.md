@@ -2,6 +2,56 @@
 
 ## 2026-05-13
 
+### Handoff Browser-Audio Release Gate
+
+Scope:
+
+- Added `desktop/tests/listening-handoff-browser-audio-smoke.mjs` to open the generated standalone listening handoff HTML in Chrome through CDP.
+- The smoke verifies every local `<audio>` control loads metadata with finite duration and no media errors.
+- Added `npm run test:listening-handoff-browser-audio`.
+- Added the smoke to `scripts/release-readiness.ps1` immediately after the real-song listening-packet step when `-RealSongPath` is supplied.
+
+Verification:
+
+- `cd desktop; node --check tests/listening-handoff-browser-audio-smoke.mjs`
+- `cd desktop; npm run test:listening-handoff-browser-audio -- "C:\Users\Daniel Kinsner\OneDrive\Documents\GitHub\album-mastering-studio\test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html"`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-572c0cd-handoff-browser-audio"`
+- Windows Application log query for the full trace window, saved to `test-output\release-readiness-572c0cd-handoff-browser-audio\windows-application-events.json`.
+
+Results:
+
+- Code commit covered by the full trace: `572c0cdd9d10956dc68a6764e7f22401823498b2`.
+- Full release-readiness trace passed: `25 passed`, `0 failed`, `0 skipped`.
+- New release gate step: `tauri-listening-handoff-browser-audio`.
+- Full trace: `test-output\release-readiness-572c0cd-handoff-browser-audio\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log artifact for Album Mastering Studio errors/hangs/WER in the checked window: `[]`.
+- Browser-audio artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
+- Browser-audio values: `audioCount: 4`, `allAudioReady: true`, all four controls at `readyState: 4`, finite durations around `186.32s`, and `error: null`.
+- Current ready-to-listen HTML from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-handoff.html`.
+- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\listening-review.json`.
+- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-055642-532\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+
+What passed:
+
+- The standalone handoff packet is reproducibly opened in Chrome by the release gate.
+- Original MP3, Mastered WAV, AAC preview, and Opus preview audio controls all load with valid durations and no media errors.
+- Existing Track Master, Album Master, real-song, installer, session-safety, and diff gates still pass.
+
+What failed:
+
+- No automated failure was observed in this pass.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded; the current real-song packet remains intentionally `not-approved`.
+- Live Preview remains a directional approximation unless the user explicitly accepts that scope or we build deeper parity.
+- Live OS drag/drop is still not proven by unattended automation, though Add/import and the Tauri drag/drop listener path are covered by current evidence.
+
+Next recommended action:
+
+- Use the current ready-to-listen Track Master packet for the human listening pass, record approve/reject notes, then decide whether Live Preview's directional-only scope is acceptable before taking on broad UI polish.
+
 ### Listening Approval Gate Hardening
 
 Scope:
@@ -29,9 +79,9 @@ Results:
 - Windows Application log artifact for Album Mastering Studio errors/hangs/WER in the checked window: `[]`.
 - Packaged session-safety artifact: `test-output\tauri-release-session-safety-smoke\tauri-release-session-safety-smoke.json`.
 - Session-safety values include `listeningApprovalBlockedNoRender: true`, `listeningApprovalAfterBlockedAttempt: "Not approved"`, `previewReadyForApproval: true`, `listeningApprovalEnabledAfterPreview: true`, `listeningApprovalAfterChecks: "Approved"`, and `persistedListeningApprovedAfterDirtyChange: false`.
-- Current ready-to-listen HTML from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html`.
-- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-review.json`.
-- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Ready-to-listen HTML from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-handoff.html`.
+- Receipt from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\listening-review.json`.
+- Mastered WAV from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-053502-852\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 
 What passed:
 
@@ -46,13 +96,13 @@ What failed:
 
 Remaining blockers:
 
-- Human listening approval is still not recorded; the current real-song packet remains intentionally `not-approved`.
+- Human listening approval is still not recorded; the real-song packet from that trace remains intentionally `not-approved`.
 - Live Preview remains a directional approximation unless the user explicitly accepts that scope or we build deeper parity.
 - Live OS drag/drop is still not proven by unattended automation, though Add/import and the Tauri drag/drop listener path are covered by current evidence.
 
 Next recommended action:
 
-- Use the current ready-to-listen Track Master packet for the human listening pass, record approve/reject notes, then decide whether Live Preview's directional-only scope is acceptable before taking on broad UI polish.
+- Use the latest ready-to-listen Track Master packet for the human listening pass, record approve/reject notes, then decide whether Live Preview's directional-only scope is acceptable before taking on broad UI polish.
 
 ### Playable Listening Handoff HTML
 
@@ -91,7 +141,7 @@ Remaining blockers:
 
 - Human listening approval is still not recorded.
 - Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
-- That full release trace covered app-code commit `cba8ae7`; it is superseded by the current `48adeb5` trace above.
+- That full release trace covered app-code commit `cba8ae7`; it is superseded by the current `572c0cd` trace above.
 
 ### Prior Full Trace With Listening Packet Gate
 
@@ -103,7 +153,7 @@ Scope:
 
 Results:
 
-- Current commit: `dbfaad7fba44d16deea5813a23ae183aedd5ab47`.
+- Trace commit: `dbfaad7fba44d16deea5813a23ae183aedd5ab47`.
 - Full release readiness passed: `24 passed`, `0 failed`, `0 skipped`.
 - Trace: `test-output\release-readiness-dbfaad7-listening-packet-gate\release-readiness.json`.
 - Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
