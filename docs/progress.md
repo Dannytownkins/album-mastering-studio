@@ -2,6 +2,45 @@
 
 ## 2026-05-13
 
+### Source Integrity Smoke and Current Full Trace
+
+Scope:
+
+- Added source-integrity evidence to `desktop\tests\tauri-real-song-performance-smoke.mjs`, which is also used by the real-song codec QC smoke.
+- The smoke now records `sourceBefore`, `sourceAfter`, and `sourceUnchanged` with real source size and SHA-256 checks.
+- Stabilized the Track Preview rendered-preview cue assertion in `desktop\tests\tauri-track-preview-ui-smoke.mjs` by waiting for the audio element to seek to the expected rendered-master cue before sampling `currentTime`.
+
+Verification:
+
+```powershell
+cd desktop
+node --check .\tests\tauri-real-song-performance-smoke.mjs
+$env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'; npm run test:tauri-real-song-codec-qc
+node --check .\tests\tauri-track-preview-ui-smoke.mjs
+npm run test:tauri-track-preview-ui
+npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes
+```
+
+Results:
+
+- Current app-code/test commit: `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`.
+- Full release readiness passed: `23 passed`, `0 failed`, `0 skipped`.
+- Trace: `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log check found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\release-readiness-1a7c870-20260513-025835\windows-application-events.json`.
+- Real-song source integrity evidence: `sourceUnchanged.size: true`, `sourceUnchanged.sha256: true`, source SHA-256 `d280ff093bc0609bb2afa2a0771b7ce5b6df107c7454662aa25c3e036a927c7b`.
+- Rendered-preview cue evidence: `exportEngineAuditionSeekReady: true`, expected cue `2.040736`, current time `2.040735`, parity `Render-faithful preview`.
+
+Note:
+
+- The first full release rerun for `1c4aad1` failed in `tauri-track-preview-ui` because the smoke sampled `audio.currentTime` before the rendered-preview media seek settled. The app handoff metadata already had the expected start; the smoke now waits for the seek and the current `1a7c870` full trace passes.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded.
+- Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
+- Native OS Open/Save-As dialogs still need manual verification or explicit waiver.
+
 ### Project Dialog Failure/Cancel Hardening and Full Trace
 
 Scope:
@@ -29,6 +68,7 @@ Results:
 - Trace: `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
 - Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
 - Windows Application log check found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\release-readiness-1a36415-20260513-022743\windows-application-events.json`.
+- This trace is now superseded by `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`, which adds source-integrity smoke evidence.
 
 Remaining blockers:
 
@@ -67,7 +107,7 @@ Results:
 - Pre-commit `HEAD` for this audit was `28594a0`; the audit update itself is docs-only.
 - Files changed since `8c6b5a0`: `docs/GOAL_AUDIT.md`, `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, `docs/codex-active-handoff.md`, and `docs/progress.md`.
 - No non-doc diff exists since `8c6b5a0`.
-- This audit was superseded by app-code commit `1a36415` and the full trace at `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
+- This audit was superseded by app-code commit `1a36415`, then by the current full trace at `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
 
 ### Native Dialog Automation Recheck
 

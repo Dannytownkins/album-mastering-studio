@@ -41,7 +41,50 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Project Dialog Failure/Cancel Hardening
+## Latest Codex Pass: Source Integrity Smoke and Current Full Trace
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-real-song-performance-smoke.mjs`
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Added before/after size and SHA-256 evidence to the real-song Track Master smoke so `Lay the Money on the Desk (1).mp3` is proven unchanged after import, analyze, render, export checks, and codec QC.
+- Stabilized the Track Preview smoke's rendered-preview cue assertion by waiting for the media element seek to settle before sampling `audio.currentTime`.
+- Recorded the failed `1c4aad1` full trace as a smoke timing race, then replaced it with a clean `1a7c870` full trace.
+
+Verification:
+
+- `cd desktop; node --check .\tests\tauri-real-song-performance-smoke.mjs`
+- `cd desktop; $env:AMS_REAL_SONG_PATH='C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3'; npm run test:tauri-real-song-codec-qc`
+- `cd desktop; node --check .\tests\tauri-track-preview-ui-smoke.mjs`
+- `cd desktop; npm run test:tauri-track-preview-ui`
+- `cd desktop; npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes`
+
+Evidence:
+
+- Current commit: `1a7c87021af9bbe9d044fdf1f5b0666e5c162577`.
+- Full trace: `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
+- Result: 23 passed, 0 failed, 0 skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Source integrity evidence: `sourceUnchanged.size: true`, `sourceUnchanged.sha256: true`, SHA-256 `d280ff093bc0609bb2afa2a0771b7ce5b6df107c7454662aa25c3e036a927c7b`.
+- Rendered-preview cue evidence: `exportEngineAuditionSeekReady: true`, expected cue `2.040736`, sampled current time `2.040735`.
+- Windows Application log check: `test-output\release-readiness-1a7c870-20260513-025835\windows-application-events.json` with zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries.
+
+Decision:
+
+- This is the current app-code/test release trace.
+- The source non-destructive requirement now has real-song byte-for-byte hash evidence in addition to output-path behavior.
+- The active goal remains open because human listening approval, Live Preview scope acceptance or deeper parity, and native Open/Save-As verification or waiver are still unresolved.
+
+## Prior Codex Pass: Project Dialog Failure/Cancel Hardening
 
 Date: 2026-05-13
 
@@ -77,7 +120,7 @@ Evidence:
 
 Decision:
 
-- This is the current app-code release trace.
+- This was the current app-code release trace at the time; it is superseded by the `1a7c870` trace above.
 - Native OS Open/Save-As dialog coverage remains open until manually verified or explicitly waived. This pass hardens failure/cancel behavior but does not prove the native dialogs can be driven unattended.
 - Human listening approval and Live Preview scope acceptance remain open.
 
@@ -100,7 +143,7 @@ What happened:
 
 Decision:
 
-- This was true at the time, but is now superseded by app-code commit `1a36415` and `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
+- This was true at the time, but is now superseded by app-code/test commit `1a7c870` and `test-output\release-readiness-1a7c870-20260513-025835\release-readiness.json`.
 - Rerun full release readiness only after a code, package, smoke-test, or installer-relevant change, or when intentionally refreshing the baseline.
 - The active goal remains open because the unresolved items are manual listening approval, Live Preview scope acceptance or deeper parity, and native Open/Save-As verification or waiver.
 
@@ -149,7 +192,7 @@ Changed files in this pass:
 What changed:
 
 - Recorded the full release-readiness trace for clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
-- This was the current app-code full trace for the Listening Approval Scope hardening at the time; it is superseded by the `1a36415` trace above.
+- This was the current app-code full trace for the Listening Approval Scope hardening at the time; it is superseded by the `1a7c870` trace above.
 
 Verification run:
 
@@ -216,7 +259,7 @@ Remaining blockers:
 - Human listening approval has not been recorded.
 - Live Preview remains approximate; it is now more explicitly scoped as directional-only, but this still needs user acceptance or a deeper parity change before goal completion.
 - Native OS Open/Save-As dialogs remain unautomated/unwaived.
-- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`, then superseded by the current `1a36415` trace above.
+- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`, then superseded by the current `1a7c870` trace above.
 
 ## Latest Codex Pass: Project Open Dialog Default Path Hardening
 
