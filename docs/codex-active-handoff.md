@@ -55,7 +55,7 @@ Changed files in this pass:
 What happened:
 
 - Audited whether current `master` head invalidates the latest full app-code release trace.
-- `git diff --name-status 8c6b5a0..HEAD` shows only docs changes.
+- `git diff --name-status 8c6b5a0..HEAD` showed only docs changes.
 - `git diff --quiet 8c6b5a0..HEAD -- ':!docs/**'` returned no non-doc diff.
 
 Decision:

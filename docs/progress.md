@@ -18,7 +18,7 @@ git diff --quiet 8c6b5a0..HEAD -- ':!docs/**'
 
 Results:
 
-- Current `HEAD` is `28594a0`.
+- Pre-commit `HEAD` for this audit was `28594a0`; the audit update itself is docs-only.
 - Files changed since `8c6b5a0`: `docs/GOAL_AUDIT.md`, `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, `docs/codex-active-handoff.md`, and `docs/progress.md`.
 - No non-doc diff exists since `8c6b5a0`.
 - The release trace at `test-output\release-readiness-8c6b5a0-full\release-readiness.json` remains the current app-code/binary evidence unless a later code, package, or smoke-test change is made.
