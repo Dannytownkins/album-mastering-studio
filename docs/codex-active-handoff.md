@@ -17,7 +17,49 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Current-Commit Release Readiness Trace
+## Latest Codex Pass: Mandatory Research Guidance Integration
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `docs/PRODUCT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/most-recent-mastering-app-research.md`
+
+What changed:
+
+- Fetched and reviewed `origin/codex/mandatory-mastering-research` at `9d8babe`.
+- Did not merge the branch directly because its branch tip is behind newer stability/release-readiness commits; a direct merge/diff would touch source/test files and remove newer release-readiness work.
+- Added `docs/most-recent-mastering-app-research.md` as reference material.
+- Integrated only mandatory guidance that reinforces the current stability goal:
+  - Track Master stability first.
+  - Fast lane plus deep lane product shape.
+  - Explicit delivery presets.
+  - Playback latency measurement.
+  - Standards-aware metering.
+  - Limiter, true-peak, dither, and stereo safety.
+  - Explainable assistant language.
+  - Album Master consistency map as later direction.
+- Preserved the newer progress/handoff/release-readiness details from current `master`.
+
+Reference-only / do not build from this branch right now:
+
+- DDP, PQ-sheet, stem separation, neural repair, target-curve overlays, large multi-reference browsers, linear-phase mode expansion, and advanced delivery authoring.
+- Codec preview expansion unless a future stabilization pass explicitly chooses it after playback, metering, limiting, and export stability improve.
+
+Current WIP note:
+
+- The Album Plan Review implementation was stashed before this docs integration under `stash@{0}` with message `wip-album-plan-review-before-research-docs-merge`.
+- Resume by applying that stash after the docs integration commit/push is complete, then continue the engine-backed Album Plan Review slice.
+
+Verification:
+
+- `git diff --check` passed for the docs integration.
+
+## Previous Codex Pass: Current-Commit Release Readiness Trace
 
 Date: 2026-05-12
 

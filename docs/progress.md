@@ -2,6 +2,28 @@
 
 ## 2026-05-12
 
+### Mandatory Research Guidance Integration
+
+- Fetched and reviewed `origin/codex/mandatory-mastering-research` at `9d8babe`.
+- The branch was not safe to merge directly into current `master` because the branch tip is behind the latest stability/release-readiness commits; a direct merge/diff would touch source/test files and remove newer release-readiness work such as `scripts/release-readiness.ps1`.
+- Manually integrated the docs-only research guidance instead of merging the stale branch state.
+- Added `docs/most-recent-mastering-app-research.md` as reference material.
+- Updated `docs/PRODUCT.md` with the mandatory research takeaways that reinforce the current goal:
+  - Track Master stability first.
+  - Fast lane plus deep lane product shape.
+  - Explicit delivery presets and standards-aware metering.
+  - Playback responsiveness as a trust requirement.
+  - Limiter, true-peak, dither, and stereo safety before preset sprawl.
+  - Explainable assistant language rather than vague AI claims.
+  - Album Master consistency map as later direction.
+- Updated `docs/IMPLEMENTATION_PLAN.md` with the same research constraints while preserving newer packaged evidence, handoff, progress, and release-readiness details.
+
+Reference-only / not current scope:
+
+- DDP, PQ-sheet, stem separation, neural repair, target-curve overlays, large multi-reference browsers, linear-phase mode expansion, and advanced delivery authoring remain later ideas only.
+- Codec preview expansion remains reference-only until playback, metering, limiting, and export stability are stronger.
+- The immediate implementation goal remains stability and release confidence, not research-feature expansion.
+
 ### Album Codec And History Evidence Slice
 
 - Extended the packaged Album Master Codec QC smoke to verify visible preview parity labels for album render artifacts.
