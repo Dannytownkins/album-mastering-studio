@@ -1,5 +1,54 @@
 # Progress Notes
 
+## 2026-05-13
+
+### Current-Commit Full Release Readiness Trace
+
+Scope:
+
+- Reran the full release-readiness runner from clean `master` commit `d8d88e6d852694c32f447e406a4b9b969522e0a3` after the playback hardening commit.
+- Included the real-song smoke set with `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3`.
+- Included installer smokes so the trace covers the release EXE, NSIS installed-app path, and MSI package path.
+
+Verification:
+
+```powershell
+cd desktop
+npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-d8d88e6-full"
+```
+
+Results:
+
+- Release readiness passed: `23 passed`, `0 failed`, `0 skipped`.
+- Trace started at `2026-05-12T23:59:21.6498260-07:00` and completed at `2026-05-13T00:13:25.3309879-07:00`.
+- Dirty state proof: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log query found no Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries after the run.
+
+Evidence:
+
+- `test-output\release-readiness-d8d88e6-full\release-readiness.json`
+- Per-step logs under `test-output\release-readiness-d8d88e6-full\`.
+
+Passed gates:
+
+- Python compile, Python unittest, and Python CLI smoke.
+- Desktop TypeScript/Vite build and desktop integration contract.
+- True headless native audio output probe.
+- Tauri release build with sidecar, FFmpeg, FFprobe, release EXE, MSI, and NSIS bundles.
+- Sidecar startup and packaged release launch.
+- Track Preview UI, Album state, Album Codec QC, Track Codec QC, session safety, and project persistence smokes.
+- Real-song Track Codec QC, Region Preview, Native UI, Album Playback, and Album Codec QC smokes.
+- NSIS installed-app smoke, MSI package smoke, and `git diff --check`.
+
+Completion audit:
+
+- Track Master-first release path: covered by the hardening pass plus this full trace.
+- Python engine contract: covered by unit/CLI/desktop contract gates and release sidecar use.
+- Album Master path: covered by Album state, Album Codec QC, real-song Album Playback, and real-song Album Codec QC gates.
+- Local/offline workflow: covered by sidecar/FFmpeg bundled release build and offline render/check/report gates.
+- Docs/progress handoff: updated here, in `docs/codex-active-handoff.md`, and in `docs/GOAL_AUDIT.md`.
+- Not complete yet because human listening approval has not been recorded, Live Preview remains explicitly approximate, and native Open/Save-As dialog automation remains uncovered.
+
 ## 2026-05-12
 
 ### Release-Candidate Playback Hardening Pass

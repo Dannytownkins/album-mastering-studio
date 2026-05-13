@@ -40,7 +40,70 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Release-Candidate Playback Hardening
+## Latest Codex Pass: Current-Commit Full Release Readiness Trace
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What changed:
+
+- Recorded the full release-readiness trace from clean `master` commit `d8d88e6d852694c32f447e406a4b9b969522e0a3` after the playback hardening commit.
+- Preserved the current Track Master-first stability evidence, real-song smoke coverage, installer coverage, and remaining blockers in the active handoff.
+- Updated the goal audit so it no longer describes the loop as paused or points at the older `2ada649` trace as the newest release evidence.
+
+Verification already run before this docs pass:
+
+- `cd desktop; npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-d8d88e6-full"`
+
+Evidence:
+
+- `test-output\release-readiness-d8d88e6-full\release-readiness.json`
+- Result: 23 passed, 0 failed, 0 skipped.
+- Trace commit: `d8d88e6d852694c32f447e406a4b9b969522e0a3` on `master`.
+- Trace timestamps: started `2026-05-12T23:59:21.6498260-07:00`, completed `2026-05-13T00:13:25.3309879-07:00`.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application logs showed no Album Mastering Studio Application Error, Application Hang, or WER entries during the checked window.
+
+Passed gates:
+
+- `python-compile`
+- `python-unittest`
+- `python-cli-smoke`
+- `desktop-build`
+- `desktop-integration`
+- `native-audio-headless-probe`
+- `desktop-tauri-build`
+- `tauri-sidecar-startup`
+- `tauri-release-launch`
+- `tauri-track-preview-ui`
+- `tauri-release-album-state`
+- `tauri-release-album-codec-qc`
+- `tauri-release-track-codec-qc`
+- `tauri-release-session-safety`
+- `tauri-project-persistence`
+- `tauri-real-song-codec-qc`
+- `tauri-real-song-region-preview`
+- `tauri-real-song-native-ui`
+- `tauri-real-song-album-playback`
+- `tauri-real-song-album-codec-qc`
+- `tauri-nsis-installed-app`
+- `tauri-msi-package`
+- `git-diff-check`
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Rerun full release readiness after any later code/package/smoke change before making a fresh release-ready claim.
+
+## Previous Codex Pass: Release-Candidate Playback Hardening
 
 Date: 2026-05-13
 
@@ -89,7 +152,6 @@ Remaining blockers:
 - Human listening approval has not been recorded.
 - Live Preview remains approximate; rendered preview/export paths remain release-faithful.
 - Native OS Open/Save-As dialogs remain unautomated.
-- Full release-readiness should be rerun from the hardening commit if a single current-commit trace is needed.
 
 ## Previous Codex Pass: Expanded Full Release Readiness Trace at 2ada649
 
