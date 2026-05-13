@@ -5284,3 +5284,40 @@ Results:
 
 - Real-song Album playback smoke passed against the packaged release EXE and wrote `test-output\tauri-real-song-album-ui-release-selflaunch\tauri-real-song-album-ui-smoke.json`.
 - The prior `422ce43` full-trace attempt remains failed; rerun the full trace from the next clean commit before claiming the current-commit release loop is closed.
+
+### Full Release Readiness Trace at 15b5d0e
+
+- Ran the release-readiness runner from clean `master` commit `15b5d0ef6e9000209d88425eb1d8aeb14dc20ac7`.
+- Trace path: `test-output\release-readiness-15b5d0e-full-20260512-175810\release-readiness.json`.
+- Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-15b5d0e-full-20260512-175810"`.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Result: 21 passed, 0 failed, 0 skipped.
+
+Passed steps:
+
+| Step | Seconds |
+| --- | ---: |
+| `python-compile` | 0.06 |
+| `python-unittest` | 47.56 |
+| `python-cli-smoke` | 7.64 |
+| `desktop-build` | 3.00 |
+| `desktop-integration` | 2.93 |
+| `desktop-tauri-build` | 207.70 |
+| `tauri-sidecar-startup` | 7.72 |
+| `tauri-release-launch` | 16.56 |
+| `tauri-track-preview-ui` | 55.84 |
+| `tauri-release-album-state` | 9.30 |
+| `tauri-release-album-codec-qc` | 18.93 |
+| `tauri-release-track-codec-qc` | 20.62 |
+| `tauri-release-session-safety` | 7.56 |
+| `tauri-project-persistence` | 11.72 |
+| `tauri-real-song-codec-qc` | 80.97 |
+| `tauri-real-song-region-preview` | 19.70 |
+| `tauri-real-song-album-playback` | 45.93 |
+| `tauri-real-song-album-codec-qc` | 22.70 |
+| `tauri-nsis-installed-app` | 30.14 |
+| `tauri-msi-package` | 22.36 |
+| `git-diff-check` | 0.04 |
+
+This closes the current-commit final release-loop blocker for `15b5d0e`. It does not close human listening approval, does not make Live Preview export-chain faithful, and does not add native OS Open/Save-As dialog automation.

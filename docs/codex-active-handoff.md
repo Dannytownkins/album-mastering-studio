@@ -94,6 +94,54 @@ Remaining gap:
 
 - The full release-readiness trace must be rerun from the clean commit that includes this fix. The `422ce43` trace failed at the old playback gate and should not be treated as current release evidence.
 
+## Latest Codex Pass: Full Release Readiness Trace
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What changed:
+
+- Recorded the passed full release-readiness trace from clean `master` commit `15b5d0ef6e9000209d88425eb1d8aeb14dc20ac7`.
+- The trace used `C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3` and included installer smokes.
+- Trace artifact: `test-output\release-readiness-15b5d0e-full-20260512-175810\release-readiness.json`.
+- Result: 21 passed, 0 failed, 0 skipped; `dirty_before` and `dirty_after` were empty.
+
+Passed gates:
+
+- `python-compile`
+- `python-unittest`
+- `python-cli-smoke`
+- `desktop-build`
+- `desktop-integration`
+- `desktop-tauri-build`
+- `tauri-sidecar-startup`
+- `tauri-release-launch`
+- `tauri-track-preview-ui`
+- `tauri-release-album-state`
+- `tauri-release-album-codec-qc`
+- `tauri-release-track-codec-qc`
+- `tauri-release-session-safety`
+- `tauri-project-persistence`
+- `tauri-real-song-codec-qc`
+- `tauri-real-song-region-preview`
+- `tauri-real-song-album-playback`
+- `tauri-real-song-album-codec-qc`
+- `tauri-nsis-installed-app`
+- `tauri-msi-package`
+- `git-diff-check`
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains an explicit approximation, though rendered preview/export paths remain the release-faithful paths.
+- Native OS Open/Save-As dialogs are still not automated; direct path `.ams.json` load/save is covered.
+- Rerun the release-readiness trace after any code, packaging, or smoke-test change before making another current-commit release claim.
+
 ## Previous Codex Pass: Album Codec And History Evidence
 
 Date: 2026-05-12

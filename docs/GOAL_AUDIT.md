@@ -14,7 +14,7 @@ This audit is a handoff guard, not a completion claim. Keep it current when the 
 
 Status: active, not complete.
 
-The current repo has strong automated evidence for the Track Master-first Tauri surface, Python engine contract, Album Master path, and packaged Windows flow. The remaining blockers are quality gates that cannot be honestly closed by documentation alone:
+The current repo has strong automated evidence for the Track Master-first Tauri surface, Python engine contract, Album Master path, packaged Windows flow, and a current-commit release trace. The remaining blockers are quality gates that cannot be honestly closed by documentation alone:
 
 - Human listening approval has not been recorded.
 - Live Preview remains an explicit Web Audio approximation for continuous control updates; the visible native path now has a bounded rendered Rust-model audition path, but not continuous native DSP or full export-chain parity.
@@ -30,7 +30,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Album Master path | Automated release evidence covers multi-source and full-source Album Master render, transitions, album WAV, dashboard, export checks, and native album playback stability. | Covered with listening caveat |
 | Docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and `docs/ENGINE_DECISION_RECORD.md` record current evidence and known gaps. | Covered |
 | Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, local render/check/report flow, and direct `.ams.json` path Load/Save remain the core path. | Covered |
-| Release package | `npm run tauri:build` has rebuilt the sidecar, release EXE, MSI, and NSIS bundles in recent loops. | Covered with rerun-before-release rule |
+| Release package | Full release-readiness trace at `15b5d0e` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, installer, and diff gates. | Covered at 15b5d0e |
 
 ## Prompt-To-Artifact Audit
 
@@ -48,6 +48,7 @@ This matrix maps the active goal wording to concrete repo artifacts. It is inten
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Full release readiness trace at `15b5d0e`: `test-output\release-readiness-15b5d0e-full-20260512-175810\release-readiness.json` passed all 21 gates with zero failures and zero skips, including Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, real-song Track/Region/Album smokes using `Lay the Money on the Desk (1).mp3`, NSIS installed-app smoke, MSI package smoke, and `git diff --check`.
 - 2026-05-12 Real-song Album playback gate fix: the real-song Album UI/playback smoke now self-launches the packaged release EXE by default and passes against `Lay the Money on the Desk (1).mp3`; app render revision stamps now use a synchronous session revision ref so immediate role/control edit plus render is not incorrectly marked stale.
 - 2026-05-12 Release readiness trace runner: added `scripts/release-readiness.ps1` and `desktop` script `npm run verify:release`. The runner records per-step logs and `release-readiness.json` for Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, optional real-song smokes, optional installer smokes, and `git diff --check`.
 - 2026-05-12 Album Codec and history evidence: packaged Album Master Codec QC smoke verifies Album Export appears in Recent Renders with enabled Play/Dashboard actions, Recent Renders Play hands off to album playback, `renderHistory` persists an `album-export` entry, Album WAV shows `Render-faithful album`, and Album AAC shows `Codec preview audition` with no warning state.
@@ -86,7 +87,10 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 1. A real human listening pass is run and recorded in the app or handoff notes, including whether Track Master and Album Master outputs are musically acceptable.
 2. Live Preview either becomes shared/export-engine faithful for the basic ear-facing controls or remains clearly scoped as an approximation with release-candidate wording adjusted accordingly.
-3. The final release loop reruns the release build and the relevant Track Master, Album Master, sidecar, and installer smokes from the commit being evaluated. The trace runner now exists, but an available runner is not the same as a passed current-commit trace.
+
+Closed for current commit:
+
+- Final release loop for commit `15b5d0e` passed with real-song and installer gates enabled. Rerun it after any code, packaging, or smoke-test change before making a fresh release-readiness claim.
 
 ## Next Unattended Slices
 
