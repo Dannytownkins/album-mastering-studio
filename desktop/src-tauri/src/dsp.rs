@@ -191,6 +191,12 @@ pub struct MbcSettings {
     pub makeup_db: f32,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct CharacterSettings {
+    #[serde(default)]
+    pub warmth: f32,
+}
+
 impl Default for MbcSettings {
     fn default() -> Self {
         Self {
@@ -218,6 +224,24 @@ pub fn process_mbc(samples: &mut [f32], settings: &MbcSettings, sample_rate: f32
         let (left, right, _) = processor.process_stereo(frame[0], frame[1]);
         frame[0] = left;
         frame[1] = right;
+    }
+}
+
+pub fn process_character(samples: &mut [f32], settings: &CharacterSettings) {
+    let warmth = settings.warmth.max(0.0);
+    if warmth <= 0.0 || samples.is_empty() {
+        return;
+    }
+
+    let drive = 1.0 + (warmth * 4.0);
+    let norm = drive.tanh();
+    if norm.abs() <= f32::EPSILON {
+        return;
+    }
+
+    for sample in samples {
+        let saturated = (*sample * drive).tanh() / norm;
+        *sample = (*sample * (1.0 - warmth)) + (saturated * warmth);
     }
 }
 

@@ -518,7 +518,10 @@ def master_track(
         ),
     )
     processed = _transient_shape(processed, sample_rate, preset.transient_punch + (intensity * 0.055))
-    processed = _saturate(processed, max(preset.warmth + fine_tune.warmth_offset + max(intensity, 0.0) * 0.015, 0.0))
+    processed = _rust_character(
+        processed,
+        max(preset.warmth + fine_tune.warmth_offset + max(intensity, 0.0) * 0.015, 0.0),
+    )
     processed = _stereo_width(processed, max(preset.stereo_width + fine_tune.width_offset, 0.15))
     processed, gain_db = _match_lufs(
         processed,
@@ -640,7 +643,7 @@ def _apply_edge_segment(
         high_db=float(treatment.get("air_db", 0.0)),
     )
     wet = _stereo_width(wet, max(float(treatment.get("width", 1.0)), 0.15))
-    wet = _saturate(wet, max(float(treatment.get("warmth", 0.0)), 0.0))
+    wet = _rust_character(wet, max(float(treatment.get("warmth", 0.0)), 0.0))
     gain = float(db_to_amplitude(float(treatment.get("gain_db", 0.0))))
     wet = wet * gain
 
@@ -773,12 +776,39 @@ def _transient_shape(samples: np.ndarray, sample_rate: int, punch: float) -> np.
     return (samples * gain[:, np.newaxis]).astype(np.float32)
 
 
-def _saturate(samples: np.ndarray, warmth: float) -> np.ndarray:
+def _rust_character(samples: np.ndarray, warmth: float) -> np.ndarray:
+    if samples.size == 0:
+        return samples.astype(np.float32)
     if warmth <= 0:
-        return samples
-    drive = 1.0 + (warmth * 4.0)
-    saturated = np.tanh(samples * drive) / np.tanh(drive)
-    return ((samples * (1.0 - warmth)) + (saturated * warmth)).astype(np.float32)
+        return samples.astype(np.float32)
+
+    stereo = np.asarray(samples, dtype=np.float32)
+    if stereo.ndim == 1:
+        stereo = stereo[:, np.newaxis]
+    if stereo.shape[1] == 1:
+        stereo = np.repeat(stereo, 2, axis=1)
+    elif stereo.shape[1] > 2:
+        stereo = stereo[:, :2]
+    stereo = np.ascontiguousarray(stereo, dtype=np.float32)
+
+    with tempfile.TemporaryDirectory(prefix="album-master-rust-character-") as tmpdir:
+        input_path = Path(tmpdir) / "input.raw"
+        output_path = Path(tmpdir) / "output.raw"
+        stereo.tofile(input_path)
+        command = _rust_character_command()
+        subprocess.run(
+            [
+                *command,
+                str(input_path),
+                str(output_path),
+                str(float(warmth)),
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        processed = np.fromfile(output_path, dtype=np.float32).reshape((-1, 2))
+    return processed.astype(np.float32)
 
 
 def _stereo_width(samples: np.ndarray, width: float) -> np.ndarray:
@@ -976,6 +1006,30 @@ def _rust_mbc_command() -> list[str]:
         ]
 
     executable = Path(sys.executable).with_name("rust-mbc.exe" if os.name == "nt" else "rust-mbc")
+    return [str(executable)]
+
+
+def _rust_character_command() -> list[str]:
+    configured = os.environ.get("ALBUM_MASTER_RUST_CHARACTER")
+    if configured:
+        return [configured]
+
+    root = Path(__file__).resolve().parents[2]
+    manifest = root / "desktop" / "src-tauri" / "Cargo.toml"
+    if manifest.exists():
+        cargo = os.environ.get("CARGO", "cargo")
+        return [
+            cargo,
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(manifest),
+            "--bin",
+            "rust-character",
+            "--",
+        ]
+
+    executable = Path(sys.executable).with_name("rust-character.exe" if os.name == "nt" else "rust-character")
     return [str(executable)]
 
 

@@ -988,6 +988,13 @@ function App() {
   }, [nativePlaybackStatus.active, settings.compression]);
 
   useEffect(() => {
+    if (!nativePlaybackStatus.active) return;
+    invoke("update_character_chain", { settings: { warmth: Math.max(settings.warmth, 0) } }).catch((error) =>
+      pushLog(`Native character update failed: ${String(error)}`),
+    );
+  }, [nativePlaybackStatus.active, settings.warmth]);
+
+  useEffect(() => {
     return () => {
       liveAuditionRef.current?.context.close().catch(() => undefined);
       invoke("stop_native_playback").catch(() => undefined);
