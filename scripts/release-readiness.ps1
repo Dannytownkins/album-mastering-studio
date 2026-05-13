@@ -121,7 +121,13 @@ function Invoke-ReadinessStep {
   Push-Location -LiteralPath $WorkingDirectory
   try {
     $global:LASTEXITCODE = 0
-    & $Command *>&1 | Tee-Object -FilePath $logPath
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+      & $Command *>&1 | Tee-Object -FilePath $logPath
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
     $exitCode = if ($null -eq $global:LASTEXITCODE) { 0 } else { $global:LASTEXITCODE }
     if ($exitCode -ne 0) {
       throw ("Command exited with code {0}" -f $exitCode)
