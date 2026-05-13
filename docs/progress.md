@@ -2,6 +2,58 @@
 
 ## 2026-05-13
 
+### Live Preview Scope Decision Field
+
+Scope:
+
+- Added `Live Preview directional scope accepted` to the standalone `Review Decision` form in generated `listening-handoff.html`.
+- The generated review JSON now includes `checklist.live_preview_scope_accepted` so Live Preview's directional-only scope can be accepted explicitly instead of being implied.
+- Extended the handoff browser-audio smoke plus Track packet and Album Codec QC packet smokes so the new decision field is verified and defaults to false.
+
+Verification:
+
+- `cd desktop\src-tauri; cargo fmt`
+- `cd desktop; node --check tests/listening-handoff-browser-audio-smoke.mjs; node --check tests/tauri-real-song-listening-packet-smoke.mjs; node --check tests/tauri-release-album-codec-qc-smoke.mjs`
+- `cd desktop\src-tauri; cargo test listening_packet_html_includes_playable_local_audio_controls`
+- `cd desktop; npm run build`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-fe808df-live-preview-scope-decision"`
+- Windows Application log query for the full trace window, saved to `test-output\release-readiness-fe808df-live-preview-scope-decision\windows-application-events.json`.
+
+Results:
+
+- Code commit covered by the full trace: `fe808df0e8d632d9eea239c1fc0baa097b923b15`.
+- Full release-readiness trace passed: `25 passed`, `0 failed`, `0 skipped`.
+- Full trace: `test-output\release-readiness-fe808df-live-preview-scope-decision\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log artifact for Album Mastering Studio errors/hangs/WER in the checked window: `[]`.
+- Browser-audio/review artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
+- Browser-audio values: `audioCount: 4`, `allAudioReady: true`, and `errors: 0`.
+- Review-decision values: `reviewDecisionVisible: true`, `reviewJsonDefaultStatus: "not-approved"`, `reviewJsonDefaultApproved: false`, `reviewJsonDefaultLivePreviewScopeAccepted: false`, and `reviewDownloadButtonVisible: true`.
+- Current ready-to-listen HTML from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-064119-225\listening-handoff.html`.
+- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-064119-225\listening-review.json`.
+- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-064119-225\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+
+What passed:
+
+- The standalone handoff packet remains playable in Chrome.
+- Original MP3, Mastered WAV, AAC preview, and Opus preview audio controls still load with valid metadata and no media errors.
+- The review-decision form is present, starts as `not-approved`, and keeps Live Preview scope acceptance unchecked by default.
+- Existing Track Master, Album Master, real-song, installer, session-safety, and diff gates still pass.
+
+What failed:
+
+- No automated failure was observed in this pass.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded; the current real-song packet and review decision state remain intentionally `not-approved`.
+- Live Preview's directional-only scope is now recordable, but still not accepted until the user checks that decision or we build deeper parity.
+- Live OS drag/drop is still not proven by unattended automation, though Add/import and the Tauri drag/drop listener path are covered by current evidence.
+
+Next recommended action:
+
+- Use the current ready-to-listen Track Master packet for the human listening pass, use the standalone review form or in-app receipt to record approve/reject notes, and check Live Preview scope acceptance only if that directional-only behavior is acceptable.
+
 ### Standalone Review Decision Handoff
 
 Scope:
@@ -30,9 +82,9 @@ Results:
 - Browser-audio/review artifact: `test-output\tauri-real-song-listening-packet-smoke\listening-handoff-browser-audio-smoke.json`.
 - Browser-audio values: `audioCount: 4`, `allAudioReady: true`, and `errors: 0`.
 - Review-decision values: `reviewDecisionVisible: true`, `reviewJsonKind: "listening-review-decision"`, `reviewJsonDefaultStatus: "not-approved"`, `reviewJsonDefaultApproved: false`, and `reviewDownloadButtonVisible: true`.
-- Current ready-to-listen HTML from the full trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-handoff.html`.
-- Current receipt: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-review.json`.
-- Current mastered WAV: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
+- Ready-to-listen HTML from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-handoff.html`.
+- Receipt from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\listening-review.json`.
+- Mastered WAV from that trace: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-062238-775\01-lay-the-money-on-the-desk-1\masters\01_lay-the-money-on-the-desk-1_mastered.wav`.
 
 What passed:
 
@@ -53,7 +105,7 @@ Remaining blockers:
 
 Next recommended action:
 
-- Use the current ready-to-listen Track Master packet for the human listening pass, use the standalone review form or in-app receipt to record approve/reject notes, then decide whether Live Preview's directional-only scope is acceptable before taking on broad UI polish.
+- Use the latest ready-to-listen Track Master packet for the human listening pass, use the standalone review form or in-app receipt to record approve/reject notes, then decide whether Live Preview's directional-only scope is acceptable before taking on broad UI polish.
 
 ### Handoff Browser-Audio Release Gate
 
