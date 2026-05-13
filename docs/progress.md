@@ -2,6 +2,40 @@
 
 ## 2026-05-13
 
+### Project Dialog Failure/Cancel Hardening and Full Trace
+
+Scope:
+
+- Hardened the dialog-backed Project Open, Save, and Save As actions in `desktop\src\App.tsx`.
+- Native dialog plugin failures now log visible failure messages instead of surfacing as opaque unhandled async errors.
+- User cancel outcomes now log explicit Open/Save/Save As canceled states and update the progress label.
+- This does not close native Windows Open/Save-As dialog coverage; it only makes the failure/cancel path visible and non-disruptive.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+npm run test:integration
+npm run tauri:build
+npm run test:tauri-project-persistence
+npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes
+```
+
+Results:
+
+- App-code commit: `1a36415e4234ca9c6cd67d36c591345342b166d5`.
+- Full release readiness passed: `23 passed`, `0 failed`, `0 skipped`.
+- Trace: `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
+- Dirty state proof in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log check found zero matching Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries and saved `test-output\release-readiness-1a36415-20260513-022743\windows-application-events.json`.
+
+Remaining blockers:
+
+- Human listening approval is still not recorded.
+- Live Preview remains accepted-only-if-user-accepts directional approximation, or it needs deeper parity work.
+- Native OS Open/Save-As dialogs still need manual verification or explicit waiver.
+
 ### Stabilization Prompt-To-Artifact Checklist
 
 Scope:
@@ -14,7 +48,7 @@ Result:
 - No app code changed.
 - The checklist confirms the remaining open gates are still native Open/Save-As manual verification or waiver, human listening approval, and Live Preview scope acceptance or deeper parity.
 
-### Current HEAD Docs-Only Audit
+### Docs-Only Audit Before Dialog Hardening
 
 Scope:
 
@@ -33,7 +67,7 @@ Results:
 - Pre-commit `HEAD` for this audit was `28594a0`; the audit update itself is docs-only.
 - Files changed since `8c6b5a0`: `docs/GOAL_AUDIT.md`, `docs/RELEASE_CANDIDATE_CLOSEOUT.md`, `docs/codex-active-handoff.md`, and `docs/progress.md`.
 - No non-doc diff exists since `8c6b5a0`.
-- The release trace at `test-output\release-readiness-8c6b5a0-full\release-readiness.json` remains the current app-code/binary evidence unless a later code, package, or smoke-test change is made.
+- This audit was superseded by app-code commit `1a36415` and the full trace at `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
 
 ### Native Dialog Automation Recheck
 
@@ -164,7 +198,7 @@ Remaining blockers:
 - Human listening approval has still not been recorded.
 - Live Preview is still an approximate directional path; the app and handoff now say so more explicitly, but the product decision still needs acceptance or a deeper parity change.
 - Native OS Open/Save-As dialog coverage is still unautomated/unwaived.
-- A full release-readiness trace was later rerun from the app-code commit that includes this hardening; see `Full Release Readiness Trace at 8c6b5a0` above.
+- A full release-readiness trace was later rerun from the app-code commit that includes this hardening; see the current `Project Dialog Failure/Cancel Hardening and Full Trace` section above.
 
 Next recommended action:
 

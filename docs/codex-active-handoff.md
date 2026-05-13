@@ -41,7 +41,47 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Current HEAD Docs-Only Audit
+## Latest Codex Pass: Project Dialog Failure/Cancel Hardening
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/RELEASE_CANDIDATE_CLOSEOUT.md`
+
+What changed:
+
+- Hardened Project Open, Save, and Save As in the Tauri surface so native dialog plugin failures are caught and shown in the app log/progress label.
+- Added explicit canceled states for Open, Save, and Save As so manual dialog cancel testing has an obvious in-app result.
+- Kept direct `.ams.json` path Load/Save unchanged as the deterministic fallback path.
+
+Verification:
+
+- `cd desktop; npm run build`
+- `cd desktop; npm run test:integration`
+- `cd desktop; npm run tauri:build`
+- `cd desktop; npm run test:tauri-project-persistence`
+- `cd desktop; npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes`
+
+Evidence:
+
+- App-code commit: `1a36415e4234ca9c6cd67d36c591345342b166d5`.
+- Full trace: `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
+- Result: 23 passed, 0 failed, 0 skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log check: `test-output\release-readiness-1a36415-20260513-022743\windows-application-events.json` with zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries.
+
+Decision:
+
+- This is the current app-code release trace.
+- Native OS Open/Save-As dialog coverage remains open until manually verified or explicitly waived. This pass hardens failure/cancel behavior but does not prove the native dialogs can be driven unattended.
+- Human listening approval and Live Preview scope acceptance remain open.
+
+## Prior Codex Pass: Docs-Only Audit Before Dialog Hardening
 
 Date: 2026-05-13
 
@@ -60,7 +100,7 @@ What happened:
 
 Decision:
 
-- `test-output\release-readiness-8c6b5a0-full\release-readiness.json` remains the current app-code/binary evidence.
+- This was true at the time, but is now superseded by app-code commit `1a36415` and `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
 - Rerun full release readiness only after a code, package, smoke-test, or installer-relevant change, or when intentionally refreshing the baseline.
 - The active goal remains open because the unresolved items are manual listening approval, Live Preview scope acceptance or deeper parity, and native Open/Save-As verification or waiver.
 
@@ -109,7 +149,7 @@ Changed files in this pass:
 What changed:
 
 - Recorded the full release-readiness trace for clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
-- This is now the current app-code full trace for the Listening Approval Scope hardening.
+- This was the current app-code full trace for the Listening Approval Scope hardening at the time; it is superseded by the `1a36415` trace above.
 
 Verification run:
 
@@ -176,7 +216,7 @@ Remaining blockers:
 - Human listening approval has not been recorded.
 - Live Preview remains approximate; it is now more explicitly scoped as directional-only, but this still needs user acceptance or a deeper parity change before goal completion.
 - Native OS Open/Save-As dialogs remain unautomated/unwaived.
-- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`; see the latest trace section above.
+- Full release-readiness was later rerun from clean app-code commit `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`, then superseded by the current `1a36415` trace above.
 
 ## Latest Codex Pass: Project Open Dialog Default Path Hardening
 

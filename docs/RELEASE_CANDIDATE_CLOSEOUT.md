@@ -6,10 +6,11 @@ This checklist is the manual closeout path for the active goal. It does not repl
 
 ## Current Evidence Baseline
 
-- Current app-code release trace: `test-output\release-readiness-8c6b5a0-full\release-readiness.json`.
-- App-code commit covered by that trace: `8c6b5a0ecb5c13bcdaf8efaeb29812f487f63ff0`.
-- Changes after `8c6b5a0` have been docs-only handoff and closeout updates; no app-code, package, or smoke-test file changed after the current release trace as of the latest recorded audit.
+- Current app-code release trace: `test-output\release-readiness-1a36415-20260513-022743\release-readiness.json`.
+- App-code commit covered by that trace: `1a36415e4234ca9c6cd67d36c591345342b166d5`.
+- The trace was run from a clean worktree and records `dirty_before: []` and `dirty_after: []`.
 - Automated result: 23 passed, 0 failed, 0 skipped.
+- Windows Application log check saved beside the trace found zero matching Album Mastering Studio Application Error, Application Hang, or Windows Error Reporting entries in the checked window.
 - Remaining blockers: human listening approval, Live Preview scope acceptance, native Open/Save-As dialog coverage or waiver.
 
 ## Track Master Listening Pass
