@@ -32,8 +32,23 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, local render/check/report flow, and direct `.ams.json` path Load/Save remain the core path. | Covered |
 | Release package | `npm run tauri:build` has rebuilt the sidecar, release EXE, MSI, and NSIS bundles in recent loops. | Covered with rerun-before-release rule |
 
+## Prompt-To-Artifact Audit
+
+This matrix maps the active goal wording to concrete repo artifacts. It is intended to prevent a future compaction or handoff from treating a broad phrase as complete without evidence.
+
+| Goal phrase | Artifact or command evidence | Still not proven by this artifact |
+| --- | --- | --- |
+| Rebuild from the existing repo | Continued work in `src/album_mastering_studio`, `desktop/`, `tests/`, and docs; no replacement repo or DSP port. | Subjective product quality. |
+| Track Master-first Tauri desktop surface | `desktop/src/App.tsx`, `desktop/src-tauri/src/lib.rs`, `desktop/tests/tauri-track-preview-ui-smoke.mjs`, and packaged evidence under `test-output/tauri-track-preview-ui-smoke/`. | Human listening approval of the resulting sound. |
+| Preserve the Python engine contract | `src/album_mastering_studio/cli.py`, `pipeline.py`, `mastering.py`, preview-contract/model commands, `tests/test_pipeline.py`, and `desktop/tests/cli-contract.test.mjs`. | A DAW-grade real-time DSP engine. |
+| Preserve the Album Master path | `desktop/tests/tauri-release-album-state-smoke.mjs`, `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`, real-song Album Master smokes, boundary-preview coverage, and dashboard/export artifacts. | True multi-song human listening approval unless the user supplies and reviews a multi-song set. |
+| Preserve docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and this audit. | The docs are evidence pointers, not proof by themselves. |
+| Preserve local/offline workflow | Tauri sidecar packaging, bundled FFmpeg/FFprobe resources, `npm run tauri:build`, local `.ams.json` project files, and offline render/report commands. | External platform release-meter certification. |
+| Make release readiness reproducible | `scripts/release-readiness.ps1` and `cd desktop; npm run verify:release` run the current release gate sequence and write a JSON trace plus per-step logs under `test-output/`. | The current-commit blocker closes only after the runner is executed from the commit being evaluated. |
+
 ## Latest Evidence Anchors
 
+- 2026-05-12 Release readiness trace runner: added `scripts/release-readiness.ps1` and `desktop` script `npm run verify:release`. The runner records per-step logs and `release-readiness.json` for Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, optional real-song smokes, optional installer smokes, and `git diff --check`.
 - 2026-05-12 Album Codec and history evidence: packaged Album Master Codec QC smoke verifies Album Export appears in Recent Renders with enabled Play/Dashboard actions, Recent Renders Play hands off to album playback, `renderHistory` persists an `album-export` entry, Album WAV shows `Render-faithful album`, and Album AAC shows `Codec preview audition` with no warning state.
 - 2026-05-12 Preview honesty labels: packaged Album Master state smoke verifies boundary preview playback shows `Bounded boundary preview`, tooltip copy mentions adjacent track tails/heads and not full-album approval, and the pill is not in warn state. Packaged Track Preview UI smoke still verifies `Render-faithful region`, `Render required` after stale Live Preview control edits, `Render-faithful preview`, cue-time tooltip text, and `Approx audition` after returning to source Live Preview.
 - 2026-05-12 Album Master Boundary Preview: packaged Album Master state smoke verifies visible `Preview Boundary`, generates a bounded adjacent-track WAV through the Python `preview-transition` sidecar path, confirms preview/project files exist, verifies transport label `Boundary 1 to 2 Preview`, and records a Recent Renders `Boundary Preview` entry. Python unit coverage verifies disabled `gap`, `fade`, `ring-out`, and `crossfade` boundary primitives in preview output.
@@ -70,15 +85,16 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 1. A real human listening pass is run and recorded in the app or handoff notes, including whether Track Master and Album Master outputs are musically acceptable.
 2. Live Preview either becomes shared/export-engine faithful for the basic ear-facing controls or remains clearly scoped as an approximation with release-candidate wording adjusted accordingly.
-3. The final release loop reruns the release build and the relevant Track Master, Album Master, sidecar, and installer smokes from the current commit.
+3. The final release loop reruns the release build and the relevant Track Master, Album Master, sidecar, and installer smokes from the commit being evaluated. The trace runner now exists, but an available runner is not the same as a passed current-commit trace.
 
 ## Next Unattended Slices
 
 Best next slices when the user is not actively listening:
 
-1. Automate packaged Open plus explicit Save As coverage only if a reliable Windows dialog automation route is found; keep the blocker documented while native OS dialogs remain too flaky to drive unattended.
-2. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented.
-3. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Rust first-control native preview, Python render-faithful preview, codec preview, or album/transition render output.
+1. From a clean commit, run `cd desktop; npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"` and add `-IncludeInstallerSmokes` when intentionally validating installers.
+2. Automate packaged Open plus explicit Save As coverage only if a reliable Windows dialog automation route is found; keep the blocker documented while native OS dialogs remain too flaky to drive unattended.
+3. Add narrower release smoke coverage for any unverified UI evidence that is currently only documented.
+4. Keep tightening the product honesty surface: every preview path should state whether it is Web Audio approximation, Rust first-control native preview, Python render-faithful preview, codec preview, or album/transition render output.
 
 Best next slice when the user is present:
 

@@ -816,6 +816,15 @@ Required:
 - App handles missing/corrupt files gracefully.
 - Sidecar/startup overhead measured.
 
+2026-05-12 release-readiness trace runner:
+
+- Added `scripts/release-readiness.ps1`.
+- Added `cd desktop; npm run verify:release`.
+- The runner creates `test-output\release-readiness-<commit>-<timestamp>\release-readiness.json` plus per-step logs for the release gate sequence.
+- Default gates include Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, and `git diff --check`.
+- Real-song and installer smokes are opt-in with `-RealSongPath` and `-IncludeInstallerSmokes`.
+- This runner supports the final-release blocker, but does not close it until run from the commit being evaluated.
+
 ## Public Release Risk Notes
 
 The app is private for now. Do not slow private development with public-product anxiety.

@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
     "build:sidecars": "powershell -ExecutionPolicy Bypass -File scripts/prepare-sidecars.ps1",
+    "verify:release": "powershell -ExecutionPolicy Bypass -File ../scripts/release-readiness.ps1",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

@@ -5234,3 +5234,28 @@ Results:
 Next candidate from scout:
 
 - Add Album Master Boundary Preview so the user can audition an adjacent-track boundary before full album export. Keep it labeled as a bounded boundary audition, not full-album listening approval.
+
+### Release Readiness Trace Runner
+
+- Added `scripts/release-readiness.ps1`, a root-level PowerShell runner for the release gate sequence.
+- Added `cd desktop; npm run verify:release` as the npm entrypoint for that runner.
+- The runner writes per-step logs plus `release-readiness.json` under `test-output\release-readiness-<commit>-<timestamp>\`.
+- Default coverage: Python compile, Python unittest, CLI smoke, desktop build, desktop integration, Tauri release build, sidecar startup, release launch smoke, Track Preview UI smoke, Album state smoke, Album Codec QC smoke, Track Codec QC smoke, session-safety smoke, and `git diff --check`.
+- Optional coverage: pass `-RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"` for real-song smokes and `-IncludeInstallerSmokes` for NSIS/MSI smoke coverage.
+- Updated `docs/GOAL_AUDIT.md` with a prompt-to-artifact audit matrix so future handoffs can map the active goal text to actual files, commands, and remaining blockers.
+
+Verification:
+
+```powershell
+$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path -LiteralPath 'scripts\release-readiness.ps1').Path, [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) { $errors | Format-List *; exit 1 } ; 'release-readiness.ps1 parse ok'
+node -e "JSON.parse(require('fs').readFileSync('desktop/package.json','utf8')); console.log('desktop/package.json ok')"
+```
+
+Results:
+
+- `release-readiness.ps1` parsed successfully.
+- `desktop/package.json` parsed successfully.
+
+Remaining caveat:
+
+- This pass adds the reusable trace runner. It does not by itself close the current-commit final release-loop blocker until the runner is executed from the commit being evaluated and the trace passes.

@@ -17,7 +17,50 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Album Codec And History Evidence
+## Latest Codex Pass: Release Readiness Trace Runner
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `scripts/release-readiness.ps1`
+- `desktop/package.json`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+
+What changed:
+
+- Added a root-level PowerShell release-readiness runner that records a JSON trace and per-step logs under `test-output\release-readiness-<commit>-<timestamp>\`.
+- Added `cd desktop; npm run verify:release` as the desktop entrypoint.
+- Default runner coverage includes Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged release launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, and `git diff --check`.
+- Optional runner coverage includes real-song smokes with `-RealSongPath` and installer smokes with `-IncludeInstallerSmokes`.
+- Updated `docs/GOAL_AUDIT.md` with a prompt-to-artifact audit matrix mapping the active goal wording to concrete files and commands.
+
+Verification already run:
+
+```powershell
+$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path -LiteralPath 'scripts\release-readiness.ps1').Path, [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) { $errors | Format-List *; exit 1 } ; 'release-readiness.ps1 parse ok'
+node -e "JSON.parse(require('fs').readFileSync('desktop/package.json','utf8')); console.log('desktop/package.json ok')"
+```
+
+Remaining gap:
+
+- This creates the repeatable final release loop, but does not itself prove a final clean-commit release trace. Run the command below from the pushed commit before treating release readiness as current:
+
+```powershell
+cd desktop
+npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3"
+```
+
+Add `-IncludeInstallerSmokes` when intentionally validating NSIS/MSI installers.
+
+Next useful slice:
+
+- Run the release-readiness trace from a clean commit, then update `docs/progress.md`, this handoff, and `docs/GOAL_AUDIT.md` with the trace path, passed steps, skipped optional gates, and remaining human-listening/native-dialog gaps.
+
+## Previous Codex Pass: Album Codec And History Evidence
 
 Date: 2026-05-12
 
