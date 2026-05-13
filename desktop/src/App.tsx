@@ -605,6 +605,7 @@ function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(initialSettings);
+  const settingsRef = useRef<Settings>(initialSettings);
   const [logs, setLogs] = useState<string[]>(["Ready."]);
   const [busy, setBusy] = useState(false);
   const [playbackBusy, setPlaybackBusy] = useState(false);
@@ -816,10 +817,11 @@ function App() {
   );
 
   useEffect(() => {
+    settingsRef.current = settings;
     tracksRef.current = tracks;
     selectedTrackIdRef.current = selectedTrackId;
     importDefaultsRef.current = { artist: settings.artist };
-  }, [tracks, selectedTrackId, settings.artist]);
+  }, [tracks, selectedTrackId, settings]);
 
   useEffect(() => {
     Promise.allSettled([
@@ -1473,7 +1475,14 @@ function App() {
   }
 
   function updateSettings(patch: Partial<Settings>, options: { dirty?: boolean } = { dirty: true }) {
-    setSettings((current) => ({ ...current, ...patch }));
+    const next = { ...settingsRef.current, ...patch };
+    settingsRef.current = next;
+    setSettings(next);
+    if (nativePlaybackStatus.active && compareSide === "master") {
+      applyRealtimeAuditionChain("master", next).catch((error) =>
+        pushLog(`Realtime slider update failed: ${String(error)}`),
+      );
+    }
     if (options.dirty !== false) markDirty();
   }
 
@@ -2609,15 +2618,15 @@ function App() {
     switchCompare(compareSide === "source" ? "master" : "source");
   }
 
-  async function applyRealtimeAuditionChain(side: AuditionSide = compareSide) {
+  async function applyRealtimeAuditionChain(side: AuditionSide = compareSide, nextSettings: Settings = settingsRef.current) {
     const mastered = side === "master";
     await Promise.all([
       invoke("update_chain", {
         settings: mastered
           ? {
-              lowDb: settings.bass,
-              midDb: settings.presence,
-              highDb: settings.air,
+              lowDb: nextSettings.bass,
+              midDb: nextSettings.presence,
+              highDb: nextSettings.air,
             }
           : {
               lowDb: 0,
@@ -2625,8 +2634,8 @@ function App() {
               highDb: 0,
             },
       }),
-      invoke("update_mbc_chain", { settings: mastered ? nativeMbcSettings(settings.compression) : nativeMbcBypassSettings() }),
-      invoke("update_character_chain", { settings: { warmth: mastered ? Math.max(settings.warmth, 0) : 0 } }),
+      invoke("update_mbc_chain", { settings: mastered ? nativeMbcSettings(nextSettings.compression) : nativeMbcBypassSettings() }),
+      invoke("update_character_chain", { settings: { warmth: mastered ? Math.max(nextSettings.warmth, 0) : 0 } }),
     ]);
   }
 
