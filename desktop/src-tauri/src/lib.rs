@@ -3391,16 +3391,22 @@ fn open_path(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn prepare_playback_file(app: AppHandle, path: String) -> Result<String, String> {
-    Ok(prepare_playback_file_inner(&app, path)?.path)
+async fn prepare_playback_file(app: AppHandle, path: String) -> Result<String, String> {
+    let prepared =
+        tauri::async_runtime::spawn_blocking(move || prepare_playback_file_inner(&app, path))
+            .await
+            .map_err(|error| format!("Playback prep task failed: {error}"))??;
+    Ok(prepared.path)
 }
 
 #[tauri::command]
-fn prepare_playback_file_info(
+async fn prepare_playback_file_info(
     app: AppHandle,
     path: String,
 ) -> Result<PreparedPlaybackFile, String> {
-    prepare_playback_file_inner(&app, path)
+    tauri::async_runtime::spawn_blocking(move || prepare_playback_file_inner(&app, path))
+        .await
+        .map_err(|error| format!("Playback prep task failed: {error}"))?
 }
 
 fn prepare_playback_file_inner(

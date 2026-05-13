@@ -2,6 +2,38 @@
 
 ## 2026-05-13
 
+### One-Hour Stability Pass: Playback Prep Guard
+
+Context:
+
+- User reported the app still feels non-intuitive and can show Windows "not responding" for about 15 seconds before recovering.
+- User asked for small stability wins only, no full-goal continuation and no broad UI redesign.
+
+Changes:
+
+- Added a dedicated playback-prep guard in `desktop/src/App.tsx` so repeated transport clicks do not stack concurrent playback prep/native prep jobs.
+- Disabled the confusing transport/prep buttons while playback prep is already running.
+- Moved `prepare_playback_file` and `prepare_playback_file_info` FFmpeg conversion work in `desktop/src-tauri/src/lib.rs` into `tauri::async_runtime::spawn_blocking`.
+- Added `docs/UI_WORKFLOW_EXPLAINER.md` for the current button row and intended Track Master workflow.
+- Added `LOOK_HERE_DAN_HANDOFF.md` as the obvious Dan-facing handoff file.
+
+Verification:
+
+- `cd desktop\src-tauri; cargo fmt`
+- `cd desktop; npm run build`
+- `cd desktop\src-tauri; cargo check`
+- `cd desktop; npm run tauri:build`
+- Full release-readiness was intentionally not rerun.
+
+Remaining risk:
+
+- This may reduce click-stacking and UI-thread pressure, but it does not prove all sources avoid the Windows "not responding" state.
+- If the app still freezes, the next investigation should target the exact button/source file combination and check whether render/export subprocesses or native WAV reads are blocking the WebView.
+
+Next recommended action:
+
+- Launch the release EXE, perform the manual Track Master path in `LOOK_HERE_DAN_HANDOFF.md`, and report the first concrete freeze or slow button.
+
 ### Manual Test Handoff / Unattended Loop Paused
 
 Context:

@@ -52,8 +52,41 @@ Manual test handoff:
 - Office-machine build/setup handoff: `docs/OFFICE_BUILD_HANDOFF.md`.
 - Manual listening checklist: `docs/MANUAL_LISTENING_TEST_GUIDE.md`.
 - New-agent workflow and committed test inventory: `docs/NEW_AGENT_WORKFLOW.md`.
+- Current UI/button explainer: `docs/UI_WORKFLOW_EXPLAINER.md`.
+- Dan-facing stop/pickup file: `LOOK_HERE_DAN_HANDOFF.md`.
 
-## Latest Codex Pass: Live Preview Scope Decision + Current Release Trace
+## Latest Codex Pass: One-Hour Stability Pass
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `desktop/src-tauri/src/lib.rs`
+- `docs/UI_WORKFLOW_EXPLAINER.md`
+- `LOOK_HERE_DAN_HANDOFF.md`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- Added a playback-prep guard so repeated transport clicks do not stack concurrent playback prep jobs.
+- Disabled transport/prep buttons while playback prep is in flight.
+- Moved Tauri playback-file FFmpeg conversion into `tauri::async_runtime::spawn_blocking`.
+- Added docs explaining the current workflow and the confusing transport row without redesigning the UI.
+
+Verification plan:
+
+- Focused checks passed: `cargo fmt`, `cd desktop; npm run build`, `cd desktop\src-tauri; cargo check`, and `cd desktop; npm run tauri:build`.
+- The release EXE at `desktop\src-tauri\target\release\album-mastering-studio.exe` was rebuilt with this pass.
+- Do not run the full release-readiness loop for this pass unless the user reports a concrete failure.
+
+Open risk:
+
+- This pass targets a likely source of click-stacking and shell responsiveness pressure. It does not prove every reported freeze is fixed.
+- If the freeze persists, reproduce the exact button/source path and inspect which operation is blocking.
+
+## Previous Codex Pass: Live Preview Scope Decision + Current Release Trace
 
 Date: 2026-05-13
 

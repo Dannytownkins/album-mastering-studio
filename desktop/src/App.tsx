@@ -607,6 +607,7 @@ function App() {
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [logs, setLogs] = useState<string[]>(["Ready."]);
   const [busy, setBusy] = useState(false);
+  const [playbackBusy, setPlaybackBusy] = useState(false);
   const [phase, setPhase] = useState("Idle");
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("Waiting.");
@@ -2294,6 +2295,8 @@ function App() {
   }
 
   async function setAudio(item: Omit<PlayItem, "originalPath">) {
+    if (playbackBusy) return;
+    setPlaybackBusy(true);
     setComparePair(null);
     setProgressLabel(`Preparing ${item.kind} playback.`);
     const requestedAtMs = performance.now();
@@ -2312,6 +2315,8 @@ function App() {
     } catch (error) {
       pushLog(`Playback prep failed for ${item.label}: ${String(error)}`);
       setProgressLabel("Playback prep failed.");
+    } finally {
+      setPlaybackBusy(false);
     }
   }
 
@@ -2520,9 +2525,11 @@ function App() {
   }
 
   async function startCompare(side: AuditionSide = "source") {
+    if (playbackBusy) return;
     if (!selectedTrack) return;
     const masteredOriginalPath = selectedMaster ?? (await renderPreviewMaster(selectedTrack));
     if (!masteredOriginalPath) return;
+    setPlaybackBusy(true);
     setProgressLabel("Preparing A/B compare.");
     const requestedAtMs = performance.now();
     try {
@@ -2559,6 +2566,8 @@ function App() {
     } catch (error) {
       pushLog(`A/B prep failed: ${String(error)}`);
       setProgressLabel("A/B prep failed.");
+    } finally {
+      setPlaybackBusy(false);
     }
   }
 
@@ -2580,6 +2589,7 @@ function App() {
   }
 
   async function toggleNativeAbLoop() {
+    if (playbackBusy) return;
     if (nativePlaybackStatus.active) {
       await stopNativeAudition();
       return;
@@ -2587,6 +2597,7 @@ function App() {
     if (!selectedTrack?.analysis) return;
     const masteredOriginalPath = selectedMaster ?? (await renderPreviewMaster(selectedTrack));
     if (!masteredOriginalPath) return;
+    setPlaybackBusy(true);
     setProgressLabel("Preparing native A/B audition.");
     const prepareStartedAtMs = performance.now();
     try {
@@ -2633,16 +2644,20 @@ function App() {
       setNativePlaybackStatus(idleNativePlaybackStatus);
       pushLog(`Native A/B audition failed: ${String(error)}`);
       setProgressLabel("Native A/B audition failed.");
+    } finally {
+      setPlaybackBusy(false);
     }
   }
 
   async function toggleNativeFilePlayback() {
+    if (playbackBusy) return;
     if (nativeFilePlaybackActive) {
       await stopNativeAudition();
       return;
     }
     if (!playItem) return;
     const shouldRenderNativeLivePreview = liveAuditionActive && playItem.kind === "source";
+    setPlaybackBusy(true);
     setProgressLabel(shouldRenderNativeLivePreview ? "Rendering native Live Preview audition." : "Starting native playback.");
     try {
       const startSeconds = duration > 0 ? clamp(position, 0, duration) : 0;
@@ -2706,10 +2721,13 @@ function App() {
       setNativeLivePreviewAudition(null);
       pushLog(`Native playback failed: ${String(error)}`);
       setProgressLabel("Native playback failed.");
+    } finally {
+      setPlaybackBusy(false);
     }
   }
 
   async function startNativePreviewWindow(track: Track | null = selectedTrack) {
+    if (playbackBusy) return;
     if (nativeLivePreviewPlaybackActive) {
       await stopNativeAudition();
       return;
@@ -2728,6 +2746,7 @@ function App() {
       return;
     }
     setBusy(true);
+    setPlaybackBusy(true);
     setPhase("Rendering native preview");
     setProgress(0);
     setProgressLabel(`Rendering ${windowToRender.label} through the native preview model.`);
@@ -2774,6 +2793,7 @@ function App() {
       pushLog(`Native Preview failed: ${String(error)}`);
       setProgressLabel("Native Preview failed.");
     } finally {
+      setPlaybackBusy(false);
       setBusy(false);
       setPhase("Idle");
     }
@@ -3206,14 +3226,14 @@ function App() {
           </div>
 
           <div className="audition-actions">
-            <button disabled={!selectedTrack} onClick={() => selectedTrack && setAudio({ label: `${selectedTrack.title} - Original`, path: selectedTrack.path, kind: "source", trackId: selectedTrack.id })}>
+            <button disabled={!selectedTrack || playbackBusy} onClick={() => selectedTrack && setAudio({ label: `${selectedTrack.title} - Original`, path: selectedTrack.path, kind: "source", trackId: selectedTrack.id })}>
               <Play size={16} /> Original
             </button>
-            <button disabled={!selectedTrack?.analysis || busy} onClick={() => renderPreviewMaster(selectedTrack, { audition: true })}>
+            <button disabled={!selectedTrack?.analysis || busy || playbackBusy} onClick={() => renderPreviewMaster(selectedTrack, { audition: true })}>
               <Activity size={16} /> Update Preview
             </button>
             <button
-              disabled={!selectedTrack?.analysis || busy}
+              disabled={!selectedTrack?.analysis || busy || playbackBusy}
               onClick={() => renderRegionPreview(selectedTrack)}
               title="Renders the selected region or current playhead window through the Python export engine."
             >
@@ -3221,17 +3241,17 @@ function App() {
             </button>
             <button
               className={nativeLivePreviewPlaybackActive ? "active" : ""}
-              disabled={(!selectedTrack?.analysis && !nativeLivePreviewPlaybackActive) || busy}
+              disabled={(!selectedTrack?.analysis && !nativeLivePreviewPlaybackActive) || busy || playbackBusy}
               onClick={() => startNativePreviewWindow(selectedTrack)}
               title="Renders the selected region or current playhead window through the Rust first-control preview model, then plays it through native Windows audio."
             >
               {nativeLivePreviewPlaybackActive ? <Square size={16} /> : <Volume2 size={16} />} {nativeLivePreviewPlaybackActive ? "Native Stop" : "Native Preview"}
             </button>
-            <button disabled={!selectedMaster} onClick={() => selectedTrack && selectedMaster && setAudio({ label: `${selectedTrack.title} - Mastered`, path: selectedMaster, kind: "master", trackId: selectedTrack.id })}>
+            <button disabled={!selectedMaster || playbackBusy} onClick={() => selectedTrack && selectedMaster && setAudio({ label: `${selectedTrack.title} - Mastered`, path: selectedMaster, kind: "master", trackId: selectedTrack.id })}>
               <Activity size={16} /> Mastered
             </button>
             <button
-              disabled={!settings.referenceTrack}
+              disabled={!settings.referenceTrack || playbackBusy}
               onClick={() => settings.referenceTrack && setAudio({ label: `${fileStem(settings.referenceTrack)} - Reference`, path: settings.referenceTrack, kind: "reference" })}
               title="Plays the selected reference track unprocessed for comparison. Export settings are unchanged."
             >
@@ -3239,23 +3259,23 @@ function App() {
             </button>
             <button
               className={liveAudition ? "active" : ""}
-              disabled={!selectedTrack?.analysis}
+              disabled={!selectedTrack?.analysis || playbackBusy}
               onClick={toggleLiveAudition}
               title="Applies the first-layer controls to source playback immediately. This is a Web Audio audition baseline, not the final export engine."
             >
               <SlidersHorizontal size={16} /> Live Preview
             </button>
             <div className="ab-switch" role="group" aria-label="Original mastered toggle">
-              <button className={compareSide === "source" && comparePair ? "active" : ""} disabled={!selectedTrack?.analysis || busy} onClick={() => switchCompare("source")}>
+              <button className={compareSide === "source" && comparePair ? "active" : ""} disabled={!selectedTrack?.analysis || busy || playbackBusy} onClick={() => switchCompare("source")}>
                 Original
               </button>
-              <button className={compareSide === "master" && comparePair ? "active" : ""} disabled={!selectedTrack?.analysis || busy} onClick={() => switchCompare("master")}>
+              <button className={compareSide === "master" && comparePair ? "active" : ""} disabled={!selectedTrack?.analysis || busy || playbackBusy} onClick={() => switchCompare("master")}>
                 Mastered
               </button>
             </div>
             <button
               className={nativeAbPlaybackActive ? "active" : ""}
-              disabled={!selectedTrack?.analysis || busy}
+              disabled={!selectedTrack?.analysis || busy || playbackBusy}
               onClick={toggleNativeAbLoop}
               title="Runs a bounded native source/master A/B loop through the Rust audio path. This is native transport proof, not live DSP parity."
             >
@@ -3263,13 +3283,13 @@ function App() {
             </button>
             <button
               className={nativePlaybackStatus.paused ? "active" : ""}
-              disabled={!nativePlaybackStatus.active}
+              disabled={!nativePlaybackStatus.active || playbackBusy}
               onClick={() => setNativeAuditionPaused(!nativePlaybackStatus.paused)}
               title={nativePlaybackStatus.paused ? "Resume native playback" : "Pause native playback"}
             >
               {nativePlaybackStatus.paused ? <Play size={16} /> : <Pause size={16} />} {nativePlaybackStatus.paused ? "Resume" : "Pause"}
             </button>
-            <button className={volumeMatch ? "active" : ""} onClick={() => setVolumeMatch((current) => !current)} title="Aligns playback loudness for fair tone comparison. Export level is unchanged.">
+            <button className={volumeMatch ? "active" : ""} disabled={playbackBusy} onClick={() => setVolumeMatch((current) => !current)} title="Aligns playback loudness for fair tone comparison. Export level is unchanged.">
               <Volume2 size={16} /> Volume Match
             </button>
             <span className={`live-audition-status ${liveAuditionActive ? "active" : ""}`}>
