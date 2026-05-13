@@ -17,7 +17,35 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
-## Latest Codex Pass: Release Readiness Native A/B Gate Expansion
+## Latest Codex Pass: Track Preview Playback Evidence Wait Fix
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `desktop/tests/tauri-track-preview-ui-smoke.mjs`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+
+What changed:
+
+- The expanded release trace at `ed38c67` failed before the new Native A/B gate at `tauri-track-preview-ui`.
+- Root cause: the smoke waited for visible playback-start logs, then sampled `window.__AMS_PLAYBACK_EVIDENCE__` before timing fields had reliably settled.
+- Updated the packaged Track Preview UI smoke to wait for the evidence object to include prepare/metadata/click-to-playing timings before asserting.
+
+Verification already run:
+
+- `cd desktop; node --check .\tests\tauri-track-preview-ui-smoke.mjs`
+- `cd desktop; npm run test:tauri-track-preview-ui`
+
+Remaining blockers:
+
+- Rerun the full release-readiness trace from the commit that contains this smoke fix and the Native A/B gate expansion.
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+
+## Previous Codex Pass: Release Readiness Native A/B Gate Expansion
 
 Date: 2026-05-12
 

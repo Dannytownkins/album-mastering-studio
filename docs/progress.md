@@ -5606,3 +5606,24 @@ Verification:
 $tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path -LiteralPath 'scripts\release-readiness.ps1').Path, [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) { $errors | Format-List *; exit 1 } ; 'release-readiness.ps1 parse ok'
 git diff --check
 ```
+
+### Track Preview Playback Evidence Wait Fix
+
+- The first expanded release-readiness run from `ed38c67` failed at `tauri-track-preview-ui` before reaching the new `tauri-real-song-native-ui` gate.
+- Trace path for the failed attempt: `test-output\release-readiness-ed38c67-expanded\release-readiness.json`.
+- Failure: `desktop/tests/tauri-track-preview-ui-smoke.mjs` line 154 asserted `masteredPlaybackEvidenceHasTimings: true`, but the smoke sampled `window.__AMS_PLAYBACK_EVIDENCE__` immediately after the visible playback-start log.
+- Updated the smoke to wait for prepare timing, metadata timing, and `click_to_playing_ms` before asserting mastered playback evidence. The reference and A/B source evidence checks now also wait for their underlying event evidence before snapshotting.
+
+Verification:
+
+```powershell
+cd desktop
+node --check .\tests\tauri-track-preview-ui-smoke.mjs
+npm run test:tauri-track-preview-ui
+```
+
+Result:
+
+- Syntax check passed.
+- Packaged Track Preview UI smoke passed and wrote `test-output\tauri-track-preview-ui-smoke\tauri-track-preview-ui-smoke.json`.
+- Follow-up required: rerun the full release-readiness trace from the commit that includes this fix.

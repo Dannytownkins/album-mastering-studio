@@ -585,16 +585,18 @@ function trackPreviewExpression() {
   const playbackEvidence = () => window.__AMS_PLAYBACK_EVIDENCE__ || null;
   const playbackHasTiming = (evidence, name) => Number.isFinite(evidence?.timings?.[name]);
   const playbackHasEvent = (evidence, name) => Array.isArray(evidence?.events) && evidence.events.some((event) => event.name === name);
+  const playbackHasStartTimings = (evidence) =>
+    playbackHasTiming(evidence, 'prepared') &&
+    playbackHasTiming(evidence, 'loadedmetadata') &&
+    Number.isFinite(evidence?.click_to_playing_ms);
   const masteredButtonEnabledAfterPreview = masteredActionButton()?.disabled === false;
   masteredActionButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   const playbackReadyVisible = await waitFor(() => logText().includes('Playback ready: Preview Fixture 2 - Mastered'), 30000);
   const playbackStartedVisible = await waitFor(() => logText().includes('Playback started: Preview Fixture 2 - Mastered'), 30000);
   const playbackMatch = /Playback ready: Preview Fixture 2 - Mastered/.exec(logText());
+  const masteredPlaybackEvidenceReady = await waitFor(() => playbackHasStartTimings(playbackEvidence()), 10000);
   const masteredPlaybackEvidence = playbackEvidence();
-  const masteredPlaybackEvidenceHasTimings =
-    playbackHasTiming(masteredPlaybackEvidence, 'prepared') &&
-    playbackHasTiming(masteredPlaybackEvidence, 'loadedmetadata') &&
-    Number.isFinite(masteredPlaybackEvidence?.click_to_playing_ms);
+  const masteredPlaybackEvidenceHasTimings = masteredPlaybackEvidenceReady && playbackHasStartTimings(masteredPlaybackEvidence);
   const masteredPlaybackEvidenceHasPlaying = playbackHasEvent(masteredPlaybackEvidence, 'playing');
   const masteredPlaybackEvidenceHasCacheStatus = typeof masteredPlaybackEvidence?.cache_hit === 'boolean';
   const playbackCachePath = await invoke('prepare_playback_file', { path: previewMasterPath });
@@ -610,8 +612,13 @@ function trackPreviewExpression() {
   const referenceTransportLabel = transportLabel();
   const referencePreviewParity = text(document.querySelector('.preview-parity-status'));
   const referencePreviewParityTitle = document.querySelector('.preview-parity-status')?.getAttribute('title') || '';
+  const referencePlaybackEvidenceReady = await waitFor(() => {
+    const evidence = playbackEvidence();
+    return playbackHasTiming(evidence, 'prepared') && playbackHasTiming(evidence, 'loadedmetadata') && playbackHasEvent(evidence, 'playing');
+  }, 10000);
   const referencePlaybackEvidence = playbackEvidence();
   const referencePlaybackEvidenceHasTimings =
+    referencePlaybackEvidenceReady &&
     playbackHasTiming(referencePlaybackEvidence, 'prepared') &&
     playbackHasTiming(referencePlaybackEvidence, 'loadedmetadata') &&
     playbackHasEvent(referencePlaybackEvidence, 'playing');
@@ -625,6 +632,7 @@ function trackPreviewExpression() {
   const abSourceReadyVisible = await waitFor(() => logText().includes('A/B ready: Preview Fixture 2') && transportLabel().includes('Original'), 30000);
   if (!abSourceReadyVisible) throw new Error('A/B source side did not become ready');
   await waitFor(() => audio()?.duration > 0 && !Number.isNaN(audio()?.duration), 10000);
+  await waitFor(() => playbackHasEvent(playbackEvidence(), 'playing'), 10000);
   const abSourcePlaybackEvidence = playbackEvidence();
   const abSourcePlaybackEvidenceHasPlaying = playbackHasEvent(abSourcePlaybackEvidence, 'playing');
   audio()?.pause();
