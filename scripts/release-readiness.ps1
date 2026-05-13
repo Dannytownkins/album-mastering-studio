@@ -1,3 +1,4 @@
+[CmdletBinding(PositionalBinding = $false)]
 param(
   [string]$OutputRoot = "",
   [string]$RealSongPath = "",
@@ -22,6 +23,10 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
   $OutputRoot = Join-Path $RepoRoot $OutputRoot
 }
 
+if ($OutputRoot -match "\s" -and -not $OutputRoot.Contains($RepoRoot)) {
+  throw "OutputRoot appears to be an unquoted partial path: $OutputRoot"
+}
+
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 $TracePath = Join-Path $OutputRoot "release-readiness.json"
 $script:Steps = New-Object System.Collections.Generic.List[object]
@@ -40,6 +45,9 @@ $UseRealSongSmokes = $IncludeRealSongSmokes.IsPresent -or -not [string]::IsNullO
 $ResolvedRealSongPath = $null
 
 if ($UseRealSongSmokes) {
+  if ($RealSongPath -match "\s" -and -not (Test-Path -LiteralPath $RealSongPath)) {
+    throw "RealSongPath appears to be an unquoted partial path: $RealSongPath"
+  }
   if ([string]::IsNullOrWhiteSpace($RealSongPath)) {
     throw "Provide -RealSongPath when using -IncludeRealSongSmokes."
   }
