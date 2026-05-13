@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Tauri shell for the local Album Mastering Studio Python engine"
 authors = ["Daniel Kinsner"]
 edition = "2021"
+default-run = "album-mastering-studio"
 
 [lib]
 name = "album_mastering_studio_desktop_lib"
