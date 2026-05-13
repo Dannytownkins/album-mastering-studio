@@ -9,6 +9,10 @@ Context:
 - The user flagged that 33 hours of continuous unattended testing is too much without a chance to use the app and start UI polish.
 - Do not rerun broad release-readiness, installer, or full app smoke loops unless the user asks or reports a concrete failure.
 - The hardening phase should now hand over to user testing, not keep searching for incremental automated evidence.
+- Added office/new-instance handoff docs so the work can move to another Windows machine without reconstructing state from the long progress log:
+  - `docs/OFFICE_BUILD_HANDOFF.md`
+  - `docs/MANUAL_LISTENING_TEST_GUIDE.md`
+  - `docs/NEW_AGENT_WORKFLOW.md`
 
 Current handoff state:
 
@@ -38,6 +42,7 @@ Remaining blockers:
 Next recommended action:
 
 - Wait for user testing results. Only resume coding from a concrete failure, a requested polish pass, or explicit acceptance/rejection of Live Preview's directional-only scope.
+- On a new machine or new agent instance, start with `docs/OFFICE_BUILD_HANDOFF.md` and `docs/NEW_AGENT_WORKFLOW.md`, not the full release runner.
 
 ### Live Preview Scope Decision Field
 

@@ -12,8 +12,8 @@ Rebuild Album Mastering Studio from the existing repo, starting with a verified 
 
 Compaction rule for this rebuild:
 
-1. Read `docs/PRODUCT.md`, `docs/IMPLEMENTATION_PLAN.md`, `AGENTS.md`, this handoff, and `docs/progress.md`.
-2. Continue one verified vertical slice at a time.
+1. Read `AGENTS.md`, `docs/OFFICE_BUILD_HANDOFF.md`, `docs/MANUAL_LISTENING_TEST_GUIDE.md`, `docs/NEW_AGENT_WORKFLOW.md`, this handoff, and `docs/progress.md`.
+2. Continue from user manual-test results, a concrete failure, or an explicit UI polish request. Do not invent another broad test loop.
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 5. When the user is ready to judge release-candidate completion, use `docs/RELEASE_CANDIDATE_CLOSEOUT.md` for the manual listening and waiver checklist.
@@ -49,6 +49,9 @@ Manual test handoff:
 - Current full release trace: `test-output\release-readiness-fe808df-live-preview-scope-decision\release-readiness.json`, `25 passed`, `0 failed`, `0 skipped`.
 - Current Track Master listening packet: `test-output\tauri-real-song-listening-packet-smoke\track-master-20260513-064119-225\listening-handoff.html`.
 - Suggested user path: launch app, add one real song, analyze, play Original, run Update Preview, play Mastered, toggle Original/Mastered and Volume Match, export Master, then listen to the WAV.
+- Office-machine build/setup handoff: `docs/OFFICE_BUILD_HANDOFF.md`.
+- Manual listening checklist: `docs/MANUAL_LISTENING_TEST_GUIDE.md`.
+- New-agent workflow and committed test inventory: `docs/NEW_AGENT_WORKFLOW.md`.
 
 ## Latest Codex Pass: Live Preview Scope Decision + Current Release Trace
 

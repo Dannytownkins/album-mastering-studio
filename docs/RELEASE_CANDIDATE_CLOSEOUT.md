@@ -4,6 +4,8 @@ Last updated: 2026-05-13
 
 This checklist is the manual closeout path for the active goal. It does not replace the automated release-readiness trace. Use it when the user is present and can judge the sound.
 
+For a step-by-step listening script, use `docs\MANUAL_LISTENING_TEST_GUIDE.md`. For building or continuing work on another Windows machine, use `docs\OFFICE_BUILD_HANDOFF.md` and `docs\NEW_AGENT_WORKFLOW.md`.
+
 ## Current Evidence Baseline
 
 - Current release trace: `test-output\release-readiness-fe808df-live-preview-scope-decision\release-readiness.json`.
