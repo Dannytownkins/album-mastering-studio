@@ -1,6 +1,6 @@
 # Goal Coverage Audit
 
-Last updated: 2026-05-12
+Last updated: 2026-05-13
 
 Active goal:
 
@@ -13,6 +13,8 @@ This audit is a handoff guard, not a completion claim. Keep it current when the 
 ## Current Goal Status
 
 Status: active, not complete.
+
+Pause state: user-paused as of 2026-05-13. Keep the goal open, but do not run further tools, edits, tests, commits, pushes, app launches, or background work until the user explicitly resumes.
 
 The current repo has strong automated evidence for the Track Master-first Tauri surface, Python engine contract, Album Master path, packaged Windows flow, and a current-commit release trace. The remaining blockers are quality gates that cannot be honestly closed by documentation alone:
 

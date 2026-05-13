@@ -1,6 +1,6 @@
 # Codex Active Handoff
 
-Last updated: 2026-05-12
+Last updated: 2026-05-13
 
 ## Current Goal Loop
 
@@ -19,9 +19,28 @@ Compaction rule for this rebuild:
 
 Operational pause note:
 
-- The user asked to pause disruptive goal work and specifically called out that app/audio tests were interrupting gaming.
-- Do not launch Tauri/WebView, installers, or any test that plays audio until the user gives explicit approval.
-- Silent docs/git bookkeeping is safe, but do not rerun release-readiness, Native A/B, album playback, installer, or `tauri:dev` flows without the green light.
+- 2026-05-13: the user reaffirmed the pause and asked to get organized before stopping.
+- The active goal remains open. Do not mark it complete and do not kill the goal loop.
+- Do not run tools, edit files, test, commit, push, launch apps, or do background work after this organization pass until the user gives an explicit green light.
+- When the user resumes, first inspect `git status --short --branch`, read this top section, and continue with one verified slice.
+- The user specifically called out that app/audio tests were interrupting gaming. Do not launch Tauri/WebView, installers, or any test that plays audio until the user gives explicit approval.
+- Silent docs/git bookkeeping was approved only for this organization pass. Future docs/git work should also wait for the green light.
+- Do not rerun release-readiness, Native A/B, album playback, installer, or `tauri:dev` flows without approval.
+
+Non-canonical visual reference:
+
+- On 2026-05-13 the user provided a screenshot reference for eventual UI polish.
+- Treat it as a visual direction only, not product canon and not implementation scope while stability remains the immediate goal.
+- Desired feel: balanced three-column mastering-studio layout, tracks on the left, large waveform and controls in the center, metering/quality panels on the right, dark modern surface, warmer amber/gold accents, slightly more vibrant colors, and clearer hierarchy.
+- Do not copy the reference copy or terms. Use the app's own product language from `docs/PRODUCT.md`, `docs/IMPLEMENTATION_PLAN.md`, and current UI terminology.
+- Do not let this become feature expansion. It is a later polish direction after Track Master stability and the documented blockers are handled.
+
+Resume checklist:
+
+1. Confirm the working tree is clean.
+2. Re-read the active blockers in `docs/GOAL_AUDIT.md`.
+3. Avoid disruptive UI/audio/installer tests unless the user approves them.
+4. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 
 ## Latest Codex Pass: Expanded Full Release Readiness Trace at 2ada649
 

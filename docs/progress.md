@@ -5724,3 +5724,21 @@ Additional evidence:
 - Real-song Native A/B values from the latest evidence: `output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, `played_output_frames: 60480`, `callback_count: 175`, `avg_callback_interval_ms: 10.0054`, `p95_callback_interval_ms: 10.598`, zero stream errors, and zero warnings.
 
 This closes the expanded current-commit release-readiness trace blocker for `2ada649`. It does not close human listening approval, does not make Web Audio Live Preview full export-chain parity, and does not add native OS Open/Save-As dialog automation.
+
+### Pause Organization Handoff
+
+Date: 2026-05-13
+
+- User asked to keep the active goal paused, get organized, and wait for an explicit green light before further work.
+- No app launch, audio playback, installer run, release-readiness rerun, or test command was run during this organization pass.
+- Repo was clean at the start of this pass on `master` at `33070ca`.
+- Added pause/resume guidance to `docs\codex-active-handoff.md` so future agents do not restart disruptive testing or background work after compaction.
+- Recorded the visual reference as non-canonical direction only: balanced dark three-column mastering layout, warmer amber/gold accents, slightly more vibrant modern feel, and clearer hierarchy. Product copy and terms still come from the repo docs/current UI, not from the reference screenshot.
+- The reference should not trigger feature expansion or a visual rebuild while the immediate goal remains stability.
+
+Next action after the user gives the green light:
+
+1. Inspect `git status --short --branch`.
+2. Re-read the top of `docs\codex-active-handoff.md` and `docs\GOAL_AUDIT.md`.
+3. Continue with one narrow stability slice, not broad UI polish.
+4. Ask before running any Tauri/WebView/audio/installer/release-readiness workflow.
