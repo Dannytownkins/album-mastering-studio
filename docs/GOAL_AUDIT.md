@@ -30,7 +30,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Album Master path | Automated release evidence covers multi-source and full-source Album Master render, transitions, album WAV, dashboard, export checks, and native album playback stability. | Covered with listening caveat |
 | Docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and `docs/ENGINE_DECISION_RECORD.md` record current evidence and known gaps. | Covered |
 | Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, local render/check/report flow, and direct `.ams.json` path Load/Save remain the core path. | Covered |
-| Release package | Full release-readiness trace at `8376e38` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, installer, and diff gates after the real-song Native A/B playback-evidence change. The runner now includes `tauri-real-song-native-ui`, so the expanded gate needs a follow-up trace from the commit containing that runner change. | Follow-up trace pending after runner expansion |
+| Release package | Expanded full release-readiness trace at `2ada649` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, true headless native output probe, Native A/B UI/audio, installer, and diff gates. | Covered with listening/dialog caveats |
 
 ## Prompt-To-Artifact Audit
 
@@ -48,6 +48,7 @@ This matrix maps the active goal wording to concrete repo artifacts. It is inten
 
 ## Latest Evidence Anchors
 
+- 2026-05-12 Expanded full release readiness trace at `2ada649`: `test-output\release-readiness-2ada649-expanded\release-readiness.json` passed all 23 gates with zero failures and zero skips from clean commit `2ada64921ae786055df5a249bfa13315bc00fbd4`, including Python compile/unit/CLI smoke, desktop build/integration, true headless native output probe, Tauri release build, sidecar startup, packaged launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, real-song Track/Region/Native A/B/Album smokes using `Lay the Money on the Desk (1).mp3`, NSIS installed-app smoke, MSI package smoke, and `git diff --check`. Operator note: this full trace is not headless; it includes app/audio/installer smokes. Only `native-audio-headless-probe` is a no-playback native audio check.
 - 2026-05-12 Full release readiness trace at `8376e38`: `test-output\release-readiness-8376e38-full\release-readiness.json` passed all 21 gates with zero failures and zero skips from clean commit `8376e38750494e23eddf2d7dcab91998ca6fb65b`, including Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, real-song Track/Region/Album smokes using `Lay the Money on the Desk (1).mp3`, NSIS installed-app smoke, MSI package smoke, and `git diff --check`.
 - 2026-05-12 True headless native output probe: Rust `native_audio_probe_reports_default_output_device_without_playback` passed without launching Tauri or starting playback, writing `test-output\native-audio-headless-probe\native-audio-probe.json` with CPAL/WASAPI default output `Headphones (HyperX Cloud Alpha Wireless)`.
 - 2026-05-12 Release-readiness runner expansion: `tauri-real-song-native-ui` is now part of the `-RealSongPath` gate set so future traces cover visible real-song Native A/B startup evidence.
@@ -96,7 +97,7 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Closed for current commit:
 
-- Final release loop for commit `8376e38` passed with real-song and installer gates enabled. A runner coverage change was made after that trace, so rerun the release-readiness trace from the new commit before making a fresh current-commit release-readiness claim.
+- Expanded final release loop for commit `2ada649` passed with real-song, true headless native output probe, Native A/B UI/audio, and installer gates enabled.
 
 ## Next Unattended Slices
 

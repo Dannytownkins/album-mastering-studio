@@ -17,6 +17,49 @@ Compaction rule for this rebuild:
 3. Leave code, verification output, and `docs/progress.md` evidence before handing off.
 4. Do not update `docs/PRODUCT.md` unless the user explicitly changes product direction.
 
+Operational pause note:
+
+- The user asked to pause disruptive goal work and specifically called out that app/audio tests were interrupting gaming.
+- Do not launch Tauri/WebView, installers, or any test that plays audio until the user gives explicit approval.
+- Silent docs/git bookkeeping is safe, but do not rerun release-readiness, Native A/B, album playback, installer, or `tauri:dev` flows without the green light.
+
+## Latest Codex Pass: Expanded Full Release Readiness Trace at 2ada649
+
+Date: 2026-05-12
+
+Changed files in this pass:
+
+- `docs/progress.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What changed:
+
+- Recorded the already-completed expanded release-readiness trace from clean `master` commit `2ada64921ae786055df5a249bfa13315bc00fbd4`.
+- Updated the handoff trail so the `tauri-real-song-native-ui` and `native-audio-headless-probe` runner coverage is no longer marked pending.
+- Preserved the operator distinction between the true headless/no-audio probe and the automated-but-not-headless Native A/B UI/audio smoke.
+
+Verification already run before this docs pass:
+
+- `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-2ada649-expanded"`
+
+Evidence:
+
+- `test-output\release-readiness-2ada649-expanded\release-readiness.json`
+- Result: 23 passed, 0 failed, 0 skipped.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- True headless native output probe artifact: `test-output\release-readiness-2ada649-expanded\native-audio-headless-probe.json`.
+- Real-song Native A/B UI/audio evidence: `test-output\tauri-real-song-native-ui-smoke\tauri-real-song-native-ui-smoke.json`.
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated.
+- Rerun full release readiness only after future code/package/smoke changes and only when the user approves UI/audio/installer work.
+
 ## Latest Codex Pass: True Headless Native Output Probe
 
 Date: 2026-05-12
@@ -572,7 +615,7 @@ Remaining blockers:
 - Human listening approval is still not recorded.
 - Live Preview remains approximate.
 - Native OS Open/Save-As dialogs remain unautomated.
-- Later full release-readiness traces are recorded above; the current-commit trace is `8376e38`.
+- Later full release-readiness traces are recorded above; the current expanded trace is `2ada649`.
 
 ## Previous Codex Pass: Album Codec And History Evidence
 

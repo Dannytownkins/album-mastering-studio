@@ -5677,3 +5677,50 @@ Result:
 - Rust headless native output probe passed.
 - Evidence JSON: `test-output\native-audio-headless-probe\native-audio-probe.json`.
 - Evidence values: `host: "Wasapi"`, `default_output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, default output config `2ch / 48000 Hz / F32 / default`, and one expected warning that exact buffer latency requires playback measurement because the default buffer size is not fixed.
+
+### Expanded Full Release Readiness Trace at 2ada649
+
+- Ran the release-readiness runner from clean `master` commit `2ada64921ae786055df5a249bfa13315bc00fbd4`.
+- Trace path: `test-output\release-readiness-2ada649-expanded\release-readiness.json`.
+- Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-2ada649-expanded"`.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Result: 23 passed, 0 failed, 0 skipped.
+- Important operator note: this expanded trace includes UI, audio, and installer smokes. The `tauri-real-song-native-ui` step is automated/self-launching but is not headless and plays a short Native A/B segment through the default output device. Do not rerun the disruptive trace while the user is gaming or has not explicitly approved app/audio/installer launches. The only true headless/no-playback native audio gate in this trace is `native-audio-headless-probe`.
+
+Passed steps:
+
+| Step | Seconds |
+| --- | ---: |
+| `python-compile` | 0.13 |
+| `python-unittest` | 57.61 |
+| `python-cli-smoke` | 11.42 |
+| `desktop-build` | 4.75 |
+| `desktop-integration` | 4.23 |
+| `native-audio-headless-probe` | 0.66 |
+| `desktop-tauri-build` | 274.96 |
+| `tauri-sidecar-startup` | 10.02 |
+| `tauri-release-launch` | 21.78 |
+| `tauri-track-preview-ui` | 69.75 |
+| `tauri-release-album-state` | 17.59 |
+| `tauri-release-album-codec-qc` | 28.11 |
+| `tauri-release-track-codec-qc` | 31.89 |
+| `tauri-release-session-safety` | 10.11 |
+| `tauri-project-persistence` | 19.37 |
+| `tauri-real-song-codec-qc` | 113.82 |
+| `tauri-real-song-region-preview` | 27.48 |
+| `tauri-real-song-native-ui` | 58.40 |
+| `tauri-real-song-album-playback` | 60.49 |
+| `tauri-real-song-album-codec-qc` | 34.85 |
+| `tauri-nsis-installed-app` | 38.38 |
+| `tauri-msi-package` | 25.44 |
+| `git-diff-check` | 0.11 |
+
+Additional evidence:
+
+- Headless native output probe artifact in the trace: `test-output\release-readiness-2ada649-expanded\native-audio-headless-probe.json`.
+- Headless probe values: `host: "Wasapi"`, `default_output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, default output config `2ch / 48000 Hz / F32 / default`.
+- Real-song Native A/B evidence artifact: `test-output\tauri-real-song-native-ui-smoke\tauri-real-song-native-ui-smoke.json`.
+- Real-song Native A/B values from the latest evidence: `output_device: "Headphones (HyperX Cloud Alpha Wireless)"`, `played_output_frames: 60480`, `callback_count: 175`, `avg_callback_interval_ms: 10.0054`, `p95_callback_interval_ms: 10.598`, zero stream errors, and zero warnings.
+
+This closes the expanded current-commit release-readiness trace blocker for `2ada649`. It does not close human listening approval, does not make Web Audio Live Preview full export-chain parity, and does not add native OS Open/Save-As dialog automation.

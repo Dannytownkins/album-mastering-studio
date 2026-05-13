@@ -930,16 +930,18 @@ Required:
 
 2026-05-12 current-commit release-readiness trace:
 
-- Latest full trace for commit `8376e38` is `test-output\release-readiness-8376e38-full\release-readiness.json`.
-- Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-8376e38-full"`.
-- Result: 21 passed, 0 failed, 0 skipped, with `dirty_before: []` and `dirty_after: []`.
+- Latest expanded full trace for commit `2ada649` is `test-output\release-readiness-2ada649-expanded\release-readiness.json`.
+- Command shape: `scripts\release-readiness.ps1 -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-2ada649-expanded"`.
+- Result: 23 passed, 0 failed, 0 skipped, with `dirty_before: []` and `dirty_after: []`.
+- This trace includes the new `native-audio-headless-probe` and `tauri-real-song-native-ui` gates.
 - Remaining release-quality blockers are human listening approval, export-chain/live-preview parity, and native OS Open/Save-As dialog automation.
 
 2026-05-12 release-readiness runner coverage expansion:
 
 - Added `tauri-real-song-native-ui` to the `-RealSongPath` gate set so future full traces cover the visible real-song Native A/B startup evidence path.
 - Added `native-audio-headless-probe` as a true headless/no-playback Rust test for CPAL/WASAPI default output device and config.
-- Rerun the full release-readiness trace from the commit that includes this runner change before treating the expanded gate as current release evidence.
+- Expanded coverage is current as of `test-output\release-readiness-2ada649-expanded\release-readiness.json`.
+- Operational note: the full expanded trace is not headless. It launches packaged UI/audio and installer smokes; do not rerun it while the user is gaming or without explicit approval. The native output probe is the only no-audio/headless native audio check in the trace.
 
 ## Public Release Risk Notes
 
