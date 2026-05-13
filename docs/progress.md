@@ -2,6 +2,46 @@
 
 ## 2026-05-13
 
+### Project Open Dialog Default Path Hardening
+
+Scope:
+
+- Hardened the native Open Project dialog path by passing `defaultPath: projectPath || settings.outputDir || repoRoot` to the Tauri dialog plugin.
+- This means Open Project now starts from the current saved project path when one exists, then the current output folder, then the repo root fallback.
+- Attempted a packaged Windows native dialog automation probe for Save As plus Open. Save As could be driven to create the default `album.ams.json`, but Open dialog selection remained too flaky to promote into release-readiness. The native Open/Save-As automation blocker remains open.
+
+Verification:
+
+```powershell
+cd desktop
+npm run build
+& cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'
+npm run test:tauri-project-persistence
+npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-e619318-full"
+```
+
+Results:
+
+- Targeted packaged project persistence smoke passed.
+- Full release readiness passed from clean `master` commit `e61931867a633a37669e61a7eab7cc92f7e6fcf6`: `23 passed`, `0 failed`, `0 skipped`.
+- Trace started at `2026-05-13T00:39:35` local time and completed at `2026-05-13T00:53:32` local time.
+- Dirty state proof: `dirty_before: []`, `dirty_after: []`.
+- Windows Application log query found no Album Mastering Studio `Application Error`, `Application Hang`, or `Windows Error Reporting` entries after the run.
+
+Evidence:
+
+- `test-output\tauri-project-persistence-smoke\tauri-project-persistence-smoke.json`
+- `test-output\release-readiness-e619318-full\release-readiness.json`
+- Per-step logs under `test-output\release-readiness-e619318-full\`.
+
+Completion audit:
+
+- Track Master-first release path remains covered by the full release trace.
+- Python engine contract remains covered by compile/unit/CLI/desktop contract gates and release sidecar use.
+- Album Master path remains covered by Album state, Album Codec QC, real-song Album Playback, and real-song Album Codec QC gates.
+- Local/offline workflow remains covered by sidecar/FFmpeg bundled release build and offline render/check/report gates.
+- Not complete yet because human listening approval has not been recorded, Live Preview remains explicitly approximate, and native Open/Save-As dialog automation remains uncovered.
+
 ### Current-Commit Full Release Readiness Trace
 
 Scope:

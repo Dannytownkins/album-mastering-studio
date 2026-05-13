@@ -14,13 +14,13 @@ This audit is a handoff guard, not a completion claim. Keep it current when the 
 
 Status: active, not complete.
 
-Operating state: resumed as of 2026-05-13. The current-commit full release trace at `d8d88e6` has passed, but the active goal remains open until the remaining listening, preview-scope, and native-dialog blockers are resolved or explicitly accepted.
+Operating state: resumed as of 2026-05-13. The current-commit full release trace at `e619318` has passed, but the active goal remains open until the remaining listening, preview-scope, and native-dialog blockers are resolved or explicitly accepted.
 
 The current repo has strong automated evidence for the Track Master-first Tauri surface, Python engine contract, Album Master path, packaged Windows flow, and a current-commit release trace. The remaining blockers are quality gates that cannot be honestly closed by documentation alone:
 
 - Human listening approval has not been recorded.
 - Live Preview remains an explicit Web Audio approximation for continuous control updates; the visible native path now has a bounded rendered Rust-model audition path, but not continuous native DSP or full export-chain parity.
-- OS file-picker Open and Save-As dialog flows remain unautomated. Direct path-based project Load/Save is now covered as a deterministic fallback, but it is not native dialog coverage.
+- OS file-picker Open and Save-As dialog flows remain unautomated. Open Project now starts from the current project path or output folder, and direct path-based project Load/Save is covered as a deterministic fallback, but this is still not native dialog automation coverage.
 
 ## Coverage Map
 
@@ -32,7 +32,7 @@ The current repo has strong automated evidence for the Track Master-first Tauri 
 | Album Master path | Automated release evidence covers multi-source and full-source Album Master render, transitions, album WAV, dashboard, export checks, and native album playback stability. | Covered with listening caveat |
 | Docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and `docs/ENGINE_DECISION_RECORD.md` record current evidence and known gaps. | Covered |
 | Local/offline workflow | Python sidecar, FFmpeg/FFprobe resources, Tauri release build, local render/check/report flow, and direct `.ams.json` path Load/Save remain the core path. | Covered |
-| Release package | Current-commit full release-readiness trace at `d8d88e6` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, true headless native output probe, Native A/B UI/audio, installer, and diff gates. | Covered with listening/dialog caveats |
+| Release package | Current-commit full release-readiness trace at `e619318` rebuilt the sidecar, release EXE, MSI, and NSIS bundles and passed release, real-song, true headless native output probe, Native A/B UI/audio, installer, and diff gates. | Covered with listening/dialog caveats |
 
 ## Prompt-To-Artifact Audit
 
@@ -46,10 +46,11 @@ This matrix maps the active goal wording to concrete repo artifacts. It is inten
 | Preserve the Album Master path | `desktop/tests/tauri-release-album-state-smoke.mjs`, `desktop/tests/tauri-release-album-codec-qc-smoke.mjs`, real-song Album Master smokes, boundary-preview coverage, and dashboard/export artifacts. | True multi-song human listening approval unless the user supplies and reviews a multi-song set. |
 | Preserve docs/progress handoff trail | `docs/progress.md`, `docs/codex-active-handoff.md`, `docs/IMPLEMENTATION_PLAN.md`, and this audit. | The docs are evidence pointers, not proof by themselves. |
 | Preserve local/offline workflow | Tauri sidecar packaging, bundled FFmpeg/FFprobe resources, `npm run tauri:build`, local `.ams.json` project files, and offline render/report commands. | External platform release-meter certification. |
-| Make release readiness reproducible | `scripts/release-readiness.ps1` and `cd desktop; npm run verify:release` run the current release gate sequence and write a JSON trace plus per-step logs under `test-output/`; `test-output\release-readiness-d8d88e6-full\release-readiness.json` is the current trace. | A fresh trace is required after any later code, package, or smoke-test change. |
+| Make release readiness reproducible | `scripts/release-readiness.ps1` and `cd desktop; npm run verify:release` run the current release gate sequence and write a JSON trace plus per-step logs under `test-output/`; `test-output\release-readiness-e619318-full\release-readiness.json` is the current trace. | A fresh trace is required after any later code, package, or smoke-test change. |
 
 ## Latest Evidence Anchors
 
+- 2026-05-13 Project Open dialog default path hardening: `desktop/src/App.tsx` now opens the native project picker from `projectPath || settings.outputDir || repoRoot`. Targeted packaged project persistence smoke passed, and a follow-up full release trace at `e619318` passed all 23 gates with zero failures and zero skips from clean commit `e61931867a633a37669e61a7eab7cc92f7e6fcf6`. Native dialog automation was attempted but not promoted: Save As could create the default project file, while Open selection remained unreliable, so the native OS dialog blocker remains open.
 - 2026-05-13 Current-commit full release readiness trace at `d8d88e6`: `test-output\release-readiness-d8d88e6-full\release-readiness.json` passed all 23 gates with zero failures and zero skips from clean commit `d8d88e6d852694c32f447e406a4b9b969522e0a3`, including Python compile/unit/CLI smoke, desktop build/integration, true headless native output probe, Tauri release build, sidecar startup, packaged launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, real-song Track/Region/Native UI/Album smokes using `Lay the Money on the Desk (1).mp3`, NSIS installed-app smoke, MSI package smoke, and `git diff --check`. Dirty proof in the trace is `dirty_before: []` and `dirty_after: []`. Windows Application logs showed no Album Mastering Studio Application Error, Application Hang, or WER entries during the checked window.
 - 2026-05-12 Expanded full release readiness trace at `2ada649`: `test-output\release-readiness-2ada649-expanded\release-readiness.json` passed all 23 gates with zero failures and zero skips from clean commit `2ada64921ae786055df5a249bfa13315bc00fbd4`, including Python compile/unit/CLI smoke, desktop build/integration, true headless native output probe, Tauri release build, sidecar startup, packaged launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, real-song Track/Region/Native A/B/Album smokes using `Lay the Money on the Desk (1).mp3`, NSIS installed-app smoke, MSI package smoke, and `git diff --check`. Operator note: this full trace is not headless; it includes app/audio/installer smokes. Only `native-audio-headless-probe` is a no-playback native audio check.
 - 2026-05-12 Full release readiness trace at `8376e38`: `test-output\release-readiness-8376e38-full\release-readiness.json` passed all 21 gates with zero failures and zero skips from clean commit `8376e38750494e23eddf2d7dcab91998ca6fb65b`, including Python compile/unit/CLI smoke, desktop build/integration, Tauri release build, sidecar startup, packaged launch, Track Preview UI, Album state, Album/Track Codec QC, session safety, project persistence, real-song Track/Region/Album smokes using `Lay the Money on the Desk (1).mp3`, NSIS installed-app smoke, MSI package smoke, and `git diff --check`.
@@ -101,7 +102,7 @@ Do not mark the active goal complete until these are resolved or explicitly waiv
 
 Closed for current commit:
 
-- Current final release loop for commit `d8d88e6` passed with real-song, true headless native output probe, Native UI/audio, and installer gates enabled.
+- Current final release loop for commit `e619318` passed with real-song, true headless native output probe, Native UI/audio, and installer gates enabled.
 
 ## Next Unattended Slices
 

@@ -40,7 +40,49 @@ Resume checklist:
 3. Pick one narrow stability slice; do not start broad visual redesign work from the reference image yet.
 4. Prefer Track Master regressions and real-song playback evidence over new UI feature work.
 
-## Latest Codex Pass: Current-Commit Full Release Readiness Trace
+## Latest Codex Pass: Project Open Dialog Default Path Hardening
+
+Date: 2026-05-13
+
+Changed files in this pass:
+
+- `desktop/src/App.tsx`
+- `docs/progress.md`
+- `docs/codex-active-handoff.md`
+- `docs/GOAL_AUDIT.md`
+
+What changed:
+
+- Hardened the native Open Project dialog by giving it a default path: current project path, then output folder, then repo root.
+- Rebuilt the packaged release app and reran the targeted project persistence smoke.
+- Attempted a packaged native dialog automation route for Save As plus Open. Save As could create the default project file, but Open selection remained unreliable enough that the smoke was not promoted into release-readiness. Keep the native OS dialog blocker open.
+- Reran the full release-readiness trace from clean `master` commit `e61931867a633a37669e61a7eab7cc92f7e6fcf6`.
+
+Verification run:
+
+- `cd desktop; npm run build`
+- `cd desktop; & cmd.exe /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && set "PATH=%USERPROFILE%\.cargo\bin;%PATH%" && npm run tauri:build'`
+- `cd desktop; npm run test:tauri-project-persistence`
+- `cd desktop; npm run verify:release -- -RealSongPath "C:\Users\Daniel Kinsner\Downloads\Lay the Money on the Desk (1).mp3" -IncludeInstallerSmokes -OutputRoot "test-output\release-readiness-e619318-full"`
+
+Evidence:
+
+- `test-output\tauri-project-persistence-smoke\tauri-project-persistence-smoke.json`
+- `test-output\release-readiness-e619318-full\release-readiness.json`
+- Result: 23 passed, 0 failed, 0 skipped.
+- Trace commit: `e61931867a633a37669e61a7eab7cc92f7e6fcf6` on `master`.
+- Options: real-song smokes enabled, installer smokes enabled, Tauri build not skipped.
+- Dirty state in trace: `dirty_before: []`, `dirty_after: []`.
+- Windows Application logs showed no Album Mastering Studio Application Error, Application Hang, or WER entries during the checked window.
+
+Remaining blockers:
+
+- Human listening approval has not been recorded.
+- Live Preview remains approximate; rendered preview/export paths remain release-faithful.
+- Native OS Open/Save-As dialogs remain unautomated. Open now starts from a sensible default path, but real OS dialog automation is still not reliable enough to count as covered.
+- Rerun full release readiness after any later code/package/smoke change before making a fresh release-ready claim.
+
+## Previous Codex Pass: Current-Commit Full Release Readiness Trace
 
 Date: 2026-05-13
 
