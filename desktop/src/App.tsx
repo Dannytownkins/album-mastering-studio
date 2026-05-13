@@ -1804,7 +1804,11 @@ function App() {
   }
 
   async function openProject() {
-    const selected = await open({ multiple: false, filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }] });
+    const selected = await open({
+      multiple: false,
+      defaultPath: projectPath || settings.outputDir || repoRoot,
+      filters: [{ name: "AMS project", extensions: ["ams.json", "json"] }],
+    });
     if (typeof selected !== "string") return;
     await openProjectFromPath(selected);
   }
