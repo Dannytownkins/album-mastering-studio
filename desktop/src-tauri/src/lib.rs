@@ -1830,6 +1830,12 @@ fn render_listening_packet_html(packet: &Value) -> String {
     .audition { margin: 10px 0 14px; }
     .audition strong { display: block; }
     .audition a { color: #76531b; }
+    .review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 16px; margin: 12px 0; }
+    .review-grid label { display: flex; gap: 8px; align-items: center; }
+    .approval-check { margin: 14px 0; padding: 12px; border: 1px solid #d4b15f; background: #fff8e6; border-radius: 6px; }
+    textarea { width: 100%; min-height: 100px; box-sizing: border-box; margin: 8px 0 12px; font: inherit; }
+    button { padding: 8px 12px; border: 1px solid #9c7a2f; background: #f0d98b; border-radius: 6px; font-weight: 700; cursor: pointer; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: #f4f4f4; border-radius: 6px; }
     table { border-collapse: collapse; width: 100%; }
     th, td { text-align: left; border-bottom: 1px solid #ddd; padding: 8px; vertical-align: top; }
   </style>
@@ -1928,9 +1934,92 @@ fn render_listening_packet_html(packet: &Value) -> String {
         html.push_str("</ul></section>");
     }
 
+    html.push_str(
+        r#"<section id="review-decision"><h2>Review Decision</h2>
+<p class="caveat">Default is not approved. Mark approval only after listening to the rendered master, codec preview, or album WAV listed in this packet.</p>
+<div class="review-grid">
+  <label><input type="checkbox" id="heard-original"> Original heard</label>
+  <label><input type="checkbox" id="heard-master"> Mastered render heard</label>
+  <label><input type="checkbox" id="heard-codec"> Codec preview heard</label>
+  <label><input type="checkbox" id="heard-album"> Album WAV heard</label>
+  <label><input type="checkbox" id="reviewed-dashboard"> Dashboard reviewed</label>
+  <label><input type="checkbox" id="reviewed-export-checks"> Export checks reviewed</label>
+</div>
+<label class="approval-check"><input type="checkbox" id="decision-approved"> Approved after listening</label>
+<label for="decision-notes"><strong>Review notes</strong></label>
+<textarea id="decision-notes" placeholder="What passed, what failed, and any changes needed before release."></textarea>
+<button type="button" id="download-review">Download review JSON</button>
+<pre id="review-json-preview" aria-label="Review JSON preview"></pre>
+</section>"#,
+    );
+
     html.push_str("<section><h2>Listening Notes</h2><p>");
     html.push_str(&escape_html(notes));
-    html.push_str("</p></section></main></body></html>\n");
+    html.push_str("</p></section>");
+    html.push_str("<script type=\"application/json\" id=\"packet-json\">");
+    html.push_str(&escape_script_json(&packet.to_string()));
+    html.push_str("</script>");
+    html.push_str(
+        r##"<script>
+(function () {
+  const packet = JSON.parse(document.getElementById("packet-json").textContent || "{}");
+  const byId = (id) => document.getElementById(id);
+  const checked = (id) => Boolean(byId(id) && byId(id).checked);
+  const notes = () => byId("decision-notes") ? byId("decision-notes").value : "";
+  const buildDecision = () => {
+    const approved = checked("decision-approved");
+    return {
+      version: 1,
+      kind: "listening-review-decision",
+      created_at: new Date().toISOString(),
+      source_packet_created_at: packet.created_at || "",
+      source_status: packet.status || "",
+      mode: packet.mode || "",
+      status: approved ? "approved" : "not-approved",
+      approved,
+      checklist: {
+        original_heard: checked("heard-original"),
+        mastered_render_heard: checked("heard-master"),
+        codec_preview_heard: checked("heard-codec"),
+        album_wav_heard: checked("heard-album"),
+        dashboard_reviewed: checked("reviewed-dashboard"),
+        export_checks_reviewed: checked("reviewed-export-checks"),
+        notes: notes()
+      },
+      approval_scope: packet.approval_scope || {},
+      render: packet.render || {},
+      tracks: packet.tracks || [],
+      transitions: packet.transitions || [],
+      codec_previews: packet.codec_previews || [],
+      export_checks: packet.export_checks || null,
+      caveats: [
+        "This decision was entered manually from the standalone listening handoff.",
+        "Approval is valid only if the listener actually auditioned the rendered output, codec preview, or album WAV.",
+        ...(packet.caveats || [])
+      ]
+    };
+  };
+  const preview = byId("review-json-preview");
+  const refresh = () => {
+    if (preview) preview.textContent = JSON.stringify(buildDecision(), null, 2);
+  };
+  document.querySelectorAll("#review-decision input, #review-decision textarea").forEach((element) => {
+    element.addEventListener("input", refresh);
+    element.addEventListener("change", refresh);
+  });
+  byId("download-review")?.addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(buildDecision(), null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "listening-review-decision.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+  refresh();
+}());
+</script></main></body></html>
+"##,
+    );
     html
 }
 
@@ -2019,6 +2108,15 @@ fn escape_html(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+fn escape_script_json(value: &str) -> String {
+    value
+        .replace('&', "\\u0026")
+        .replace('<', "\\u003C")
+        .replace('>', "\\u003E")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
 }
 
 fn render_project_product(
@@ -3985,6 +4083,11 @@ mod tests {
         assert!(html.contains("Open file"));
         assert!(html.contains("directional-only"));
         assert!(html.contains("not human approval"));
+        assert!(html.contains("id=\"review-decision\""));
+        assert!(html.contains("Approved after listening"));
+        assert!(html.contains("Download review JSON"));
+        assert!(html.contains("listening-review-decision.json"));
+        assert!(html.contains("kind: \"listening-review-decision\""));
     }
 
     #[test]

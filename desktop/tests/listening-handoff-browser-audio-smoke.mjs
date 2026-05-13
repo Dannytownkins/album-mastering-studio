@@ -63,6 +63,11 @@ try {
 
   assert.equal(evidence.audioCount, expectedAudioCount);
   assert.equal(evidence.allAudioReady, true);
+  assert.equal(evidence.reviewDecisionVisible, true);
+  assert.equal(evidence.reviewJsonKind, "listening-review-decision");
+  assert.equal(evidence.reviewJsonDefaultStatus, "not-approved");
+  assert.equal(evidence.reviewJsonDefaultApproved, false);
+  assert.equal(evidence.reviewDownloadButtonVisible, true);
   for (const item of evidence.items) {
     assert.equal(item.error, null, `${item.label || item.src} reported media error`);
     assert.ok(item.readyState >= 1, `${item.label || item.src} did not load metadata`);
@@ -203,11 +208,18 @@ function audioMetadataExpression() {
   const started = performance.now();
   const audios = Array.from(document.querySelectorAll('audio'));
   const audioEvidence = await Promise.all(audios.map((audio) => waitForAudio(audio)));
+  const reviewPreviewText = document.querySelector('#review-json-preview')?.textContent || '{}';
+  const reviewPreview = JSON.parse(reviewPreviewText);
   return JSON.stringify({
     pageTitle: document.title,
     pageUrl: location.href,
     audioCount: audios.length,
     allAudioReady: audioEvidence.every((item) => !item.error && item.readyState >= 1 && Number.isFinite(item.duration) && item.duration > 0),
+    reviewDecisionVisible: Boolean(document.querySelector('#review-decision')),
+    reviewDownloadButtonVisible: Boolean(document.querySelector('#download-review')),
+    reviewJsonDefaultStatus: reviewPreview.status,
+    reviewJsonDefaultApproved: reviewPreview.approved,
+    reviewJsonKind: reviewPreview.kind,
     elapsedMs: Math.round((performance.now() - started) * 10) / 10,
     items: audioEvidence,
   });

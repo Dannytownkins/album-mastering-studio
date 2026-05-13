@@ -84,6 +84,10 @@ try {
     listeningPacketHtmlIncludesAuditionScope: listeningPacketHtml.includes("Audition Scope"),
     listeningPacketHtmlIncludesApprovalBasis: listeningPacketHtml.includes("rendered preview/export, codec preview, or album WAV listening"),
     listeningPacketHtmlIncludesLivePreviewScope: listeningPacketHtml.includes("directional-only"),
+    listeningPacketHtmlIncludesReviewDecision: listeningPacketHtml.includes('id="review-decision"'),
+    listeningPacketHtmlIncludesReviewDownload: listeningPacketHtml.includes("Download review JSON"),
+    listeningPacketHtmlIncludesReviewDecisionDefault: listeningPacketHtml.includes('status: approved ? "approved" : "not-approved"'),
+    listeningPacketHtmlIncludesReviewDecisionFilename: listeningPacketHtml.includes("listening-review-decision.json"),
     listeningPacketHtmlIncludesCodecPreview: codecPreviewOutputs.every((output) => listeningPacketHtml.includes(output)),
     codecPreviewCount: codecPreviews.length,
     codecPreviewOutputs,
@@ -154,6 +158,10 @@ try {
   assert.equal(evidence.listeningPacketHtmlIncludesAuditionScope, true);
   assert.equal(evidence.listeningPacketHtmlIncludesApprovalBasis, true);
   assert.equal(evidence.listeningPacketHtmlIncludesLivePreviewScope, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesReviewDecision, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesReviewDownload, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesReviewDecisionDefault, true);
+  assert.equal(evidence.listeningPacketHtmlIncludesReviewDecisionFilename, true);
   assert.equal(evidence.listeningPacketHtmlIncludesCodecPreview, true);
   assert.equal(evidence.manifestCodecPreviewFlag, true);
   assert.equal(evidence.codecPreviewCount, 2);
